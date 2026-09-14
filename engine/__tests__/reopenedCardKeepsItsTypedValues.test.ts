@@ -109,7 +109,9 @@ describe('a reopened calibration card keeps the values the user typed', () => {
    * any measurement, and it is general: every option a type asks must have an
    * answer after a reopen, whether or not the file had anything to say about it.
    */
-  it('⚑⚑ a reopened heatmap answers its Colour key question instead of showing two empty radios', () => {
+  /** A value x value heatmap, calibrated: four frame clicks with their
+   *  coordinates and counts, then the colour key's two ends and two ticks. */
+  function calibratedHeatmap(): CalibrationSession<never> {
     const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
     const clicks: Array<[number, number, string[]]> = [
       [100, 300, ['0']],
@@ -125,29 +127,46 @@ describe('a reopened calibration card keeps the values the user typed', () => {
       s.handleCalibrationClick(px, py);
       if (vals.length > 0) s.confirmCalibrationValues(vals);
     }
+    return s as unknown as CalibrationSession<never>;
+  }
+
+  it('⚑⚑ a reopened heatmap answers its Colour key question instead of showing two empty radios', () => {
+    const s = calibratedHeatmap();
     expect(s.runCalibration(), 'the walk calibrates').toBe(true);
     expect(s.getOptions()['keyIsCategory'], 'the card answers Values before the save').toBe('false');
 
-    const back = reopen(s as unknown as CalibrationSession<never>);
+    const back = reopen(s);
     expect(back.getOptions()['keyIsCategory'], 'and it still answers Values after the reopen').toBe(
       'false'
     );
   });
 
   it.each([
-    ['a tilted polar', POLAR_AXES_CONFIG as unknown as typeof HEATMAP_AXES_CONFIG],
-    ['a heatmap', HEATMAP_AXES_CONFIG],
-  ])('⚑⚑ every option %s asks has an answer after a reopen', (_name, config) => {
-    // The rule, not the one case: the walk above is irrelevant to it, so this
-    // reopens a session that was never even calibrated - `loadCalibrated` is
-    // still the door, and a card with an unanswered question is the defect
-    // whether the answer came off the axes or off the default.
-    const s = new CalibrationSession(config);
-    s.handleCalibrationClick(300, 300);
-    s.confirmCalibrationValues(['2']);
-    const declared = (config.options ?? []).map((o) => o.key);
-    expect(declared.length, 'this type asks something').toBeGreaterThan(0);
-    const answered = Object.keys(s.getOptions());
-    expect(declared.filter((k) => !answered.includes(k)), 'before any load').toEqual([]);
+    [
+      'a tilted polar',
+      () => {
+        const s = new CalibrationSession(POLAR_AXES_CONFIG);
+        s.setOption('isCircular', 'false');
+        s.handleCalibrationClick(300, 300);
+        s.confirmCalibrationValues(['2']);
+        s.handleCalibrationClick(500, 300);
+        s.confirmCalibrationValues(['10', '0']);
+        s.handleCalibrationClick(300, 150);
+        s.confirmCalibrationValues(['20', '90']);
+        return s as unknown as CalibrationSession<never>;
+      },
+      POLAR_AXES_CONFIG.options ?? [],
+    ],
+    ['a heatmap', () => calibratedHeatmap(), HEATMAP_AXES_CONFIG.options ?? []],
+  ])('⚑⚑ every option %s asks has an answer after a reopen', (_name, build, options) => {
+    // ⚑ THE RULE, not the one case. A card draws one control per declared
+    // option; a control with no value behind it is a question the reopened
+    // session cannot answer, whether or not the file had anything to say.
+    const s = build();
+    expect(s.runCalibration(), 'the walk calibrates').toBe(true);
+    const back = reopen(s);
+    const answered = back.getOptions();
+    const unanswered = options.map((o) => o.key).filter((k) => answered[k] === undefined);
+    expect(unanswered, 'every option the card asks is answered after the reopen').toEqual([]);
   });
 });
