@@ -43,6 +43,21 @@
 /** The Measure tools. Slope is ours; the rest mirror WPD's measurement types. */
 export type MeasureTool = 'distance' | 'angle' | 'area' | 'slope';
 
+/**
+ * Every instrument a RECORDED measurement can have been taken with - the four
+ * geometric tools plus the colour reading, which is an instrument in the same
+ * panel rather than a geometry (see `engine/measureCapture.ts`).
+ *
+ * ⚑ A runtime list, because the load door has to ask a string from a file
+ * whether it names an instrument at all, and a type cannot be asked that. The
+ * check below fails to compile if a tool is ever added to the union and not to
+ * the list, so the two cannot drift.
+ */
+export const RECORDED_MEASURE_TOOLS = ['distance', 'angle', 'area', 'slope', 'colour'] as const;
+export type RecordedMeasureTool = (typeof RECORDED_MEASURE_TOOLS)[number];
+const _everyToolIsListed: MeasureTool | 'colour' extends RecordedMeasureTool ? true : never = true;
+void _everyToolIsListed;
+
 export interface Point2D {
   x: number;
   y: number;

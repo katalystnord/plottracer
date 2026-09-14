@@ -44,6 +44,7 @@
 
 import { PlotData, type SerializedPlotData, type AnyAxes, type SerializedHeatmapLayer } from '../core/plotData.js';
 import { CategoryAxis } from '../core/categoryAxis.js';
+import { RECORDED_MEASURE_TOOLS } from '../core/measurementValues.js';
 import type { Dataset } from '../core/dataset.js';
 import { BarAxes } from '../core/axes/bar.js';
 import { barSeating } from '../core/barInterval.js';
@@ -640,7 +641,12 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // the writer at `image:` above -- a file with no remembered name has no
     // key, it does not have a key holding nothing.
     ...(data.image.fileName === undefined ? {} : { imageFileName: data.image.fileName }),
-    measurements: Array.isArray(data.measurements) ? data.measurements.map(readMeasurement) : [],
+    measurements: Array.isArray(data.measurements)
+      ? data.measurements
+          .map(readMeasurementGeometry)
+          .filter((m): m is SerializedMeasurement => m !== null)
+          .map(readMeasurement)
+      : [],
     measureScale: readMeasureScale(data.measureScale),
     // Accept only well-formed parts; a hand-edited or pre-95 file with missing
     // or malformed provenance reads back as `{}` (or a partial), never throws.
@@ -698,12 +704,16 @@ function dropOrphanedDerivedRole(dataset: Dataset): void {
 /**
  * A measurement as it comes off disk, with any colour it claims CHECKED.
  *
- * ⚑⚑ THE ONE STORED READING HERE IS THE ONE THAT NEEDS A DOOR GUARD. Every
- * other field on a measurement is geometry that gets re-derived through the
- * axes on the way to the screen, so a bad number shows up as a bad number.
- * `rgb` is different: it is kept verbatim, on purpose, and then INVERTED
- * through the colour key to produce a value. A channel that is not a channel
- * therefore comes back as a confident reading rather than as nonsense.
+ * ⚑⚑ `rgb` IS THE ONE FIELD THAT IS KEPT VERBATIM, and then INVERTED through
+ * the colour key to produce a value. A channel that is not a channel therefore
+ * comes back as a confident reading rather than as nonsense.
+ *
+ * ⚠️ This used to say that every OTHER field was safe because it is geometry
+ * re-derived on the way to the screen, "so a bad number shows up as a bad
+ * number". It does not: `measurementValue` divides and hypots those pixels, and
+ * a NaN carried in from a file reads as an empty cell in the export and as
+ * `NaN px` on the card, with nothing saying which measurement is unreadable or
+ * why. The geometry is now checked here too - see `readMeasurementGeometry`.
  *
  * ⚠️ `null` is the case that arrives by itself, with nobody editing anything:
  * `NaN` serializes to `null` through JSON, and `null` behaves as `0` in the
@@ -724,6 +734,64 @@ function readMeasurement(raw: SerializedMeasurement): SerializedMeasurement {
   if (usable) return raw;
   const { rgb: _drop, ...rest } = raw;
   return rest;
+}
+
+/** A pixel pair off a file, or null. `null` is what both `NaN` and `Infinity`
+ * become on the way through JSON, and `null` behaves as `0` in the arithmetic
+ * on the other side - the laundering that cost this project a released defect
+ * in the curve fit. */
+function pointFrom(raw: unknown): { x: number; y: number } | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { x, y } = raw as { x?: unknown; y?: unknown };
+  if (typeof x !== 'number' || typeof y !== 'number') return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
+/**
+ * A measurement off a file, or null when it is not a measurement.
+ *
+ * ⚑⚑ THE SAME VALIDITY THE CLICK PATH ENFORCES, at the other entrance. A click
+ * is always a finite pixel pair, always taken with one of the instruments the
+ * panel offers, and always filed under a minted id - so a record missing any of
+ * those describes a state no gesture can build, and every one of them is silent
+ * downstream: `core/measurementValues.ts` hypots and divides these pixels with
+ * no opinion about them, an unknown tool falls off the end of its switch, and a
+ * duplicate or absent id makes selecting and deleting pick the wrong row.
+ *
+ * ⚑ DROPPED WHOLE, never half-read - the posture `heatmapLayerFrom` states for
+ * the heatmap grid. A measurement IS its geometry plus its tool; keeping a
+ * half of that would draw a reading nobody took.
+ *
+ * ⚑ THE LABEL'S POSITION IS THE ONE PART THAT IS NOT A READING. It is where the
+ * drawing puts its text, derived from the points by the gesture that recorded
+ * it, so an unusable one costs the label its place and never the measurement.
+ */
+function readMeasurementGeometry(raw: SerializedMeasurement): SerializedMeasurement | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { id, tool, points, labelAt } = raw as {
+    id?: unknown;
+    tool?: unknown;
+    points?: unknown;
+    labelAt?: unknown;
+  };
+  if (typeof id !== 'string' || id.length === 0) return null;
+  if (typeof tool !== 'string' || !(RECORDED_MEASURE_TOOLS as readonly string[]).includes(tool)) {
+    return null;
+  }
+  if (!Array.isArray(points) || points.length === 0) return null;
+  const read: { x: number; y: number }[] = [];
+  for (const p of points) {
+    const point = pointFrom(p);
+    if (point === null) return null;
+    read.push(point);
+  }
+  return {
+    ...raw,
+    points: read,
+    labelAt: pointFrom(labelAt) ?? read[0]!,
+    label: typeof raw.label === 'string' ? raw.label : '',
+  };
 }
 
 /**

@@ -809,6 +809,92 @@ describe('a project file carrying values the app could never have written', () =
     if ('error' in back) throw new Error(back.error);
     expect(back.measurements![0]!.rgb).toEqual([68, 1, 84]);
   });
+
+  /**
+   * A MEASUREMENT'S RECORD IS ITS PIXELS, so a pixel that is not a pixel is the
+   * whole reading gone - and nothing downstream says so.
+   *
+   * `core/measurementValues.ts` derives every distance, angle, area and slope
+   * from these points on demand. A NaN carried in from a hand-edited or
+   * truncated file reads as `NaN px` on the card and as a blank cell in the
+   * export, and `points` that is not an array at all reaches the overlay as a
+   * `.map` on a string. The click path can produce neither: a click is always a
+   * finite pair, always with an instrument behind it.
+   */
+  const forgedMeasurement = (m: Record<string, unknown>) => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const file = serializeProject(session, FORGED_IMAGE, undefined, { measurements: [], scale: null });
+    if ('error' in file) throw new Error(file.error);
+    (file as { measurements?: unknown }).measurements = [m];
+    const back = deserializeProject(file);
+    if ('error' in back) throw new Error(back.error);
+    return back.measurements ?? [];
+  };
+
+  const GOOD = {
+    id: 'm1',
+    tool: 'distance',
+    points: [{ x: 10, y: 20 }, { x: 30, y: 40 }],
+    closed: false,
+    label: '',
+    labelAt: { x: 20, y: 30 },
+  };
+
+  it('⚑⚑ a measurement with a coordinate that is not a number is dropped, not reported as NaN', () => {
+    // `null` is what NaN and Infinity both become on the way through JSON.
+    expect(forgedMeasurement({ ...GOOD, points: [{ x: 10, y: 20 }, { x: null, y: 40 }] })).toEqual([]);
+    expect(forgedMeasurement({ ...GOOD, points: [{ x: 10, y: 20 }, { x: '30', y: 40 }] })).toEqual([]);
+    expect(forgedMeasurement({ ...GOOD, points: [{ x: Number.NaN, y: 0 }] })).toEqual([]);
+  });
+
+  it('⚑⚑ a measurement whose points are not a list of points is dropped, not handed to the overlay', () => {
+    expect(forgedMeasurement({ ...GOOD, points: 'twelve' })).toEqual([]);
+    expect(forgedMeasurement({ ...GOOD, points: [null] })).toEqual([]);
+    expect(forgedMeasurement({ ...GOOD, points: [] })).toEqual([]);
+  });
+
+  it('⚑ a measurement taken with an instrument this app does not have is dropped', () => {
+    // Every value is derived by tool. A tool nothing knows has no derivation,
+    // so the record cannot produce the reading it claims to be.
+    expect(forgedMeasurement({ ...GOOD, tool: 'thermometer' })).toEqual([]);
+    expect(forgedMeasurement({ ...GOOD, tool: 42 })).toEqual([]);
+  });
+
+  it('⚑ a measurement with no id is dropped - selecting and deleting are by id', () => {
+    expect(forgedMeasurement({ ...GOOD, id: '' })).toEqual([]);
+    expect(forgedMeasurement({ ...GOOD, id: 7 })).toEqual([]);
+  });
+
+  it('⚑ a label drawn nowhere falls back to the measurement, which is the part that was measured', () => {
+    // The label's position is where the drawing puts its text, not a reading -
+    // so an unusable one costs the label's place, never the measurement.
+    const back = forgedMeasurement({ ...GOOD, labelAt: { x: null, y: 30 } });
+    expect(back).toHaveLength(1);
+    expect(back[0]!.labelAt).toEqual({ x: 10, y: 20 });
+    expect(back[0]!.points).toEqual([{ x: 10, y: 20 }, { x: 30, y: 40 }]);
+  });
+
+  it('⚑ a real measurement still loads whole - the guard must not over-reach', () => {
+    const back = forgedMeasurement({ ...GOOD, label: '20.0 px' });
+    expect(back).toHaveLength(1);
+    expect(back[0]).toEqual({ ...GOOD, label: '20.0 px' });
+  });
+
+  it('⚑⚑ the MULTI-FIGURE door drops it too, because both doors are one door', () => {
+    const session = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(session);
+    session.runCalibration();
+    const multi = serializeMultiFigureProject([{ name: 'Fig 1', session, imageDataURL: FORGED_IMAGE }], 0);
+    if ('error' in multi) throw new Error(multi.error);
+    multi.figures[0]!.measurements = [
+      { ...GOOD, points: [{ x: 10, y: 20 }, { x: Number.NaN, y: 40 }] },
+    ];
+    const back = deserializeMultiFigureProject(multi);
+    if ('error' in back) throw new Error(back.error);
+    expect(back.figures[0]!.measurements).toEqual([]);
+  });
 });
 
 /**
