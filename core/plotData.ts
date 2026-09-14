@@ -221,6 +221,31 @@ export interface SerializedMeasurementData {
 }
 
 /**
+ * Where an axis's two calibration points SAT when a grid was recorded, in image
+ * pixels - and, for the colour key, what its labelled ticks said.
+ *
+ * ⚑⚑ DECLARED HERE, WHERE THE FILE IS, AND ALIASED BY `engine/heatmapRun.ts`'s
+ * `HeatmapAxisStamp`. Two declarations of one record is how a stored `key` came
+ * to be invisible to the type that describes the file: the runtime stamp
+ * carried the colour key's half, the serialized one did not mention it, and the
+ * load door spread the object through unchecked so nobody noticed.
+ *
+ * ⚑ Used for exactly one thing - answering "has the axis moved since?" - never
+ * to place anything. See `heatmapAxisStamp` for what puts it there.
+ */
+export interface SerializedAxisStamp {
+  x: [{ px: number; py: number }, { px: number; py: number }];
+  y: [{ px: number; py: number }, { px: number; py: number }];
+  key?: {
+    /** k1, k2, kv1, kv2 - the strip's corners and its two labelled ticks. */
+    at: { px: number; py: number }[];
+    /** What the user typed at kv1 and kv2. */
+    values: string[];
+    log: boolean;
+  };
+}
+
+/**
  * ⚑⚑ THE HEATMAP'S RECORD - the grid, the axis NAMES, and the cells a person
  * read themselves. A LAYER ON TOP OF THE CALIBRATION, not part of it.
  *
@@ -250,10 +275,7 @@ export interface SerializedHeatmapLayer {
   grid?: {
     x: number[];
     y: number[];
-    axisAt?: {
-      x: [{ px: number; py: number }, { px: number; py: number }];
-      y: [{ px: number; py: number }, { px: number; py: number }];
-    };
+    axisAt?: SerializedAxisStamp;
   };
   /** One name per BAND, per axis. Empty lists are the norm - a value × value
    * heatmap has nothing to name. */
@@ -261,6 +283,58 @@ export interface SerializedHeatmapLayer {
   /** `"col,row"` → position on the colour key, for cells a person read
    * themselves. A POSITION, not a number, so a recalibrated key moves them. */
   readings?: Record<string, number>;
+}
+
+/**
+ * Where the axes sat when a grid was recorded, or null.
+ *
+ * ⚑⚑ THE STAMP GOES, THE GRID STAYS. A divider is a measured position and is
+ * kept; the stamp is only the answer to "has the axis moved under it since?",
+ * and its own field already says an absent stamp means "nothing to compare" -
+ * which is the honest reading of one that cannot be trusted.
+ *
+ * ⚠️ It was spread through unchecked, in the function whose header says a
+ * malformed layer is dropped whole. `heatmapAxisMovedKind` indexes `stamp.x[0]`
+ * and `stamp.key.at[i]`, so a hand-edited or truncated file made the moved-check
+ * throw - and a position that came back as `null`, which is what NaN and
+ * Infinity both become through JSON, compared as 0 and reported a move nobody
+ * made.
+ *
+ * ⚑ WHOLE, INCLUDING THE KEY. The colour key is the third axis and is stamped
+ * like the other two; half a stamp cannot answer for the half that is missing,
+ * and there is no measurement in it to save by keeping the readable part.
+ */
+function axisStampFrom(raw: unknown): SerializedAxisStamp | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const at = (v: unknown): { px: number; py: number } | null => {
+    if (typeof v !== 'object' || v === null) return null;
+    const { px, py } = v as { px?: unknown; py?: unknown };
+    if (typeof px !== 'number' || typeof py !== 'number') return null;
+    return Number.isFinite(px) && Number.isFinite(py) ? { px, py } : null;
+  };
+  const pair = (v: unknown): [{ px: number; py: number }, { px: number; py: number }] | null => {
+    if (!Array.isArray(v) || v.length !== 2) return null;
+    const a = at(v[0]);
+    const b = at(v[1]);
+    return a && b ? [a, b] : null;
+  };
+  const { x, y, key } = raw as { x?: unknown; y?: unknown; key?: unknown };
+  const sx = pair(x);
+  const sy = pair(y);
+  if (!sx || !sy) return null;
+  if (key === undefined) return { x: sx, y: sy };
+  if (typeof key !== 'object' || key === null) return null;
+  const { at: keyAt, values, log } = key as { at?: unknown; values?: unknown; log?: unknown };
+  if (!Array.isArray(keyAt) || keyAt.length === 0) return null;
+  const points: { px: number; py: number }[] = [];
+  for (const p of keyAt) {
+    const point = at(p);
+    if (point === null) return null;
+    points.push(point);
+  }
+  if (!Array.isArray(values) || values.some((v) => typeof v !== 'string')) return null;
+  if (typeof log !== 'boolean') return null;
+  return { x: sx, y: sy, key: { at: points, values: values as string[], log } };
 }
 
 /**
@@ -286,7 +360,8 @@ function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
     const y = numbers(src.grid.y);
     // Two dividers bound one band - the smallest grid that is a grid.
     if (x && y && x.length >= 2 && y.length >= 2) {
-      out.grid = { x, y, ...(src.grid.axisAt ? { axisAt: src.grid.axisAt } : {}) };
+      const stamp = axisStampFrom(src.grid.axisAt);
+      out.grid = { x, y, ...(stamp ? { axisAt: stamp } : {}) };
     }
   }
   if (src.labels && Array.isArray(src.labels.x) && Array.isArray(src.labels.y)) {
