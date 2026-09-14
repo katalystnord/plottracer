@@ -3081,6 +3081,40 @@ export function Workspace() {
     setMode((m) => (AUTO_EXTRACT_MODES.includes(m) && !autoExtractModesFor(s.getConfig().autoExtractKind).includes(m) ? 'place-point' : m));
   }, []);
 
+  // --- Import another digitizer's project ---------------------------------
+  // The migration route into this app, and the only level at which interop
+  // happens (tenet 6). Every foreign format reaches here through the registry,
+  // which answers the same two questions of all of them: what figures are in
+  // this file, and open the one chosen. A project holding one figure opens
+  // directly; several raise a picker. The rest of that flow is further down,
+  // with `importForeignProject`.
+  //
+  // ⚑ DECLARED UP HERE, above `resetPerFigureUI`, because that is the one list
+  // of what a newly installed figure closes - and a modal the incoming figure
+  // has nothing to do with is exactly that. A `useState` read from a callback
+  // declared before it would be in its temporal dead zone while the deps array
+  // is evaluated, so the state has to come first.
+  const [foreignFigures, setForeignFigures] = useState<ForeignFigure[] | null>(null); // non-null => picker open
+  // ⚑⚑ THE PROJECT BEING CHOSEN FROM, WHATEVER WROTE IT. This used to be
+  // `wpdHeldRef`, typed to one vendor's parser, beside an `importTarProject`
+  // hardcoded to the same one - so a project holding several figures got a
+  // picker if it came from that tool and silently lost all but one otherwise. The
+  // registry now answers the same two questions for every foreign format, and
+  // nothing here knows whose file it is.
+  const foreignHeldRef = useRef<ListedProject | null>(null);
+
+  /**
+   * Close the figure picker AND let go of the project it was listing.
+   *
+   * ⚑ The two are one gesture: every row in the picker opens out of
+   * `foreignHeldRef`, so a ref that outlives the surface reading it is a whole
+   * parsed project - figures and image bytes - held for a window nobody can see.
+   */
+  const closeFigurePicker = useCallback(() => {
+    setForeignFigures(null);
+    foreignHeldRef.current = null;
+  }, []);
+
   /**
    * ⚑⚑ ONE DOOR'S WORTH OF RESET, FOR EVERY DOOR THAT INSTALLS A FIGURE.
    *
@@ -3171,6 +3205,13 @@ export function Workspace() {
       // ⚑ ...and a tick-detection report describes the axis of the figure you
       // are leaving, so it cannot outlive it either.
       setTickDetectNotice(null);
+      // ⚑⚑ AND THE FIGURE PICKER BELONGS TO THE FILE IT WAS LISTING. It is a
+      // modal over the canvas and nothing underneath it closed it, so opening any
+      // project while it was up left the PREVIOUS file's figures on screen over
+      // the figure just loaded - and its rows still import out of the project
+      // held in `foreignHeldRef`, which lands another file's figure on top of
+      // this one. A figure installing is what ends the choosing.
+      closeFigurePicker();
       // ⚑⚑ AND THE MARKS COME BACK WITH A NEW FIGURE. Hiding them is a look at
       // THIS picture; carrying it across a figure switch would open the next one
       // with every mark missing and most of the rail greyed, which reads as a
@@ -3215,7 +3256,7 @@ export function Workspace() {
       setMode(calibrated ? 'place-point' : 'calibrate');
       setCalibExpanded(!calibrated); // calibrated -> folded; not -> show the steps
     },
-    [restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale]
+    [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale]
   );
 
   const restoreDoc = useCallback(
@@ -5376,23 +5417,9 @@ export function Workspace() {
     },
     []
   );
-
-
-
-  // --- Import another digitizer's project ---------------------------------
-  // The migration route into this app, and the only level at which interop
-  // happens (tenet 6). Every foreign format reaches here through the registry,
-  // which answers the same two questions of all of them: what figures are in
-  // this file, and open the one chosen. A project holding one figure opens
-  // directly; several raise a picker.
-  const [foreignFigures, setForeignFigures] = useState<ForeignFigure[] | null>(null); // non-null => picker open
-  // ⚑⚑ THE PROJECT BEING CHOSEN FROM, WHATEVER WROTE IT. This used to be
-  // `wpdHeldRef`, typed to one vendor's parser, beside an `importTarProject`
-  // hardcoded to the same one - so a project holding several figures got a
-  // picker if it came from that tool and silently lost all but one otherwise. The
-  // registry now answers the same two questions for every foreign format, and
-  // nothing here knows whose file it is.
-  const foreignHeldRef = useRef<ListedProject | null>(null);
+  // --- Import another digitizer's project, continued ----------------------
+  // The picker's own state and `closeFigurePicker` are declared further up,
+  // above the per-figure reset list that closes it.
 
   const importForeignFigureAt = useCallback(
     (index: number) => {
@@ -5404,7 +5431,9 @@ export function Workspace() {
         return;
       }
       setProjectError(null);
-      setForeignFigures(null); // close the picker if it was open
+      // ⚑ The picker is closed by the INSTALL, from the one per-figure reset
+      // list - so a figure that refuses to install leaves the picker up with its
+      // project still held, which is the surface the user needs to choose again.
       loadCalibratedFigure({
         configId: imported.configId,
         axes: imported.axes as CalibratedAxes,
@@ -5415,13 +5444,10 @@ export function Workspace() {
       });
       if (imported.notes.length > 0) setProjectNotice(imported.notes.join(' '));
     },
-    // ⚑ `setForeignFigures` is a useState setter and therefore stable, so listing it
-    // changes nothing at runtime -- but the React Compiler infers it as a
-    // dependency, and a manual array that disagrees with the inferred one makes
-    // it skip optimizing the WHOLE component. Both errors were latent: the
-    // compiler stops at its first bailout, and an earlier one was masking these
-    // until the guidance-tip extraction removed it.
-    [loadCalibratedFigure, setForeignFigures, setProjectNotice]
+    // ⚑ The array has to say exactly what the React Compiler infers: a manual
+    // one that disagrees makes it skip optimizing the WHOLE component, and the
+    // failure is latent because the compiler stops at its first bailout.
+    [loadCalibratedFigure, setProjectNotice]
   );
 
   /**
@@ -10469,7 +10495,7 @@ export function Workspace() {
       {foreignFigures && (
         <div
           data-testid="figure-picker"
-          onClick={() => setForeignFigures(null)}
+          onClick={closeFigurePicker}
           style={{
             position: 'fixed',
             inset: 0,
@@ -10547,7 +10573,7 @@ export function Workspace() {
             <button
               type="button"
               data-testid="figure-picker-cancel"
-              onClick={() => setForeignFigures(null)}
+              onClick={closeFigurePicker}
               style={{ marginTop: 6, fontSize: theme.font.size.small }}
             >
               Cancel

@@ -49,9 +49,14 @@ function callbackBody(name: string): string {
   throw new Error(`unbalanced parens in ${name}`);
 }
 
-/** Every `setX(` / `applyX(` / `restoreX(` call made directly in a body. */
+/** Every `setX(` / `restoreX(` / `closeX(` call made directly in a body.
+ *  ⚑ A named helper counts as the reset - `restoreHeatmapGrid` has always been
+ *  read that way - so a surface with more to put down than one setter can say
+ *  it in one call rather than by spelling itself out in the list twice. */
 function callsIn(body: string): string[] {
-  return [...body.matchAll(/\b(set[A-Z]\w*|restore[A-Z]\w*)\s*\(/g)].map((m) => m[1]!);
+  return [...body.matchAll(/\b(set[A-Z]\w*|restore[A-Z]\w*|close[A-Z]\w*)\s*\(/g)].map(
+    (m) => m[1]!
+  );
 }
 
 /** The two doors that INSTALL a figure: a project/import load, and a switch. */
@@ -119,6 +124,12 @@ const PER_FIGURE_RESETS = [
   'setOcrError',
   // ⚑ A tick-detection report describes the axis of ONE figure.
   'setTickDetectNotice',
+  // ⚑⚑ THE FIGURE PICKER BELONGS TO THE FILE IT WAS LISTING. It is a modal over
+  // the canvas, and nothing under it closed it: opening any project while it was
+  // up left the PREVIOUS file's figures on screen over the newly loaded one, and
+  // its rows still import out of the project held in `foreignHeldRef` - so a
+  // click lands another file's figure on top of the one just opened.
+  'closeFigurePicker',
   // ⚑⚑ FIVE CATEGORY SETTERS CAME OFF THIS LIST (v2.3), and the list is the
   // reason that is safe to say: `setCategoryCountInput`, `setCategoryFirstEdge`,
   // `setCategoryMarkError`, `setCategoryPlaceBothEdges` and
@@ -157,6 +168,14 @@ describe('one per-figure reset list, read by every door that installs a figure',
         'so the other doors get it too - see this file\'s header for the three releases ' +
         'in which they did not.'
     ).toEqual([]);
+  });
+
+  it('⚑⚑ the project the picker was choosing FROM is dropped with the picker', () => {
+    // Closing the picker is half the job: `foreignHeldRef` holds the whole
+    // listed project - its parsed figures and its image bytes - and every row in
+    // the picker opens out of it. A ref that outlives the surface that reads it
+    // is a file kept in memory for a window nobody can see any more.
+    expect(callbackBody('closeFigurePicker')).toContain('foreignHeldRef.current = null');
   });
 
   it('the heatmap layer is restored on a figure SWITCH, not only on a load (F24)', () => {
