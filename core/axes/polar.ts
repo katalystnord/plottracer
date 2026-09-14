@@ -10,7 +10,7 @@
  * calibration that cannot fail is not a check.
  */
 
-import { taninverse } from '../mathFunctions.js';
+import { taninverse, sineBetween, MIN_READABLE_SINE } from '../mathFunctions.js';
 import { InputParser } from '../inputParser.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
@@ -274,7 +274,14 @@ export class PolarAxes {
     const u2x = mag2 * Math.cos(sense * theta2r);
     const u2y = mag2 * Math.sin(sense * theta2r);
     const cross = u1x * u2y - u1y * u2x;
-    if (!Number.isFinite(cross) || cross === 0) return null;
+    // ⚑⚑ NEARLY one ray is the same failure as exactly one ray, and `cross === 0`
+    // caught only the second. `cross` is `mag1 mag2 sin(theta2 - theta1)`, so
+    // testing it against zero (or any fixed epsilon) asks a question that carries
+    // the figure's radial units; the angle itself does not. Measured on the walk
+    // before this: two declared angles a hundredth of a degree apart calibrated,
+    // and a figure whose own radii were 50 and 100 read 143,264 at a mid-figure
+    // pixel.
+    if (!Number.isFinite(cross) || sineBetween(u1x, u1y, u2x, u2y) < MIN_READABLE_SINE) return null;
 
     // Screen deltas of the two clicks. `M` maps canonical -> screen, so it
     // absorbs the y-axis flip along with the shear; nothing here needs to know
@@ -291,7 +298,15 @@ export class PolarAxes {
     const det = a * d - b * c;
     // A frame with no area maps the whole figure onto a line: every reading
     // would be non-finite while `calibrate()` reported success.
-    if (!Number.isFinite(det) || det === 0) return null;
+    // ⚑⚑ AND A FRAME WITH ALMOST NO AREA IS THE SAME FIGURE, read one pixel
+    // differently. `det` is `|col1| |col2| sin(theta)` between the frame's two
+    // screen directions, so a test against zero asks a question in pixels
+    // squared: a figure drawn edge-on is refused only when it is EXACTLY
+    // edge-on, and everything beside it calibrates and reads amplified nonsense.
+    // Dividing by the two column lengths asks for the angle, which is what "no
+    // area" always meant, and it is the same question `cross` above asks on the
+    // other side of the map.
+    if (!Number.isFinite(det) || sineBetween(a, c, b, d) < MIN_READABLE_SINE) return null;
 
     return { a, b, c, d, det, rho0, sense, radialSign };
   }

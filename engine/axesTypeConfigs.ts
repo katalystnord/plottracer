@@ -22,7 +22,7 @@ import { Calibration } from '../core/calibration.js';
 import { InputParser } from '../core/inputParser.js';
 // ⚑ The SAME fit the axes class uses for its own centre, so the guard and the
 // model cannot disagree about where the middle of the chart is.
-import { getCircleFrom3Pts } from '../core/mathFunctions.js';
+import { getCircleFrom3Pts, MIN_READABLE_SINE } from '../core/mathFunctions.js';
 
 import { XYAxes } from '../core/axes/xy.js';
 import { BarAxes } from '../core/axes/bar.js';
@@ -3416,7 +3416,14 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       if (step.key === 'origin') {
         return {
           ...step,
-          prompt: 'Click the centre of the plot, and enter the radial value there (usually 0)',
+          // ⚑⚑ THE PROMPT MUST NOT INSTRUCT THE ONE VALUE THAT CANNOT WORK.
+          // "(usually 0)" is right on a linear radial axis and fatal on a log
+          // one, where 0 has no logarithm and the frame cannot be built at all.
+          // Measured: the user typed what the prompt asked for and was refused
+          // (tenet 7 - a prompt that leads into a refusal is a defect).
+          prompt: optionBool(options, 'isLogR')
+            ? 'Click the centre of the plot, and enter the radial value there - on a log radial axis it must be greater than zero, so read the innermost ring'
+            : 'Click the centre of the plot, and enter the radial value there (usually 0)',
           valueFields: [{ key: 'r0', label: 'r at centre', field: 'dx' as const }],
         };
       }
@@ -3492,13 +3499,32 @@ export const POLAR_AXES_CONFIG: AxesTypeConfig<PolarAxes> = {
       // Parallel, not merely equal: θ and θ+180° put both points on one line
       // through the centre, which sees nothing perpendicular to it either.
       const toRad = optionBool(options, 'isDegrees') ? Math.PI / 180 : 1;
+      // ⚑⚑ NEARLY the same line is the same refusal. This compared the sine
+      // against 1e-9, which is 5.7e-8 degrees: the quantity was already the
+      // right, scale-free one, and the threshold made it fire on exact
+      // degeneracy alone. Measured before the change: angles a hundredth of a
+      // degree apart calibrated and read 143,264 where the figure's own radii
+      // were 50 and 100. `MIN_READABLE_SINE` is where a reading stops meaning
+      // anything, and the model applies the same number to the frame it builds.
       const spread = Math.abs(Math.sin((theta2 - (theta1 as number)) * toRad));
-      if (spread < 1e-9) {
+      if (spread < MIN_READABLE_SINE) {
         return 'P1 and P2 are on the same line through the centre - give P2 a different angle, or set Shape to Circular.';
       }
       const centreRaw = String(cal.getPoint(0)?.dx ?? '').trim();
       if (centreRaw !== '' && !Number.isFinite(Number(centreRaw))) {
         return 'The radial value at the centre must be a number - it is usually 0.';
+      }
+      // ⚑⚑ A LOG RADIAL AXIS NEVER REACHES ZERO, AND THE CENTRE IS A RADIUS
+      // LIKE ANY OTHER ON IT. Blank counts, because blank means 0 here - which
+      // is what the linear prompt suggests and what a file written before the
+      // Log radial box was ticked carries. Without this the frame simply could
+      // not be built and the user was told "check the entered data values are
+      // valid numbers" about values that were all perfectly good numbers.
+      if (optionBool(options, 'isLogR')) {
+        const centre = centreRaw === '' ? 0 : Number(centreRaw);
+        if (!(centre > 0)) {
+          return 'On a log radial axis the value at the centre must be greater than zero - a log radial scale never reaches 0, so enter the value printed at the innermost ring.';
+        }
       }
     }
     return null;
