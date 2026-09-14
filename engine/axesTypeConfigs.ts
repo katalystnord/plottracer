@@ -516,7 +516,32 @@ export function checkGuards(
     const d2 = dirOf(pag.v2);
     if (d1 && d2) {
       const cross = d1.x * d2.y - d1.y * d2.x;
-      if (Math.abs(cross) < 1e-9) {
+      /**
+       * ⚑⚑ THE QUESTION IS AN ANGLE, SO THE THRESHOLD MUST NOT CARRY THE SIZE
+       * OF THE FIGURE. `cross` is `|d1| |d2| sin(theta)`, so comparing it with an
+       * absolute `1e-9` - which this did - actually asked
+       * *"sin(theta) < 1e-9 / (|d1| |d2|)"*, a test that tightens as the figure
+       * grows. On a 300px frame it fired at about 1e-14: exact degeneracy and
+       * nothing else, while every near-degenerate frame calibrated and read
+       * nonsense. Reported against ternary, true of every type declaring this.
+       *
+       * ⚑ Dividing by both lengths asks for `|sin(theta)|` itself, which is what
+       * the guard always meant and does not change when the same figure is
+       * photographed larger.
+       *
+       * ⚑ 0.01 is about 0.57 degrees, and is deliberately the conservative end:
+       * sensitivity to a click goes as `1 / sin(theta)`, so there one pixel moves
+       * a reading by tens of units on a 0..100 scale, while a badly distorted
+       * photograph sits at tens of degrees and is thousands of times clear of it.
+       * The guard refuses only frames that cannot be read.
+       *
+       * ⚠️ Zero-length directions are `distinctPixelSteps`' case and keep its
+       * own "same pixel" sentence; a 0/0 here would be NaN, and NaN fails every
+       * comparison, so it is answered explicitly rather than by luck.
+       */
+      const spread = Math.hypot(d1.x, d1.y) * Math.hypot(d2.x, d2.y);
+      const sine = spread > 0 ? Math.abs(cross) / spread : 0;
+      if (sine < 0.01) {
         return (
           pag.message ??
           `The ${pag.label} calibration axes are parallel - they must point in different directions, or the calibration has no scale.`

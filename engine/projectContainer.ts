@@ -251,9 +251,25 @@ type MultiFigureContainerJson = Omit<MultiFigureProjectFile, 'figures' | 'source
 export function serializeMultiFigureZip(file: MultiFigureProjectFile): ProjectResult<Uint8Array> {
   const entries: Record<string, Uint8Array> = {};
   const jsonFigures: MultiFigureContainerJson['figures'] = [];
-  file.figures.forEach((fig, i) => {
+  /**
+   * ⚠️⚑⚑ IT RETURNS THE REFUSAL ITS SIGNATURE PROMISES, and it used to THROW.
+   *
+   * This function is `ProjectResult<Uint8Array>` - the bytes or `{error}` - and
+   * every caller reads it that way, checking `'error' in result` and showing the
+   * string. For an unparseable figure image it threw, so the one case the
+   * signature exists for escaped past every caller as an exception: a save that
+   * reports nothing and writes no file, where `serializeProjectZip` eighty lines
+   * above returns *"Could not package the image for the project archive."* for
+   * the identical fault. A `forEach` cannot return out of its caller, which is
+   * how the throw got there; a `for` loop can.
+   *
+   * ⚑ The figure is NAMED in the sentence (`figure 2`), because a project being
+   * split into one figure per series type can hold several and "an image" would
+   * not say which to look at.
+   */
+  for (const [i, fig] of file.figures.entries()) {
     const parsed = parseDataURL(fig.image.dataURL);
-    if (!parsed) throw new Error(`Could not package figure ${i + 1}'s image.`);
+    if (!parsed) return { error: `Could not package figure ${i + 1}'s image for the project archive.` };
     const imagePath = `figures/${i}/image.${mimeToExt(parsed.mime)}`;
     entries[imagePath] = base64ToBytes(parsed.b64);
     const { image, ...rest } = fig;
@@ -261,7 +277,7 @@ export function serializeMultiFigureZip(file: MultiFigureProjectFile): ProjectRe
       ...rest,
       image: { path: imagePath, mime: parsed.mime, ...(image.fileName ? { fileName: image.fileName } : {}) },
     });
-  });
+  }
   const { figures: _f, sourceDocument, ...top } = file;
   const json: MultiFigureContainerJson = { ...top, figures: jsonFigures };
   if (sourceDocument) {
