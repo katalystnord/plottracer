@@ -136,3 +136,52 @@ export function layeredProjectOffer(series: readonly SeriesShape[]): string | nu
     .join('\n');
   return `${LAYERED_PROJECT_OFFER_OPENING}\n\n${kinds}\n\n${LAYERED_PROJECT_OFFER_CLOSING}`;
 }
+
+/** What this module needs to know about a graph type to recognise a series of
+ * its shape. Narrow on purpose, so this stays testable without the registry. */
+export interface SlotShapedType {
+  id: string;
+  /** Which axes class it calibrates - a type of another kind cannot take over a
+   * figure whose calibration was made for this one. */
+  axesKind: string;
+  /** The slots it captures into when nothing has reshaped it. */
+  defaultSlots?: readonly string[];
+}
+
+/**
+ * ⚑⚑ WHICH TYPE A SPLIT FIGURE SHOULD DECLARE, given the slots its series carry.
+ *
+ * ⚠️ FOUND BY DAVID'S HANDS ON THE BUILT APP, 2026-09-14, and by nothing else.
+ * The first split produced two figures and left BOTH declared as the document's
+ * original type, so a figure whose series held `Min, Q1, Median, Q3, Max` sat
+ * under a toolbar reading "Bar" and drew a BAR's advisory about bars that do not
+ * reach the baseline. The data was separated and the declaration was not, which
+ * makes "one figure per series type" half true in the half the user can see.
+ * ⚑ The e2e asserted the figure COUNT and its NAME and sailed past it: the case
+ * *"the second figure's graph type reads Box Plot"* was a conclusion in my head
+ * and was never written as an observable outcome (gate 1).
+ *
+ * ⚑ THIS READS THE RECORD, IT DOES NOT INTERPRET PIXELS. A series captured into
+ * `BOX_PLOT_SLOTS` IS a box plot by the model's own definition - the slot names
+ * are what the type declares - so this is the same reading `valueColumnNames`
+ * already makes, not a judgement about the figure (tenet 9).
+ *
+ * ⚑ IT CHANGES NOTHING UNLESS IT IS SURE, and there are two ways not to be:
+ * · **the shape names more than one type.** Bar and Span both declare
+ *   `OPPOSITE_CORNER_SLOTS`, so those slots identify neither - which is the same
+ *   boundary `layeredProjectOffer` has, for the same reason.
+ * · **the type calibrates a different axes class.** A pie's slots cannot take
+ *   over a figure calibrated as a bar; the axes would not fit the record.
+ * In both cases the figure keeps the type the document declared.
+ */
+export function typeForSlots(
+  slots: readonly string[],
+  types: readonly SlotShapedType[],
+  current: SlotShapedType
+): string {
+  const key = shapeKey(slots);
+  const matches = types.filter(
+    (t) => t.axesKind === current.axesKind && t.defaultSlots && shapeKey(t.defaultSlots) === key
+  );
+  return matches.length === 1 ? matches[0]!.id : current.id;
+}

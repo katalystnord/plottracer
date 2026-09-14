@@ -2562,9 +2562,13 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
-    await dragMarker(150, 350, 150, 250);
+    // ⚠️ FROM THE BASELINE (y=400 reads 0), or the fixture measures something
+    // else: bars clear of the baseline make the app relabel the whole document a
+    // Span chart on open, and figure 1 then reports Span rather than Bar. A real
+    // relabel, tested elsewhere, and noise over THIS case.
+    await dragMarker(150, 400, 150, 250);
     await page.getByTestId('add-series').click();
-    await dragMarker(350, 330, 350, 230);
+    await dragMarker(350, 400, 350, 230);
 
     const savePath = tempFilePath('zip');
     await stubSaveDialog(savePath);
@@ -2599,6 +2603,22 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       // jumper is the only thing saying which figure is which, and a positional
       // name would make the user open both to find out.
       expect(await page.getByTestId('figure-name').inputValue()).toBe('Series 1');
+
+      /**
+       * ⚑⚑ AND EACH FIGURE DECLARES THE TYPE ITS SERIES ACTUALLY IS.
+       *
+       * ⚠️ FOUND BY DAVID'S HANDS, not by this test, which asserted the COUNT
+       * and the NAME and stopped. The split moved the data and left both figures
+       * declared as the document's Bar, so figure 2 held `Min, Q1, Median, Q3,
+       * Max` under a toolbar reading "Bar" and drew a BAR's advisory about bars
+       * short of the baseline. *"One figure per series type"* was a conclusion
+       * in my head and never an observable outcome (gate 1).
+       */
+      expect(await textOf('axes-type-trigger')).toMatch(/Bar/);
+      await page.getByTestId('figure-next').click();
+      await page.waitForTimeout(250);
+      expect(await page.getByTestId('figure-name').inputValue()).toBe('Series 2');
+      expect(await textOf('axes-type-trigger')).toMatch(/Box Plot/);
     } finally {
       await app.evaluate(({ dialog }, p) => {
         dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });

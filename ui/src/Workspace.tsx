@@ -186,7 +186,7 @@ import {
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpenedProject } from '../../engine/projectSaveInputs.js';
-import { layeredProjectOffer, layeredSeriesGroups, layeredGroupName } from '../../engine/layeredSeries.js';
+import { layeredProjectOffer, layeredSeriesGroups, layeredGroupName, typeForSlots } from '../../engine/layeredSeries.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion, tracingADifferentColour, pickedColourAdopts } from '../../engine/colorTraceRun.js';
@@ -5596,11 +5596,24 @@ export function Workspace() {
       const groups = layeredSeriesGroups(
         result.datasets.map((d) => ({ name: d.name, slots: d.getSlotNames(), dataset: d }))
       );
+      const currentType =
+        ALL_AXES_TYPE_CONFIGS.find((c) => c.id === result.configId) ?? XY_AXES_CONFIG;
       const records = groups.map((g) =>
         buildFigureRecordFromDeserialized(
           {
             ...result,
             name: layeredGroupName(g.members),
+            /**
+             * ⚑⚑ EACH FIGURE DECLARES THE TYPE ITS SERIES ACTUALLY IS.
+             *
+             * ⚠️ Found by David's hands on the built app: the split moved the
+             * DATA and left both figures declared as the document's type, so a
+             * figure holding `Min, Q1, Median, Q3, Max` sat under a toolbar
+             * reading "Bar" and drew a BAR's advisory. See `typeForSlots` for
+             * why it changes nothing unless the slots name exactly one type of
+             * the same axes kind.
+             */
+            configId: typeForSlots(g.slots, ALL_AXES_TYPE_CONFIGS, currentType),
             // ⚑ ONE COPY OF THE GRAPH IMAGE PER SERIES TYPE, which is what the
             // offer promises and what the container format already does:
             // `serializeMultiFigureZip` writes every figure its own image entry.
