@@ -269,14 +269,14 @@ next. A reading you placed by hand is never overwritten.
   along the category axis, so it lands on the right category however you click and
   whatever you skip. Where the app can't tell which category you meant, it leaves
   the cell **blank** rather than guess.
-- **Mark category ticks (optional, v2.1).** Once a Bar, Span chart, Box Plot or
-  Candlestick figure is calibrated, the calibration card offers **Mark category
-  ticks?**. Open it, click where the categories end (**P1** - the amber
-  calibration handle - is already the start), and say how many there are. Tick
-  marks appear along the category axis; drag any of them if the figure isn't
-  evenly spaced. Choose whether the figure prints its ticks **under each
-  category** or **between them** - flip the setting and watch the marks move to
-  see which matches.
+- **Mark category ticks (optional, v2.1).** Once a Bar, Span chart, Stacked bar,
+  Box plot, Candlestick or Line (categorical X) figure is calibrated, the
+  calibration card offers **Mark category ticks?**. Open it, click where the
+  categories end (**P1** - the amber calibration handle - is already the start),
+  and say how many there are. Tick marks appear along the category axis; drag
+  any of them if the figure isn't evenly spaced. Choose whether the figure
+  prints its ticks **under each category** or **between them** - flip the
+  setting and watch the marks move to see which matches.
   If P1 isn't where the categories start - you calibrated on a gridline part-way
   up the value axis, say - press **Re-place axis** and click *both* ends yourself.
   **Read categories** ends the step and keeps everything, folding the card to a
