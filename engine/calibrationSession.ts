@@ -277,6 +277,7 @@ import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from './serie
 import { valueAtPixel, exportLabelsFor, type ExportValue } from '../core/exportValues.js';
 import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../core/exportPrecision.js';
 import { valueColumnNames, valueCells, isReshaped } from './valueColumns.js';
+import { layeredProjectOffer } from './layeredSeries.js';
 
 // ⚑ The axes-type configuration system lives in its own module since v2.0 - the
 // graph-type declarations plus the shape they satisfy. (It said "eleven" until
@@ -5293,6 +5294,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * captured in. A series with no bar for a given category yet leaves that
    * cell null, exactly like Spider's own empty cells.
    */
+  /**
+   * ⚑⚑ THE OFFER TO MAKE WHEN A FILE CARRIES SERIES OF DIFFERENT KINDS, or
+   * null when it does not. See `engine/layeredSeries.ts` for why the file is the only
+   * door that can produce one, and why it is surfaced rather than refused.
+   *
+   * ⚑ Computed on demand from the series themselves rather than latched at load
+   * time: the answer is a fact about what is currently open, and a latched one
+   * would go stale the moment a series is added, removed or reshaped.
+   */
+  getLayeredProjectOffer(): string | null {
+    return layeredProjectOffer(
+      this.datasetEntries.map((e) => ({ name: e.dataset.name, slots: e.dataset.getSlotNames() }))
+    );
+  }
+
   getBarCategoryTable(): {
     categoryNames: string[];
     /** The names AS STORED - empty where a bar was captured but never
@@ -5308,6 +5324,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
      *
      * ⚑ The TYPE answers it, through `valueColumnNames`, because N is a property
      * of the type - which is how every plotting library treats it.
+     *
+     * ⚠️ WITH ONE EXCEPTION THE FILE DOOR CAN PRODUCE: a series reshaped out of
+     * its type's shape carries its own. This field is the ACTIVE series' answer,
+     * taken from `columns[active].valueColumns` rather than computed a second
+     * time; a consumer showing every series must read the per-column list.
      */
     valueColumns: readonly string[];
     /**
@@ -5325,7 +5346,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
       seriesIndex: number;
       seriesName: string;
       /**
-       * Each row's readings, aligned index-for-index with `valueColumns`.
+       * What THIS series' values are called, in order.
+       *
+       * ⚑⚑ PER SERIES, because slots are a property of the SERIES: a loaded
+       * file can carry a Bar-shaped series beside a Box-Plot-shaped one, and
+       * reading the second under the first's shape is a silent wrong number.
+       * The table's top-level `valueColumns` is this same list for the ACTIVE
+       * series - one computation, two readings of it, never two answers.
+       */
+      valueColumns: readonly string[];
+      /** Which of THIS series' `valueColumns` holds its derived value, or null. */
+      derivedColumnIndex: number | null;
+      /**
+       * Each row's readings, aligned index-for-index with this column's
+       * `valueColumns`.
        *
        * ⚠️ IT WAS `values` PLUS `intervals` - one array for types with a single
        * number, another for types with two, and every consumer branching on
@@ -5395,11 +5429,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const categoryRawNames = [...categories];
     const categoryNames = categories.map((name, i) => (name === '' ? `Category ${i + 1}` : name));
     const derive = this.config.derivedTupleValue;
-    // ⚑ Asked ONCE for the whole table: the names are a fact about the TYPE, not
-    // about a series or a row, so a per-column answer would be a fourth place
-    // for them to disagree.
-    const ownSlotsForCells = this.ownSlots(this.activeEntry.dataset);
-    const columnNames = valueColumnNames(this.config, ownSlotsForCells, axes);
 
     const crowded: { seriesIndex: number; categoryIndex: number; tupleIndex: number }[] = [];
     const advisory: {
@@ -5410,6 +5439,27 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }[] = [];
     const columns = this.datasetEntries.map((entry, seriesIndex) => {
       const dataset = entry.dataset;
+      /**
+       * ⚑⚑ ASKED PER SERIES, because SLOTS ARE A PROPERTY OF THE SERIES.
+       *
+       * ⚠️ This was asked ONCE, off the ACTIVE series, under a comment claiming
+       * *"the names are a fact about the TYPE, not about a series or a row"*.
+       * `setSlotNames` reshapes `this.activeEntry` ALONE, and
+       * `engine/valueColumns.ts`'s own header says *"a session can be reshaped
+       * out of that shape at runtime"* - so the claim was false in the same file
+       * that made it, and asserting it is what kept anyone from looking (gate 3).
+       *
+       * ⚠️⚠️ AND IT WAS NOT ONLY THE HEADERS. `ownSlotsForCells` is handed to
+       * `valueCells` below for EVERY series, and `isReshaped` decides the
+       * READING shape from it - so a series of another shape had its numbers
+       * read under a premise it was never captured under. A silent wrong number.
+       *
+       * ⚑ A file is the only door that can produce the disagreement - see
+       * `getLayeredSeriesNotice`, which is what the user is told about it.
+       */
+      const ownSlotsForCells = this.ownSlots(dataset);
+      const columnNames = valueColumnNames(this.config, ownSlotsForCells, axes);
+      const derivedAt = derive ? columnNames.indexOf(derive.label) : -1;
       const tuples = dataset.getAllTuples();
       // categoryIndex -> tupleIndex, for this series only.
       const tupleForCategory = new Map<number, number>();
@@ -5481,14 +5531,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
         const kind = derive?.advisory?.(points, axes) ?? null;
         if (kind !== null) advisory.push({ seriesIndex, categoryIndex, tupleIndex, kind });
       });
-      return { seriesIndex, seriesName: dataset.name, cells, supplied, tupleIndices };
+      return {
+        seriesIndex,
+        seriesName: dataset.name,
+        valueColumns: columnNames,
+        derivedColumnIndex: derivedAt < 0 ? null : derivedAt,
+        cells,
+        supplied,
+        tupleIndices,
+      };
     });
-    const derivedAt = derive ? columnNames.indexOf(derive.label) : -1;
+    // ⚑ The document-level answer is the ACTIVE series', read off the SAME
+    // computation rather than repeated - so the two can never disagree. On every
+    // file this app can create each series answers identically anyway.
+    const activeColumn = columns[this.activeDatasetIndex] ?? columns[0];
     return {
       categoryNames,
       categoryRawNames,
-      valueColumns: columnNames,
-      derivedColumnIndex: derivedAt < 0 ? null : derivedAt,
+      valueColumns: activeColumn?.valueColumns ?? [],
+      derivedColumnIndex: activeColumn?.derivedColumnIndex ?? null,
       columns,
       crowded,
       advisory,

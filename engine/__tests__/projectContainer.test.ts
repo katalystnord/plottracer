@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
 import { serializeProject, serializeMultiFigureProject } from '../projectFile.js';
+import type { MultiFigureProjectFile } from '../projectFile.js';
 import {
   serializeProjectZip,
   deserializeProjectZip,
@@ -44,6 +45,64 @@ function calibratedProjectFile(imageDataURL = PNG_DATA_URL, fileName?: string) {
   if ('error' in result) throw new Error(`fixture build failed: ${result.error}`);
   return result;
 }
+
+/**
+ * ⚑⚑ A FUNCTION THAT PROMISES A REFUSAL MUST RETURN ONE (v2.5.1).
+ *
+ * ⚠️ FOUND BY AUDIT, 2026-09-11. `serializeMultiFigureZip` is typed
+ * `ProjectResult<Uint8Array>` - "either the bytes or `{error}`" - and every
+ * caller reads it that way, checking `'error' in result` and showing the string.
+ * For an unparseable figure image it THREW instead, so the one case its own
+ * signature was written for escaped past every caller as an exception: a save
+ * that reports nothing and leaves no file, where the sibling
+ * `serializeProjectZip` returns *"Could not package the image for the project
+ * archive."* eighty lines above.
+ *
+ * ⚑ It has just gained a caller: a layered project split into one figure per
+ * series type is a multi-figure project, so this is the save path for the
+ * figures that split produces (`engine/layeredSeries.ts`).
+ */
+describe('serializeMultiFigureZip refuses rather than throws', () => {
+  /** A minimal multi-figure file whose second figure carries an unusable image. */
+  function fileWithABadImage(): MultiFigureProjectFile {
+    // ⚠️ CALIBRATED, or the fixture measures the wrong refusal: an uncalibrated
+    // session is turned away by `serializeMultiFigureProject` long before the
+    // zip writer is reached, and the test would pass on a sentence about axes.
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(s);
+    s.runCalibration();
+    const multi = serializeMultiFigureProject(
+      [
+        { name: 'Good', session: s, imageDataURL: PNG_DATA_URL },
+        { name: 'Bad', session: s, imageDataURL: PNG_DATA_URL },
+      ],
+      0
+    );
+    if ('error' in multi) throw new Error(multi.error);
+    // Not a data URL at all - the shape a hand-edited or truncated file carries.
+    multi.figures[1]!.image.dataURL = 'this is not a data url';
+    return multi;
+  }
+
+  it('⚑⚑ returns the refusal its signature promises, naming the figure', () => {
+    const result = serializeMultiFigureZip(fileWithABadImage());
+    expect('error' in result).toBe(true);
+    expect((result as { error: string }).error).toMatch(/figure 2/i);
+  });
+
+  it('⚠️ and does not throw - the whole point, since no caller catches', () => {
+    expect(() => serializeMultiFigureZip(fileWithABadImage())).not.toThrow();
+  });
+
+  it('a sound project is untouched', () => {
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    calibrateStandardXY(s);
+    s.runCalibration();
+    const multi = serializeMultiFigureProject([{ name: 'Only', session: s, imageDataURL: PNG_DATA_URL }], 0);
+    if ('error' in multi) throw new Error(multi.error);
+    expect('error' in serializeMultiFigureZip(multi)).toBe(false);
+  });
+});
 
 describe('base64 <-> bytes helpers', () => {
   it('round-trips arbitrary bytes, including a chunk boundary', () => {

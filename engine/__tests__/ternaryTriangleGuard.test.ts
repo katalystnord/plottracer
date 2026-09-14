@@ -70,6 +70,35 @@ describe('a ternary diagram needs a triangle', () => {
     expect(session.runCalibration(), session.getCalibrationError() ?? 'no error').toBe(true);
   });
 
+  it('⚠️⚑⚑ refuses a triangle ONE PIXEL from collinear, not only an exactly flat one', () => {
+    /**
+     * ⚠️ FOUND BY AUDIT, 2026-09-11, and the defect is the THRESHOLD, not the
+     * guard: `parallelAxisGuard` compared the raw cross product against `1e-9`,
+     * and a cross product carries the SIZE of the figure. Corners 300px apart
+     * one pixel off a line give a cross of 300, which clears an absolute 1e-9 by
+     * eleven orders of magnitude - so the guard fired only on EXACT degeneracy
+     * while every near-degenerate frame calibrated and read nonsense.
+     *
+     * ⚑ The scale-free question is the ANGLE between the two directions:
+     * `|cross| / (|d1| |d2|)` is `|sin theta|`, which does not change when the
+     * same figure is photographed larger. Here it is 300 / (300 * 150.003),
+     * about 0.0067 - a third of a degree, where one pixel of click error moves a
+     * component by tens of units on a 0..100 scale.
+     */
+    const session = walk([[100, 400], [400, 400], [250, 401]]);
+    expect(session.runCalibration()).toBe(false);
+    expect(session.getCalibrationError()).toBe(REFUSAL);
+  });
+
+  it('⚠️ a merely SKEWED triangle still calibrates - the threshold must not over-reach', () => {
+    // 10 degrees off flat is a badly distorted photograph of a ternary, not a
+    // degenerate one: a pixel of click error is worth well under a unit, so the
+    // reading still means something and the guard must keep its hands off.
+    const rise = Math.round(150 * Math.tan((10 * Math.PI) / 180)); // 26px
+    const session = walk([[100, 400], [400, 400], [250, 400 - rise]]);
+    expect(session.runCalibration(), session.getCalibrationError() ?? 'no error').toBe(true);
+  });
+
   it('a right-angled triangle is a real triangle, and reads its own corner', () => {
     // The shape the old maths could not describe is ordinary to the guard: it
     // has area, so it calibrates, and corner C reads as pure C.
