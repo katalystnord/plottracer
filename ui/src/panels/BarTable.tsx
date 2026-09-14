@@ -63,6 +63,16 @@ export interface BarColumn {
   seriesIndex: number;
   seriesName: string;
   /**
+   * What THIS series' values are called, in order.
+   *
+   * ⚑⚑ PER SERIES, because slots are a property of the SERIES - see
+   * `engine/layeredSeries.ts`. Optional so a caller that has not been taught the
+   * per-series shape reads the table-wide list unchanged (`labelsOf`).
+   */
+  valueColumns?: readonly string[];
+  /** Which of THIS series' `valueColumns` holds its derived value, or null. */
+  derivedColumnIndex?: number | null;
+  /**
    * Each row's readings, aligned index-for-index with `valueColumns` - one cell
    * per named value, `null` where there is none.
    *
@@ -494,13 +504,22 @@ export function BarTable({
    * driven by a PAIR - the N=2 case wearing the interface, which a box plot's
    * five could not have used. David: *"Consistency and coherency above all."*
    */
-  const slotLabels = table.valueColumns;
+  /**
+   * ⚑⚑ PER SERIES, because slots are a property of the SERIES. A loaded file
+   * can carry a Bar-shaped series beside a Box-Plot-shaped one - layered data,
+   * which we do not support yet and therefore SAY - and reading the second under
+   * the first's shape was a silent wrong number. `errors[i]` beside this has
+   * always been per series; this is the same mechanism, not a second one.
+   */
+  const labelsOf = (col: { valueColumns?: readonly string[] }): readonly string[] =>
+    col.valueColumns ?? table.valueColumns;
+
   // ⚑ Which cells hold a bar that does not reach the origin, so the hover can
   // say so on the cell itself rather than only in the note below the table.
   const offBaselineAt = new Set((table.advisory ?? []).map((u) => `${u.seriesIndex}:${u.categoryIndex}`));
   // ⚑ A second header row whenever a series' block is more than one column -
   // which is any type past Bar, and any type carrying error roles.
-  const headRowSpan = anyError || slotLabels.length > 1 ? 2 : 1;
+  const headRowSpan = anyError || table.columns.some((c) => labelsOf(c).length > 1) ? 2 : 1;
   return (
     <>
     {/* ⚑⚑ THE TABLE SAYS WHEN IT IS HIDING A COLUMN, AND IT SAYS IT THE WAY THE
@@ -535,7 +554,7 @@ export function BarTable({
               // error role beside it - the same fix the spreadsheet's header
               // needed when a series grew a Δ column and the name stayed one
               // cell wide, skewing every column to its right.
-              colSpan={slotLabels.length + (errors[i]?.labels.length ?? 0)}
+              colSpan={labelsOf(col).length + (errors[i]?.labels.length ?? 0)}
               style={{
                 textAlign: 'right',
                 paddingRight: 16,
@@ -549,11 +568,11 @@ export function BarTable({
             </th>
           ))}
         </tr>
-        {(anyError || slotLabels.length > 1) && (
+        {(anyError || table.columns.some((c) => labelsOf(c).length > 1)) && (
           <tr>
             {table.columns.map((col, i) => (
               <Fragment key={col.seriesIndex}>
-                {slotLabels.map((label, sub) => (
+                {labelsOf(col).map((label, sub) => (
                   <th
                     key={label}
                     style={{
@@ -617,7 +636,7 @@ export function BarTable({
               const aimable = aimTupleIndex != null && missingGroupIndex > -1;
               return (
                 <Fragment key={col.seriesIndex}>
-                {slotLabels.map((slotName, sub) => ({ key: slotName, shown: rowCells[sub] ?? null, sub })).map(({ key: cellKey, shown, sub }) => (
+                {labelsOf(col).map((slotName, sub) => ({ key: slotName, shown: rowCells[sub] ?? null, sub })).map(({ key: cellKey, shown, sub }) => (
                 <td
                   key={cellKey}
                   data-testid={
@@ -687,7 +706,7 @@ export function BarTable({
                           that HOLDS the value - see `derivedColumnIndex`. */}
                       <span
                         data-testid={
-                          sub === (table.derivedColumnIndex ?? 0) ? `tuple-derived-${tupleIndex}` : undefined
+                          sub === (col.derivedColumnIndex ?? table.derivedColumnIndex ?? 0) ? `tuple-derived-${tupleIndex}` : undefined
                         }
                       >
                         {renderValue(
@@ -698,7 +717,7 @@ export function BarTable({
                           col.supplied?.[categoryIndex]?.[sub] === true
                         )}
                       </span>
-                      {sub === slotLabels.length - 1 && (
+                      {sub === labelsOf(col).length - 1 && (
                         <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
                       )}
                     </>
@@ -720,7 +739,7 @@ export function BarTable({
                           // table names rather than anyone counting: a stacked
                           // bar puts `Base` in front of `Value`, so the first
                           // cell stopped being the number this row reports.
-                          sub === (table.derivedColumnIndex ?? 0) && isActive && tupleIndex != null
+                          sub === (col.derivedColumnIndex ?? table.derivedColumnIndex ?? 0) && isActive && tupleIndex != null
                             ? `tuple-derived-${tupleIndex}`
                             : undefined
                         }
@@ -734,7 +753,7 @@ export function BarTable({
                       </span>
                       {/* ⚑ ONE delete button per BAR, on the last of its cells -
                           a bar is one datum however many columns report it. */}
-                      {isActive && tupleIndex != null && sub === slotLabels.length - 1 && (
+                      {isActive && tupleIndex != null && sub === labelsOf(col).length - 1 && (
                         <TupleDeleteButton tupleIndex={tupleIndex} noun={tupleNoun} onDelete={onRemoveTuple} />
                       )}
                     </>
