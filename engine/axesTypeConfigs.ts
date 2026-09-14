@@ -22,7 +22,7 @@ import { Calibration } from '../core/calibration.js';
 import { InputParser } from '../core/inputParser.js';
 // ⚑ The SAME fit the axes class uses for its own centre, so the guard and the
 // model cannot disagree about where the middle of the chart is.
-import { getCircleFrom3Pts, MIN_READABLE_SINE } from '../core/mathFunctions.js';
+import { getCircleFrom3Pts, MIN_READABLE_SINE, sineBetween } from '../core/mathFunctions.js';
 
 import { XYAxes } from '../core/axes/xy.js';
 import { BarAxes } from '../core/axes/bar.js';
@@ -515,7 +515,6 @@ export function checkGuards(
     const d1 = dirOf(pag.v1);
     const d2 = dirOf(pag.v2);
     if (d1 && d2) {
-      const cross = d1.x * d2.y - d1.y * d2.x;
       /**
        * ⚑⚑ THE QUESTION IS AN ANGLE, SO THE THRESHOLD MUST NOT CARRY THE SIZE
        * OF THE FIGURE. `cross` is `|d1| |d2| sin(theta)`, so comparing it with an
@@ -539,9 +538,11 @@ export function checkGuards(
        * own "same pixel" sentence; a 0/0 here would be NaN, and NaN fails every
        * comparison, so it is answered explicitly rather than by luck.
        */
-      const spread = Math.hypot(d1.x, d1.y) * Math.hypot(d2.x, d2.y);
-      const sine = spread > 0 ? Math.abs(cross) / spread : 0;
-      if (sine < 0.01) {
+      // ⚑ THROUGH THE SHARED HELPER, not a second copy of the same arithmetic.
+      // This block and POLAR's frame guard were written hours apart and reached
+      // the identical answer independently, which is exactly the parallel
+      // mechanism the reuse rule is about: one decision, two places to change it.
+      if (sineBetween(d1.x, d1.y, d2.x, d2.y) < MIN_READABLE_SINE) {
         return (
           pag.message ??
           `The ${pag.label} calibration axes are parallel - they must point in different directions, or the calibration has no scale.`
