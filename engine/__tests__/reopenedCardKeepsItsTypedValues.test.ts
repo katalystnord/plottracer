@@ -91,4 +91,63 @@ describe('a reopened calibration card keeps the values the user typed', () => {
     expect(back.getPlacedPoints().x2?.values, 'Columns reopens as the count').toEqual(['7']);
     expect(back.getPlacedPoints().y2?.values, 'Rows reopens as the count').toEqual(['3']);
   });
+
+  /**
+   * ⚑⚑ A QUESTION ON THE CARD WITH NO ANSWER IN IT.
+   *
+   * `loadCalibrated` REPLACES the whole option record with whatever the config's
+   * `extractOptions` returns, so an option that has no home in the axes comes
+   * back `undefined` rather than at its default. The card draws a `choice` as
+   * two radios, each `checked` when the value equals its own, so an undefined
+   * answer paints a row with NEITHER radio selected - a state no click can
+   * produce and nothing on screen explains.
+   *
+   * ⚑ The heatmap's Colour key row is where this is reachable today: a declared
+   * CATEGORY key is refused by `checkValues`, so no file can carry one and
+   * `buildAxes` has nothing to write down - which is exactly why nothing reads
+   * it back. That makes the missing answer a question about the CARD, not about
+   * any measurement, and it is general: every option a type asks must have an
+   * answer after a reopen, whether or not the file had anything to say about it.
+   */
+  it('⚑⚑ a reopened heatmap answers its Colour key question instead of showing two empty radios', () => {
+    const s = new CalibrationSession(HEATMAP_AXES_CONFIG);
+    const clicks: Array<[number, number, string[]]> = [
+      [100, 300, ['0']],
+      [400, 300, ['10', '4']],
+      [100, 300, ['0']],
+      [100, 100, ['10', '4']],
+      [120, 420, []],
+      [380, 420, []],
+      [150, 420, ['5']],
+      [350, 420, ['95']],
+    ];
+    for (const [px, py, vals] of clicks) {
+      s.handleCalibrationClick(px, py);
+      if (vals.length > 0) s.confirmCalibrationValues(vals);
+    }
+    expect(s.runCalibration(), 'the walk calibrates').toBe(true);
+    expect(s.getOptions()['keyIsCategory'], 'the card answers Values before the save').toBe('false');
+
+    const back = reopen(s as unknown as CalibrationSession<never>);
+    expect(back.getOptions()['keyIsCategory'], 'and it still answers Values after the reopen').toBe(
+      'false'
+    );
+  });
+
+  it.each([
+    ['a tilted polar', POLAR_AXES_CONFIG as unknown as typeof HEATMAP_AXES_CONFIG],
+    ['a heatmap', HEATMAP_AXES_CONFIG],
+  ])('⚑⚑ every option %s asks has an answer after a reopen', (_name, config) => {
+    // The rule, not the one case: the walk above is irrelevant to it, so this
+    // reopens a session that was never even calibrated - `loadCalibrated` is
+    // still the door, and a card with an unanswered question is the defect
+    // whether the answer came off the axes or off the default.
+    const s = new CalibrationSession(config);
+    s.handleCalibrationClick(300, 300);
+    s.confirmCalibrationValues(['2']);
+    const declared = (config.options ?? []).map((o) => o.key);
+    expect(declared.length, 'this type asks something').toBeGreaterThan(0);
+    const answered = Object.keys(s.getOptions());
+    expect(declared.filter((k) => !answered.includes(k)), 'before any load').toEqual([]);
+  });
 });
