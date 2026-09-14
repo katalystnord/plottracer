@@ -288,3 +288,38 @@ export function normalizeAngleDeg(angleDeg: number): number {
   }
   return normDeg;
 }
+
+/**
+ * ⚑⚑ "ARE THESE TWO DIRECTIONS THE SAME DIRECTION" IS A QUESTION ABOUT AN
+ * ANGLE, so the answer must not carry the size of the figure.
+ *
+ * `|sin(theta)|` between two 2-D directions: the cross product divided by both
+ * lengths. Zero-length directions answer 0, which reads as "no angle at all" -
+ * they are another check's case (two clicks on one pixel) and a 0/0 NaN would
+ * slip past every comparison rather than being refused.
+ *
+ * ⚑ It exists because the raw cross product is `|d1| |d2| sin(theta)`, so
+ * comparing THAT against a fixed epsilon asks a question that tightens as the
+ * figure grows: on a 300px frame an epsilon of 1e-9 fires at about 1e-14, which
+ * is exact degeneracy and nothing else. Photograph the same figure twice the
+ * size and it answers differently about a reading of identical quality.
+ */
+export function sineBetween(ax: number, ay: number, bx: number, by: number): number {
+  const lengths = Math.hypot(ax, ay) * Math.hypot(bx, by);
+  if (!(lengths > 0) || !Number.isFinite(lengths)) return 0;
+  const sine = Math.abs(ax * by - ay * bx) / lengths;
+  return Number.isFinite(sine) ? sine : 0;
+}
+
+/**
+ * ⚑⚑ BELOW THIS ANGLE A READING HAS STOPPED MEANING ANYTHING, so a calibration
+ * that rests on it is refused rather than reported.
+ *
+ * 0.01 is about 0.57 degrees, and it is deliberately the conservative end:
+ * sensitivity to a click goes as `1 / sin(theta)`, so there one pixel of click
+ * error on a 300px frame moves a value by tens of units on a 0..100 scale, while
+ * a badly distorted photograph sits at tens of degrees and is thousands of times
+ * clear of it. A guard wants that margin: it refuses only frames that cannot be
+ * read, and never argues with a real figure.
+ */
+export const MIN_READABLE_SINE = 0.01;
