@@ -5629,9 +5629,34 @@ export function Workspace() {
       setActiveFigureIndex(install.active);
       setProjectError(null);
       if (install.restore) restoreFigure(install.restore, true);
+      /**
+       * ⚠️⚑⚑ THE SPLIT IS UNSAVED WORK, and `restoreFigure(..., true)` has just
+       * said the opposite. Marking clean is true for an OPENED multi-figure
+       * project - the file IS that - and false here: the file on disk holds one
+       * figure and what is now open holds several. Without this the user can
+       * close, quit or open another project and lose the split they accepted
+       * with no prompt, which is `restoreFigure`'s own recorded defect
+       * (*"let a whole multi-figure session close with no unsaved-work prompt
+       * and both figures discarded"*) arriving through a new door.
+       */
+      dirtyRef.current = true;
       setSourcePdf(result.sourceDocument
         ? { bytes: result.sourceDocument.bytes, name: result.sourceDocument.name }
         : null);
+      /**
+       * ⚠️⚑⚑ AND THE LOAD DOOR'S NOTICE IS STILL TRUE AFTER THE SPLIT. This
+       * branch used to return above the single-figure path's
+       * `setProjectNotice`, so a project that arrived with a sentence - series
+       * held back because the file carries a second set of axes, marks orphaned
+       * by a dropped role, a Bar relabelled Span, a box plot whose slots cannot
+       * draw a box - showed it on No and swallowed it on Yes. Splitting the
+       * project makes none of those facts untrue.
+       *
+       * ⚑ AFTER the install, for the reason that path states in full: installing
+       * a figure clears the notice, so one set before the load is wiped in the
+       * same batch and never reaches the eye.
+       */
+      if (result.notice) setProjectNotice(result.notice);
       return;
     }
     loadCalibratedFigure({

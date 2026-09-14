@@ -5515,9 +5515,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         // editor moves - so the mark and the edit cannot disagree about which
         // corner a cell is.
         supplied.push(
+          // ⚠️ ASKED OF THIS SERIES. It used to answer `false` for every series
+          // but the selected one, because `valuePointIndexFor` could only speak
+          // for `activeEntry` - so a number a person TYPED read as measured the
+          // moment they clicked another series' tab, and `[ ]` means exactly
+          // "not read off the pixels". Which series is selected is a fact about
+          // the UI, not about the reading.
           columnNames.map((_name, columnIndex) => {
-            if (seriesIndex !== this.activeDatasetIndex) return false;
-            const at = this.valuePointIndexFor(tupleIndex, columnIndex);
+            const at = this.valuePointIndexFor(tupleIndex, columnIndex, seriesIndex);
             return at === null ? false : this.suppliedDimsAt(dataset, at).length > 0;
           })
         );
@@ -5574,14 +5579,34 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * is computed with, so the cell a user edits is the corner whose number they
    * are looking at.
    *
-   * Returns the PIXEL index in the active dataset, or null where the column
-   * names nothing movable (a half-captured tuple).
+   * Returns the PIXEL index in that dataset, or null where the column names
+   * nothing movable (a half-captured tuple).
+   *
+   * ⚑⚑ WHICH SERIES IS ASKED IS AN ARGUMENT, defaulting to the active one so
+   * the editor's call reads unchanged.
+   *
+   * ⚠️ FOUND BY AUDIT, 2026-09-15. While this could only answer for
+   * `activeEntry`, `getBarCategoryTable` stood a guard in front of it -
+   * *"if (seriesIndex !== this.activeDatasetIndex) return false"* - and so
+   * reported every INACTIVE series' typed value as measured. `[ ]` means a value
+   * not read off the pixels; which series is selected is a fact about the UI,
+   * not about the reading. Enforced by
+   * `theSuppliedMarkBelongsToTheSeries.test.ts`.
    */
-  valuePointIndexFor(tupleIndex: number, columnIndex: number): number | null {
-    const dataset = this.activeEntry.dataset;
+  valuePointIndexFor(
+    tupleIndex: number,
+    columnIndex: number,
+    datasetIndex: number = this.activeDatasetIndex
+  ): number | null {
+    const entry = this.datasetEntries[datasetIndex];
+    if (!entry) return null;
+    const dataset = entry.dataset;
     const tuple = dataset.getAllTuples()[tupleIndex];
     if (!tuple || !this.axes) return null;
-    const columns = this.getValueColumns();
+    // ⚑ THIS SERIES' OWN COLUMNS, for the same reason the table's headers became
+    // per series: a file can carry a Bar-shaped series beside a Box-Plot-shaped
+    // one, and the column count decides which branch below answers.
+    const columns = this.getValueColumns(datasetIndex);
     if (columnIndex < 0 || columnIndex >= columns.length) return null;
     const indices = tuple.filter((i): i is number => i !== null && i !== undefined);
     if (indices.length === 0) return null;
