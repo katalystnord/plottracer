@@ -21,11 +21,33 @@
  * the user accepts (tenet 9, and gate 3's *"assert only what was measured"*).
  */
 
+import { ownSlotNames } from '../algorithms/errorExtent.js';
+
 /** One series, as this module needs to see it. */
 export interface SeriesShape {
   name: string;
   /** The series' own slot names, in capture order. */
   slots: readonly string[];
+}
+
+/**
+ * ⚑⚑ THE ERROR TAIL IS NOT PART OF THE SHAPE, and `ownSlotNames` is the app's
+ * own answer to that - *"error slots are an addition to a SERIES, not a change
+ * of what the series IS"*.
+ *
+ * ⚠️ FOUND BY AUDIT, 2026-09-15. Every caller here was handed the RAW
+ * `Dataset.getSlotNames()`, so capturing one error cap - which calls
+ * `adoptSlots` on that series ALONE - made a plain bar and its error-carrying
+ * sibling answer two different shapes. An ordinary chart was declared to hold
+ * *"series of different kinds"* and its owner was offered the split of a project
+ * this app supports completely. Enforced by
+ * `errorBarsAreNotASecondKind.test.ts`, which is red without this line.
+ *
+ * ⚑ Asked HERE rather than at each door, so the offer, the grouping and
+ * `typeForSlots` cannot answer the question three ways.
+ */
+function ownShape(slots: readonly string[]): readonly string[] {
+  return ownSlotNames(slots);
 }
 
 /**
@@ -39,7 +61,7 @@ export interface SeriesShape {
  * appear inside a slot name and merge two different shapes into one key.
  */
 function shapeKey(slots: readonly string[]): string {
-  return JSON.stringify(slots.map((s) => s.trim().toLowerCase()));
+  return JSON.stringify(ownShape(slots).map((s) => s.trim().toLowerCase()));
 }
 
 /**
@@ -59,7 +81,9 @@ export function layeredSeriesGroups<T extends SeriesShape>(series: readonly T[])
     const key = shapeKey(s.slots);
     const group = byKey.get(key);
     if (group) group.members.push(s);
-    else byKey.set(key, { slots: s.slots, members: [s] });
+    // ⚑ The group's slots are the SHAPE, error tail stripped - so what the offer
+    // lists as a kind and what `typeForSlots` is later asked are one answer.
+    else byKey.set(key, { slots: ownShape(s.slots), members: [s] });
   }
   return [...byKey.values()];
 }
@@ -114,7 +138,17 @@ function listOf(names: readonly string[]): string {
  * (it reads the same for two kinds or ten) and the list carries the specifics.
  *
  * ⚑ NAMED BY THE SERIES' OWN NAMES AND THEIR OWN SLOTS - nothing is
- * interpreted, and a user can check every word of it against the panel.
+ * interpreted. The names are the ones the series panel shows; the shapes are
+ * read straight off the record.
+ *
+ * ⚠️ This line used to end *"and a user can check every word of it against the
+ * panel"*, which the sentence three lines above already denies - the panel shows
+ * series NAMES, not shapes - and which the table denies too: a Bar series stores
+ * `Corner, Opposite corner` and its column header reads `Value`. A comment
+ * asserting a property nothing enforces is gate 3, so the claim goes rather than
+ * the wording being quietly bent to fit it. Whether the offer should list the
+ * PANEL'S column names instead of the stored slots is David's call, not a
+ * tidy-up (see the audit findings for 2026-09-15).
  */
 /**
  * What to call the figure a group becomes when the project is split - the names
@@ -132,7 +166,17 @@ export function layeredProjectOffer(series: readonly SeriesShape[]): string | nu
   const groups = layeredSeriesGroups(series);
   if (groups.length < 2) return null;
   const kinds = groups
-    .map((g) => `    ${listOf(g.members.map((m) => m.name))}: ${g.slots.join(', ')}`)
+    // ⚠️ A SHAPE WITH NO NAMES IS SAID IN WORDS. A slotless series is an
+    // ordinary record - a WPD import where one dataset has point groups and
+    // another has none is the module's own stated door - and joining an empty
+    // list left the line as a series name followed by a bare colon, asking the
+    // user to accept a split on the strength of nothing.
+    .map(
+      (g) =>
+        `    ${listOf(g.members.map((m) => m.name))}: ${
+          g.slots.length > 0 ? g.slots.join(', ') : 'no named values'
+        }`
+    )
     .join('\n');
   return `${LAYERED_PROJECT_OFFER_OPENING}\n\n${kinds}\n\n${LAYERED_PROJECT_OFFER_CLOSING}`;
 }

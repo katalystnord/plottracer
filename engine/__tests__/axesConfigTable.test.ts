@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
+import { ALL_AXES_TYPE_CONFIGS, mustDiffer } from '../axesTypeConfigs.js';
 import {
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
@@ -289,6 +289,34 @@ describe('the config table - cross-cutting invariants', () => {
         for (const key of group) {
           expect(known, `${c.id}: distinctPixelSteps names unknown step "${key}"`).toContain(key);
         }
+      }
+    }
+  });
+
+  it('⚑⚑ every parallel-axis guard pair is ALSO a distinct-pixel pair', () => {
+    /**
+     * ⚠️ FOUND BY AUDIT, 2026-09-15, enforcing a claim `8df7137` made in a
+     * comment and nothing checked (gate 3). `checkGuards` now answers a
+     * zero-length direction with `sine = 0`, which is below the threshold, so
+     * two coincident calibration points would come back as *"the axes are
+     * parallel"* - and the comment beside it says they do not, because
+     * *"zero-length directions are `distinctPixelSteps`' case and keep its own
+     * 'same pixel' sentence"*.
+     *
+     * That is true only while every guarded pair is also declared distinct,
+     * since `distinctPixelSteps` runs FIRST and returns its own message. A new
+     * type declaring the parallel guard without the distinct one gets the wrong
+     * sentence for a mis-click - it would be told to point the axes different
+     * ways when what it did was click the same pixel twice.
+     */
+    for (const c of ALL) {
+      const pag = c.parallelAxisGuard;
+      if (!pag) continue;
+      for (const pair of [pag.v1, pag.v2]) {
+        expect(
+          mustDiffer(c, pair[0], pair[1]),
+          `${c.id}: ${pair[0]}/${pair[1]} is parallel-guarded but not distinct-guarded, so two clicks on one pixel would be refused as "parallel"`
+        ).toBe(true);
       }
     }
   });
