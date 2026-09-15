@@ -94,14 +94,16 @@ describe('a file holding two types’ data in one figure', () => {
     expect(session.getDatasets()[1]!.getSlotNames()).toEqual([...BOX_PLOT_SLOTS]);
   });
 
-  it('offers to split it, saying what is not supported and what would happen', () => {
-    const offer = layeredSession().getLayeredProjectOffer();
-    expect(offer).not.toBeNull();
-    // The three things the sentence has to carry, asserted rather than the
-    // whole string, so rewording it does not break the case it is here for.
-    expect(offer).toMatch(/does not support/i);
-    expect(offer).toMatch(/multi-figure/i);
-    expect(offer).toMatch(/one copy of the graph image per series type/i);
+  it('⚑⚑ says point blank that layered graphs are not supported yet', () => {
+    // A STATEMENT, not an offer. David, 2026-09-15, after a split feature grew
+    // out of a one-line correctness fix: *"we will just point blank say that we
+    // do not yet support layered graphs. And that is it."*
+    const notice = layeredSession().getLayeredNotice();
+    expect(notice).not.toBeNull();
+    expect(notice).toMatch(/does not support/i);
+    expect(notice).toMatch(/layered graphs/i);
+    // Nothing to press, and nothing technical: no series names, no slot names.
+    expect(notice).not.toMatch(/Corner|Min, Q1|proceed/);
   });
 
   it('offers nothing when every series agrees - it must not over-reach', () => {
@@ -111,7 +113,7 @@ describe('a file holding two types’ data in one figure', () => {
       seriesWithATuple('A', OPPOSITE_CORNER_SLOTS, 250),
       seriesWithATuple('B', OPPOSITE_CORNER_SLOTS, 350),
     ], categoryAxis);
-    expect(session.getLayeredProjectOffer()).toBeNull();
+    expect(session.getLayeredNotice()).toBeNull();
   });
 
   it('⚑⚑ names EVERY series’ columns by that series’ own slots', () => {
@@ -157,7 +159,7 @@ describe('a file holding two types’ data in one figure', () => {
       seriesWithATuple('Bar-shaped', OPPOSITE_CORNER_SLOTS, 250),
       seriesWithATuple('Span-shaped', OPPOSITE_CORNER_SLOTS, 350),
     ], categoryAxis);
-    expect(session.getLayeredProjectOffer()).toBeNull();
+    expect(session.getLayeredNotice()).toBeNull();
   });
 
   it('the document-level valueColumns is the ACTIVE series’ answer, from the same computation', () => {

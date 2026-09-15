@@ -277,7 +277,7 @@ import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from './serie
 import { valueAtPixel, exportLabelsFor, type ExportValue } from '../core/exportValues.js';
 import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../core/exportPrecision.js';
 import { valueColumnNames, valueCells, isReshaped } from './valueColumns.js';
-import { layeredProjectOffer } from './layeredSeries.js';
+import { layeredNotice } from './layeredSeries.js';
 
 // ⚑ The axes-type configuration system lives in its own module since v2.0 - the
 // graph-type declarations plus the shape they satisfy. (It said "eleven" until
@@ -5304,16 +5304,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * cell null, exactly like Spider's own empty cells.
    */
   /**
-   * ⚑⚑ THE OFFER TO MAKE WHEN A FILE CARRIES SERIES OF DIFFERENT KINDS, or
-   * null when it does not. See `engine/layeredSeries.ts` for why the file is the only
-   * door that can produce one, and why it is surfaced rather than refused.
-   *
-   * ⚑ Computed on demand from the series themselves rather than latched at load
-   * time: the answer is a fact about what is currently open, and a latched one
-   * would go stale the moment a series is added, removed or reshaped.
+   * ⚑ What to tell the user when this figure holds series of different kinds,
+   * or null. A STATEMENT: layered graphs are v3.0 work and we say so.
    */
-  getLayeredProjectOffer(): string | null {
-    return layeredProjectOffer(
+  getLayeredNotice(): string | null {
+    return layeredNotice(
       this.datasetEntries.map((e) => ({ name: e.dataset.name, slots: e.dataset.getSlotNames() }))
     );
   }

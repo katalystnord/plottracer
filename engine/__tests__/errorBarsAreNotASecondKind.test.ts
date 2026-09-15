@@ -3,7 +3,7 @@
  *
  * ⚠️ FOUND BY AUDIT, 2026-09-15, against the layered-project offer added the
  * evening before. `layeredProjectOffer` is asked for each series' shape, and
- * both the session (`getLayeredProjectOffer`) and the split in `Workspace.tsx`
+ * both the session (`getLayeredNotice`) and the split in `Workspace.tsx`
  * answered it with `Dataset.getSlotNames()` - the RAW list, error tail included.
  *
  * Capturing one error cap calls `adoptSlots`, which appends `SD upper`,
@@ -25,9 +25,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
-import { BOX_PLOT_SLOTS, OPPOSITE_CORNER_SLOTS, ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
+import { BOX_PLOT_SLOTS, OPPOSITE_CORNER_SLOTS } from '../axesTypeConfigs.js';
 import { errorSlotNames } from '../../algorithms/errorExtent.js';
-import { isLayered, layeredProjectOffer, typeForSlots } from '../layeredSeries.js';
+import { isLayered, layeredNotice } from '../layeredSeries.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /** An upright bar chart: y 0..10 over py 300..100, four categories along y=500. */
@@ -72,7 +72,7 @@ describe('a series carrying error bars is the same kind as its plain sibling', (
     const s = twoBarSeriesOneWithError();
     // The premise, so a failure here reads as the fixture and not the rule.
     expect(s.getDatasets()[0]!.getSlotNames(), 'the fixture captured no cap').not.toEqual([]);
-    expect(s.getLayeredProjectOffer()).toBeNull();
+    expect(s.getLayeredNotice()).toBeNull();
   });
 
   it('⚑ the module says the same thing when asked directly', () => {
@@ -83,22 +83,13 @@ describe('a series carrying error bars is the same kind as its plain sibling', (
       ])
     ).toBe(false);
     expect(
-      layeredProjectOffer([
+      layeredNotice([
         { name: 'With error', slots: errorSlotNames('95% CI', BOX_PLOT_SLOTS) },
         { name: 'Plain', slots: BOX_PLOT_SLOTS },
       ])
     ).toBeNull();
   });
 
-  it('⚑⚑ and a split figure of box plots carrying error still declares Box Plot', () => {
-    const TYPES = ALL_AXES_TYPE_CONFIGS.map((c) => ({
-      id: c.id,
-      axesKind: c.axesKind,
-      ...(c.defaultSlots ? { defaultSlots: c.defaultSlots } : {}),
-    }));
-    const BAR = TYPES.find((t) => t.id === 'bar')!;
-    expect(typeForSlots(errorSlotNames('SD', BOX_PLOT_SLOTS), TYPES, BAR)).toBe('boxplot');
-  });
 
   it('⚑ two genuinely different kinds are still reported', () => {
     // The companion assertion: stripping the error tail must not blind the

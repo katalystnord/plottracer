@@ -186,7 +186,7 @@ import {
 } from '../../engine/spreadsheetModel.js';
 import { renderTable, TABLE_FORMAT_EXTENSION, type TableFormat } from '../../engine/tableFormats.js';
 import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpenedProject } from '../../engine/projectSaveInputs.js';
-import { layeredProjectOffer, layeredSeriesGroups, layeredGroupName, typeForSlots } from '../../engine/layeredSeries.js';
+import { layeredNotice } from '../../engine/layeredSeries.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
 import { runColorTrace, calibrationBoxRegion, tracingADifferentColour, pickedColourAdopts } from '../../engine/colorTraceRun.js';
@@ -5232,66 +5232,6 @@ export function Workspace() {
     []
   );
 
-  /**
-   * ⚑⚑ SPLIT THIS FIGURE INTO ONE FIGURE PER KIND OF SERIES (v2.5.1).
-   *
-   * ⚠️ David chose to give the offer a surface rather than leave it at the load
-   * door: it used to appear once, while opening, and answering No made the
-   * capability invisible for good. The Series panel now carries it, and this is
-   * what its button runs.
-   *
-   * ⚑ THE SAME MECHANISM AS THE DOOR'S, not a second one: the grouping, the
-   * naming and the type all come from `engine/layeredSeries.ts`, and the install
-   * goes through `figuresForOpenedProject` exactly as an opened multi-figure
-   * project does. What differs is only where the datasets come from - the LIVE
-   * session here, a deserialized file there.
-   *
-   * ⚠️ IT MARKS THE DOCUMENT DIRTY. The file on disk holds one figure and memory
-   * now holds several, so leaving it clean would let close or Open discard the
-   * split with no prompt. That was a real defect on the door's path, found in
-   * the overnight audit; this path must not reintroduce it.
-   */
-  const splitLayeredFigure = useCallback(() => {
-    const live = sessionRef.current;
-    const axes = live.getAxes();
-    if (!axes) return;
-    const groups = layeredSeriesGroups(
-      live.getDatasets().map((d) => ({ name: d.name, slots: d.getSlotNames(), dataset: d }))
-    );
-    if (groups.length < 2) return;
-    const base = liveFigureFields();
-    const current = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === base.axesTypeId) ?? XY_AXES_CONFIG;
-    const categoryAxis = live.getCategoryAxis();
-    const heatmapLayer = live.getHeatmapLayer();
-    const records = groups.map((g) => {
-      const config =
-        ALL_AXES_TYPE_CONFIGS.find(
-          (c) => c.id === typeForSlots(g.slots, ALL_AXES_TYPE_CONFIGS, current)
-        ) ?? current;
-      const fresh = new CalibrationSession(config);
-      fresh.setImageHeight(imageHeightRef.current);
-      fresh.loadCalibrated(
-        axes as CalibratedAxes,
-        g.members.map((m) => m.dataset),
-        categoryAxis,
-        heatmapLayer
-      );
-      return {
-        ...base,
-        id: ++figureIdRef.current,
-        name: layeredGroupName(g.members),
-        session: fresh,
-        axesTypeId: config.id,
-      };
-    });
-    const install = figuresForOpenedProject(records, 0);
-    figuresRef.current = install.figures;
-    setActiveFigureIndex(install.active);
-    if (install.restore) restoreFigure(install.restore);
-    dirtyRef.current = true;
-    bump();
-  }, [liveFigureFields, restoreFigure, bump]);
-
   /** "Get another figure from the source" (design §8): go back to the retained
    * paged source (a PDF today) and start a fresh figure from it, keeping the
    * current one. Stashes the live figure into the array (registering it as
@@ -5655,96 +5595,6 @@ export function Workspace() {
       setProjectError(result.error);
       return;
     }
-    /**
-     * ⚑⚑ A PROJECT HOLDING SERIES OF DIFFERENT KINDS IS OFFERED THE SPLIT.
-     *
-     * David, 2026-09-14, in his own words, which are the dialog's: *"This graph
-     * project contains series of different kinds based on the same graph figure,
-     * which PlotTracer does not support yet. For now, plottracer can offer to
-     * split the project in to a multifigure project, with one copy of the graph
-     * image per series type."*
-     *
-     * ⚑ OFFERED, NOT DONE. Declining opens the project exactly as it is, every
-     * series read under its OWN columns (`getBarCategoryTable`), so No costs the
-     * user nothing and loses no reading.
-     *
-     * ⚑ BEFORE `loadCalibratedFigure`, because the split installs FIGURES
-     * instead of one session - and it reuses `buildFigureRecordFromDeserialized`
-     * and `figuresForOpenedProject`, the same two the multi-figure door above
-     * takes, so a split project and an opened multi-figure project are the same
-     * thing by construction rather than by resemblance.
-     */
-    const offer = layeredProjectOffer(
-      result.datasets.map((d) => ({ name: d.name, slots: d.getSlotNames() }))
-    );
-    if (offer && window.confirm(offer)) {
-      closePdf();
-      const groups = layeredSeriesGroups(
-        result.datasets.map((d) => ({ name: d.name, slots: d.getSlotNames(), dataset: d }))
-      );
-      const currentType =
-        ALL_AXES_TYPE_CONFIGS.find((c) => c.id === result.configId) ?? XY_AXES_CONFIG;
-      const records = groups.map((g) =>
-        buildFigureRecordFromDeserialized(
-          {
-            ...result,
-            name: layeredGroupName(g.members),
-            /**
-             * ⚑⚑ EACH FIGURE DECLARES THE TYPE ITS SERIES ACTUALLY IS.
-             *
-             * ⚠️ Found by David's hands on the built app: the split moved the
-             * DATA and left both figures declared as the document's type, so a
-             * figure holding `Min, Q1, Median, Q3, Max` sat under a toolbar
-             * reading "Bar" and drew a BAR's advisory. See `typeForSlots` for
-             * why it changes nothing unless the slots name exactly one type of
-             * the same axes kind.
-             */
-            configId: typeForSlots(g.slots, ALL_AXES_TYPE_CONFIGS, currentType),
-            // ⚑ ONE COPY OF THE GRAPH IMAGE PER SERIES TYPE, which is what the
-            // offer promises and what the container format already does:
-            // `serializeMultiFigureZip` writes every figure its own image entry.
-            datasets: g.members.map((m) => m.dataset),
-          },
-          result.sourceDocument
-            ? { bytes: result.sourceDocument.bytes, name: result.sourceDocument.name }
-            : null
-        )
-      );
-      const install = figuresForOpenedProject(records, 0);
-      figuresRef.current = install.figures;
-      setActiveFigureIndex(install.active);
-      setProjectError(null);
-      if (install.restore) restoreFigure(install.restore, true);
-      /**
-       * ⚠️⚑⚑ THE SPLIT IS UNSAVED WORK, and `restoreFigure(..., true)` has just
-       * said the opposite. Marking clean is true for an OPENED multi-figure
-       * project - the file IS that - and false here: the file on disk holds one
-       * figure and what is now open holds several. Without this the user can
-       * close, quit or open another project and lose the split they accepted
-       * with no prompt, which is `restoreFigure`'s own recorded defect
-       * (*"let a whole multi-figure session close with no unsaved-work prompt
-       * and both figures discarded"*) arriving through a new door.
-       */
-      dirtyRef.current = true;
-      setSourcePdf(result.sourceDocument
-        ? { bytes: result.sourceDocument.bytes, name: result.sourceDocument.name }
-        : null);
-      /**
-       * ⚠️⚑⚑ AND THE LOAD DOOR'S NOTICE IS STILL TRUE AFTER THE SPLIT. This
-       * branch used to return above the single-figure path's
-       * `setProjectNotice`, so a project that arrived with a sentence - series
-       * held back because the file carries a second set of axes, marks orphaned
-       * by a dropped role, a Bar relabelled Span, a box plot whose slots cannot
-       * draw a box - showed it on No and swallowed it on Yes. Splitting the
-       * project makes none of those facts untrue.
-       *
-       * ⚑ AFTER the install, for the reason that path states in full: installing
-       * a figure clears the notice, so one set before the load is wiped in the
-       * same batch and never reaches the eye.
-       */
-      if (result.notice) setProjectNotice(result.notice);
-      return;
-    }
     loadCalibratedFigure({
       configId: result.configId,
       axes: result.axes as CalibratedAxes,
@@ -5779,7 +5629,17 @@ export function Workspace() {
     // ⚑ This is what keeps a Bar chart quietly opening as a Span chart from
     // being the app disagreeing with the file in silence - see
     // `relabelAllFloatingBarsAsSpan`.
-    if (result.notice) setProjectNotice(result.notice);
+    /**
+     * ⚑ LAYERED GRAPHS ARE NOT SUPPORTED YET, AND WE SAY SO. A statement on the
+     * same surface every other load-time notice uses, with nothing to press.
+     * David: *"we will just point blank say that we do not yet support layered
+     * graphs. And that is it."*
+     */
+    const layered = layeredNotice(
+      result.datasets.map((d) => ({ name: d.name, slots: d.getSlotNames() }))
+    );
+    const notices = [result.notice, layered].filter((n): n is string => Boolean(n));
+    if (notices.length > 0) setProjectNotice(notices.join(' '));
     // Restore a bundled source document AFTER loadCalibratedFigure (which calls
     // closePdf, clearing the ref), so a project that carried its source PDF keeps
     // carrying it on the next Save (checkpoint 104).
@@ -7087,15 +6947,6 @@ export function Workspace() {
   const tableDateFormats = useMemo(() => session.getTableDateFormats(), [session, version, config]);
   const spreadsheetMaxRows = useMemo(() => spreadsheetMaxRowCount(spreadsheetSeries), [spreadsheetSeries]);
   const showCategoryColumn = showsCategoryColumn(config.axesKind, hasSlots);
-  /**
-   * ⚑ Whether THIS figure holds series of different kinds, asked of the live
-   * session rather than remembered from the load. There is deliberately no
-   * "already declined" flag: the offer is a fact about the figure, and a flag is
-   * exactly what made it a one-way door.
-   */
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const layeredNotice = useMemo(() => session.getLayeredProjectOffer(), [session, version]);
-
   const curveFitOverlay = useMemo(() => {
     if (!curveFitState || config.id !== 'xy' || !axes) return undefined;
     const xyAxes = axes as unknown as { dataToPixel(x: number, y: number): { x: number; y: number } };
@@ -9912,8 +9763,6 @@ export function Workspace() {
       )}
 
       <SeriesPanel
-        layeredNotice={layeredNotice}
-        onSplitLayered={splitLayeredFigure}
         infos={datasetInfos}
         activeInfo={activeInfo}
         activeIndex={activeDatasetIndex}
