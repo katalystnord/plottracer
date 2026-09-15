@@ -41,6 +41,21 @@ export interface SeriesPanelProps {
   canvasHasImage: boolean;
   onCommitPendingEdit: () => void;
   onArmEyedropper: (target: 'series') => void;
+  /**
+   * ⚑⚑ THE SPLIT OFFER, KEPT WHERE THE SERIES ARE (v2.5.1).
+   *
+   * The full sentence when this figure holds series of different kinds, or null.
+   * ⚠️ IT USED TO EXIST ONLY AT THE MOMENT A PROJECT OPENED, so answering No
+   * left the capability invisible for good - a thing that appears once,
+   * unprompted, and can never be found again. David chose to give it a surface.
+   *
+   * ⚑ HERE rather than beside the table, because what it is about is the
+   * SERIES: it is the series list that disagrees, and the split is a change to
+   * the series list. The panel already owns adding, naming and deleting them.
+   */
+  layeredNotice: string | null;
+  /** Split this figure into one figure per kind of series. */
+  onSplitLayered: () => void;
 }
 
 /**
@@ -70,6 +85,8 @@ export function SeriesPanel(props: SeriesPanelProps) {
     canvasHasImage,
     onCommitPendingEdit,
     onArmEyedropper,
+    layeredNotice,
+    onSplitLayered,
   } = props;
   return (
     <SidebarSection>
@@ -247,6 +264,25 @@ export function SeriesPanel(props: SeriesPanelProps) {
         <p data-testid="series-name-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
           {nameNotice}
         </p>
+      )}
+      {/* ⚑ SHORT LINE, FULL SENTENCE ON HOVER. The dialog's wording is a
+          paragraph because it is asking a question; a rail line that long would
+          push the controls off the panel. The line says the fact, the button
+          says the action, and `title` carries the same words the dialog used so
+          the two surfaces cannot describe the figure differently. */}
+      {layeredNotice && (
+        <div
+          data-testid="series-layered-notice"
+          title={layeredNotice}
+          style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
+        >
+          <span style={{ fontSize: 12, color: theme.color.text.legend }}>
+            This figure holds series of different kinds.
+          </span>
+          <button type="button" data-testid="series-split-layered" onClick={onSplitLayered}>
+            Split into figures
+          </button>
+        </div>
       )}
     </SidebarSection>  );
 }

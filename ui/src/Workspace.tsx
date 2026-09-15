@@ -5232,6 +5232,66 @@ export function Workspace() {
     []
   );
 
+  /**
+   * ⚑⚑ SPLIT THIS FIGURE INTO ONE FIGURE PER KIND OF SERIES (v2.5.1).
+   *
+   * ⚠️ David chose to give the offer a surface rather than leave it at the load
+   * door: it used to appear once, while opening, and answering No made the
+   * capability invisible for good. The Series panel now carries it, and this is
+   * what its button runs.
+   *
+   * ⚑ THE SAME MECHANISM AS THE DOOR'S, not a second one: the grouping, the
+   * naming and the type all come from `engine/layeredSeries.ts`, and the install
+   * goes through `figuresForOpenedProject` exactly as an opened multi-figure
+   * project does. What differs is only where the datasets come from - the LIVE
+   * session here, a deserialized file there.
+   *
+   * ⚠️ IT MARKS THE DOCUMENT DIRTY. The file on disk holds one figure and memory
+   * now holds several, so leaving it clean would let close or Open discard the
+   * split with no prompt. That was a real defect on the door's path, found in
+   * the overnight audit; this path must not reintroduce it.
+   */
+  const splitLayeredFigure = useCallback(() => {
+    const live = sessionRef.current;
+    const axes = live.getAxes();
+    if (!axes) return;
+    const groups = layeredSeriesGroups(
+      live.getDatasets().map((d) => ({ name: d.name, slots: d.getSlotNames(), dataset: d }))
+    );
+    if (groups.length < 2) return;
+    const base = liveFigureFields();
+    const current = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === base.axesTypeId) ?? XY_AXES_CONFIG;
+    const categoryAxis = live.getCategoryAxis();
+    const heatmapLayer = live.getHeatmapLayer();
+    const records = groups.map((g) => {
+      const config =
+        ALL_AXES_TYPE_CONFIGS.find(
+          (c) => c.id === typeForSlots(g.slots, ALL_AXES_TYPE_CONFIGS, current)
+        ) ?? current;
+      const fresh = new CalibrationSession(config);
+      fresh.setImageHeight(imageHeightRef.current);
+      fresh.loadCalibrated(
+        axes as CalibratedAxes,
+        g.members.map((m) => m.dataset),
+        categoryAxis,
+        heatmapLayer
+      );
+      return {
+        ...base,
+        id: ++figureIdRef.current,
+        name: layeredGroupName(g.members),
+        session: fresh,
+        axesTypeId: config.id,
+      };
+    });
+    const install = figuresForOpenedProject(records, 0);
+    figuresRef.current = install.figures;
+    setActiveFigureIndex(install.active);
+    if (install.restore) restoreFigure(install.restore);
+    dirtyRef.current = true;
+    bump();
+  }, [liveFigureFields, restoreFigure, bump]);
+
   /** "Get another figure from the source" (design §8): go back to the retained
    * paged source (a PDF today) and start a fresh figure from it, keeping the
    * current one. Stashes the live figure into the array (registering it as
@@ -7027,6 +7087,14 @@ export function Workspace() {
   const tableDateFormats = useMemo(() => session.getTableDateFormats(), [session, version, config]);
   const spreadsheetMaxRows = useMemo(() => spreadsheetMaxRowCount(spreadsheetSeries), [spreadsheetSeries]);
   const showCategoryColumn = showsCategoryColumn(config.axesKind, hasSlots);
+  /**
+   * ⚑ Whether THIS figure holds series of different kinds, asked of the live
+   * session rather than remembered from the load. There is deliberately no
+   * "already declined" flag: the offer is a fact about the figure, and a flag is
+   * exactly what made it a one-way door.
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const layeredNotice = useMemo(() => session.getLayeredProjectOffer(), [session, version]);
 
   const curveFitOverlay = useMemo(() => {
     if (!curveFitState || config.id !== 'xy' || !axes) return undefined;
@@ -9844,6 +9912,8 @@ export function Workspace() {
       )}
 
       <SeriesPanel
+        layeredNotice={layeredNotice}
+        onSplitLayered={splitLayeredFigure}
         infos={datasetInfos}
         activeInfo={activeInfo}
         activeIndex={activeDatasetIndex}

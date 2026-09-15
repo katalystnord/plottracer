@@ -2627,6 +2627,83 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     }
   }, 40000);
 
+  /**
+   * ⚑⚑ DECLINING THE SPLIT IS NOT A ONE-WAY DOOR (v2.5.1).
+   *
+   * ⚠️ The offer used to exist only while a project opened. David: give it a
+   * surface. This walk says No at the door and then finds the split anyway,
+   * using only what is on screen - which is the whole of the keystone persona's
+   * rule, written as a test rather than left as a judgement.
+   *
+   * ⚑ The walk clicks what a prompt tells it to: the panel line says the figure
+   * holds series of different kinds, and the button beside it says what it does.
+   */
+  it('a split declined at the door can still be found in the Series panel', async () => {
+    await resetWorkspace('bar');
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+    await dragMarker(150, 400, 150, 250);
+    await page.getByTestId('add-series').click();
+    await dragMarker(350, 400, 350, 230);
+
+    const savePath = tempFilePath('zip');
+    await stubSaveDialog(savePath);
+    await page.getByTestId('save-project').click();
+    await page.waitForTimeout(300);
+
+    try {
+      const entries = unzipSync(fs.readFileSync(savePath));
+      const written = JSON.parse(strFromU8(entries['project.json']!));
+      written.plotData.datasetColl[1].groupNames = ['Min', 'Q1', 'Median', 'Q3', 'Max'];
+      entries['project.json'] = strToU8(JSON.stringify(written));
+      fs.writeFileSync(savePath, Buffer.from(zipSync(entries)));
+
+      // ⚠️ SAY NO, AND MEAN IT. The suite-wide handler in `beforeEach` ACCEPTS
+      // every dialog and is registered first, so adding a second listener cannot
+      // decline anything: Playwright refuses with *"Cannot dismiss dialog which
+      // is already handled"*. This test therefore takes the listeners over for
+      // its own duration. `beforeEach` re-registers the suite's handler for the
+      // next test, so nothing leaks.
+      page.removeAllListeners('dialog');
+      page.on('dialog', (d) => {
+        dialogMessages.push(d.message());
+        if (/series of different kinds/.test(d.message())) void d.dismiss();
+        else void d.accept();
+      });
+      await stubOpenProjectDialog(savePath);
+      await page.getByTestId('open-project').click();
+      await page.waitForTimeout(600);
+
+      // Declined: still one figure, and the readings are all there.
+      expect(await page.getByTestId('figure-jumper-status').count()).toBe(0);
+
+      // ⚑⚑ AND THE WAY BACK IS ON SCREEN. The panel says what the figure is and
+      // offers the action, so a user who said No is not stranded.
+      await page.getByTestId('series-layered-notice').waitFor({ state: 'visible', timeout: 8000 });
+      expect(await textOf('series-layered-notice')).toMatch(/different kinds/i);
+      await page.getByTestId('series-split-layered').click();
+      await page.waitForTimeout(400);
+
+      await page.getByTestId('figure-jumper-status').waitFor({ state: 'visible', timeout: 8000 });
+      expect(await textOf('figure-jumper-status')).toMatch(/of 2/);
+      // ⚑ And the offer is gone, because each figure now holds one kind.
+      expect(await page.getByTestId('series-layered-notice').count()).toBe(0);
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+      fs.unlinkSync(savePath);
+    }
+  }, 40000);
+
   it('saves a calibrated project to disk with the expected shape', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
