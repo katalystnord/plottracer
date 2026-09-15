@@ -2588,13 +2588,15 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       await stubOpenProjectDialog(savePath);
       await page.getByTestId('open-project').click();
 
-      // What the user reads before answering: the two static sentences, and the
-      // generated list naming which series are of which kind.
+      // ⚑ What the user reads before answering: David's two sentences, and NOTHING
+      // technical. The dialog used to list each series and its slot names; he
+      // deleted that on sight of the built app, because for a BAR it printed
+      // `Corner, Opposite corner`, which appears nowhere on screen.
       await expect
         .poll(() => dialogMessages.join(' | '), { timeout: 8000 })
         .toMatch(/series of different kinds based on the same graph figure/);
       expect(dialogMessages.join(' | ')).toMatch(/one copy of the graph image per series type/);
-      expect(dialogMessages.join(' | ')).toMatch(/Min, Q1, Median, Q3, Max/);
+      expect(dialogMessages.join(' | ')).not.toMatch(/Corner|Min, Q1/);
 
       // And yes leaves them looking at two figures, not at a warning.
       await page.getByTestId('figure-jumper-status').waitFor({ state: 'visible', timeout: 8000 });

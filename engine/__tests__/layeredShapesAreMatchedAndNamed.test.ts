@@ -111,17 +111,43 @@ describe('what a split figure is called', () => {
   });
 });
 
-describe('the offer names the series it found', () => {
-  it('⚑⚑ lists both members of a shared shape, not just the first', () => {
+describe('the offer says what it is for, and nothing technical', () => {
+  it('⚠⚑⚑ names NO series and NO slots - David deleted the generated middle', () => {
+    /**
+     * David, 2026-09-15, on the list this used to assert: *"Just remove the
+     * technical wording from the offer altogether. It is not needed at all for
+     * any graph or series type."*
+     *
+     * ⚠️ The deleted list was mine, and it read `Corner, Opposite corner` for a
+     * BAR - how a bar is CAPTURED, a phrase that appears nowhere on screen,
+     * where the panel's own header reads `Value`. It was written to make every
+     * word checkable against the panel and achieved the opposite for the
+     * commonest type.
+     *
+     * ⚑ This case is here so nobody restores it as a kindness.
+     */
     const offer = layeredProjectOffer([
       { name: 'Control', slots: BAR },
       { name: 'Vehicle', slots: BAR },
       { name: 'Treated', slots: BOX },
     ]);
     expect(offer).not.toBeNull();
-    expect(offer).toContain('Control and Vehicle');
-    expect(offer).toContain('Treated');
-    // The shapes are named by their own slots, so every word is checkable.
-    expect(offer).toContain('Min, Q1, Median, Q3, Max');
+    expect(offer).not.toContain('Control');
+    expect(offer).not.toContain('Corner');
+    expect(offer).not.toContain('Min, Q1');
+    // What it DOES carry: the reason and the remedy, in David's own words.
+    expect(offer).toContain('series of different kinds');
+    expect(offer).toContain('one copy of the graph image per series type');
+  });
+
+  it('⚑ the group NAME still lists the series, because those are the user\u2019s own words', () => {
+    // The series name is what the user typed and can see in the panel; a slot
+    // name is ours. That is why one survived the deletion and the other did not.
+    expect(
+      layeredGroupName([
+        { name: 'Control', slots: BAR },
+        { name: 'Vehicle', slots: BAR },
+      ])
+    ).toBe('Control and Vehicle');
   });
 });

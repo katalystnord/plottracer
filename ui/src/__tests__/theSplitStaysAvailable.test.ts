@@ -69,9 +69,11 @@ describe('a layered figure keeps saying so, not only at the door', () => {
     // the figure still knows what it is.
     const offer = layeredSession().getLayeredProjectOffer();
     expect(offer).not.toBeNull();
-    expect(offer).toContain('Control');
-    expect(offer).toContain('Treated');
-    expect(offer).toContain('Min, Q1, Median, Q3, Max');
+    expect(offer).toContain('series of different kinds');
+    // ⚠️ NOTHING TECHNICAL. The sentence names no series and no slot names -
+    // David deleted the generated list on sight of the built app.
+    expect(offer).not.toContain('Corner');
+    expect(offer).not.toContain('Min, Q1');
   });
 
   it('⚑ and a figure whose series agree says nothing, so the panel stays quiet', () => {

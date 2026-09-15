@@ -109,14 +109,26 @@ export function isLayered(series: readonly SeriesShape[]): boolean {
  * ⚑ PER SERIES TYPE, not per series - *"one copy of the graph image per series
  * type"* - which is why `layeredSeriesGroups` groups by shape and leaves two
  * series of one shape together in one figure.
+ *
+ * ⚠⚑⚑ AND IT IS THE WHOLE MESSAGE. It briefly sandwiched a GENERATED list of
+ * each series and its slot names, added when David observed that a constant
+ * cannot say WHICH kinds it found. He deleted it on sight of the built app:
+ * *"Just remove the technical wording from the offer altogether. It is not
+ * needed at all for any graph or series type."*
+ *
+ * ▶ The reason it had to go is worth keeping, because the idea sounded right.
+ * The list was built to make every word checkable against the panel, and for a
+ * BAR it printed `Corner, Opposite corner` - how a bar is CAPTURED, a phrase
+ * that appears NOWHERE on screen, where the panel's own header reads `Value`. It
+ * achieved the opposite of its purpose for the commonest type in the app. The
+ * question the dialog asks is whether to split a project we cannot represent,
+ * and naming our internal shapes answers a question nobody asked.
  */
-export const LAYERED_PROJECT_OFFER_OPENING =
+export const LAYERED_PROJECT_OFFER =
   'This graph project contains series of different kinds based on the same graph figure, ' +
-  'which PlotTracer does not support yet.';
-
-export const LAYERED_PROJECT_OFFER_CLOSING =
-  'For now, PlotTracer can offer to split the project into a multi-figure project, ' +
-  'with one copy of the graph image per series type. Do you want to proceed?';
+  'which PlotTracer does not support yet. For now, PlotTracer can offer to split the project ' +
+  'into a multi-figure project, with one copy of the graph image per series type. ' +
+  'Do you want to proceed?';
 
 /** `a`, `a and b`, `a, b and c` - the same list voice the bar table's
  * crowded-readings sentence uses, so two messages about one figure read as one
@@ -126,59 +138,44 @@ function listOf(names: readonly string[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]!}`;
 }
 
+
 /**
- * The offer to make, or null when this project is not layered and there is
- * nothing to ask.
- *
- * ⚑⚑ DAVID'S TWO SENTENCES ARE THE FRAME AND THEY ARE STATIC; only the middle
- * is generated. David, 2026-09-14, on his own wording being the more apt one:
- * *"Yes, but the text is static."* A constant cannot say WHICH kinds it found,
- * and the kinds are the one thing the user cannot see for themselves - the panel
- * shows series names, not the shapes behind them. So the frame stays general
- * (it reads the same for two kinds or ten) and the list carries the specifics.
- *
- * ⚑ NAMED BY THE SERIES' OWN NAMES AND THEIR OWN SLOTS - nothing is
- * interpreted. The names are the ones the series panel shows; the shapes are
- * read straight off the record.
- *
- * ⚠️ This line used to end *"and a user can check every word of it against the
- * panel"*, which the sentence three lines above already denies - the panel shows
- * series NAMES, not shapes - and which the table denies too: a Bar series stores
- * `Corner, Opposite corner` and its column header reads `Value`. A comment
- * asserting a property nothing enforces is gate 3, so the claim goes rather than
- * the wording being quietly bent to fit it. Whether the offer should list the
- * PANEL'S column names instead of the stored slots is David's call, not a
- * tidy-up (see the audit findings for 2026-09-15).
- */
-/**
- * What to call the figure a group becomes when the project is split - the names
- * of the series it holds, in the list voice the offer itself uses.
+ * What to call the figure a group becomes when the project is split.
  *
  * ⚑ NAMED BY ITS CONTENTS, not `Figure 1`/`Figure 2`: after a split the jumper
  * is the only thing saying which figure is which, and a positional name makes
  * the user open both to find out.
+ *
+ * ⚑ THE SERIES' OWN NAMES, which the user typed and can see in the panel - not
+ * slot names. That distinction is why this survived the offer's generated middle
+ * being deleted: a series name is the USER's word, a slot name is OURS.
  */
 export function layeredGroupName(members: readonly SeriesShape[]): string {
   return listOf(members.map((m) => m.name)) || 'Figure';
 }
 
+/**
+ * The offer to make, or null when this project is not layered and there is
+ * nothing to ask.
+ *
+ * ⚑⚑ DAVID'S TWO SENTENCES, AND NOTHING ELSE. David, 2026-09-15, seeing the
+ * generated middle in the built app: *"Just remove the technical wording from
+ * the offer altogether. It is not needed at all for any graph or series type."*
+ *
+ * ⚠️ IT USED TO LIST EACH SERIES AND ITS SLOT NAMES, and that was mine. The
+ * reasoning sounded good - a constant cannot say WHICH kinds it found, so make
+ * the middle generated and every word checkable against the panel. It did not
+ * survive contact: the words it printed for a BAR were `Corner, Opposite
+ * corner`, which is how a bar is CAPTURED and appears nowhere on screen, where
+ * the panel's own header reads `Value`. So the "checkable" list was checkable
+ * for some types and meaningless for the commonest one.
+ *
+ * ▶ And the question the dialog asks never needed it: it asks whether to split
+ * a project the app cannot represent, and naming the internal shapes answers a
+ * question nobody asked, in words only we use.
+ */
 export function layeredProjectOffer(series: readonly SeriesShape[]): string | null {
-  const groups = layeredSeriesGroups(series);
-  if (groups.length < 2) return null;
-  const kinds = groups
-    // ⚠️ A SHAPE WITH NO NAMES IS SAID IN WORDS. A slotless series is an
-    // ordinary record - a WPD import where one dataset has point groups and
-    // another has none is the module's own stated door - and joining an empty
-    // list left the line as a series name followed by a bare colon, asking the
-    // user to accept a split on the strength of nothing.
-    .map(
-      (g) =>
-        `    ${listOf(g.members.map((m) => m.name))}: ${
-          g.slots.length > 0 ? g.slots.join(', ') : 'no named values'
-        }`
-    )
-    .join('\n');
-  return `${LAYERED_PROJECT_OFFER_OPENING}\n\n${kinds}\n\n${LAYERED_PROJECT_OFFER_CLOSING}`;
+  return isLayered(series) ? LAYERED_PROJECT_OFFER : null;
 }
 
 /** What this module needs to know about a graph type to recognise a series of
