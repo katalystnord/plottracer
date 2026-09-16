@@ -370,6 +370,26 @@
     </div>
       <article class="rel">
         <div class="rel-head">
+          <span class="rel-ver data">2.5.1</span>
+          <span class="rel-when">2026-09</span>
+        </div>
+        <div class="rel-body">
+          <h2>The release that fixed what it had been reporting</h2>
+          <p class="rel-lede">Nothing new. Every change here is a number that was wrong, a refusal that could not fire, or a message that said the wrong thing.</p>
+          <ul>
+        <li>A figure whose series were captured in different shapes read some of them under the wrong one. The shared table asked what a value is called once, off whichever series was selected, and read every other series that way. Each series is now read and headed by its own shape.</li>
+        <li>A tilted polar figure could calibrate on a frame that carries no reading: two declared angles a hundredth of a degree apart were accepted, and a figure whose own radii were 50 and 100 then read 143,264. The check existed and could only fire on exact degeneracy. It now asks about the angle rather than about a quantity that carries the size of the figure, and so does the guard every other chart type shares.</li>
+        <li>A tilted figure with a logarithmic radial axis was told to type the one value that cannot work, then refused with a complaint about numbers that were all valid. It now asks for the innermost ring's value.</li>
+        <li>Measurements are checked when they arrive from a file, to the same standard as when they are drawn. A project archive that cannot package a figure's image says which figure, instead of writing no file and saying nothing.</li>
+        <li>A foreign project opens for what it measured, not for the picture it bundles: one importer refused a whole project over a missing image while the others opened it and said so. They now agree.</li>
+        <li>Layered graphs are not supported yet, and PlotTracer says so plainly when a project holds series of different kinds on one graph. It opens, every series is read correctly, and nothing has to be decided.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.5.1">Full release notes for 2.5.1</a></p>
+        </div>
+      </article>
+
+      <article class="rel">
+        <div class="rel-head">
           <span class="rel-ver data">2.5.0</span>
           <span class="rel-when">2026-09</span>
         </div>
