@@ -13,7 +13,7 @@
     "y": {
       "label": "Stress (MPa)",
       "min": 0,
-      "max": 50
+      "max": 60
     }
   },
   "calibration": {
@@ -38,7 +38,7 @@
       "y2": {
         "px": 67.78,
         "py": 39.33,
-        "value": 50
+        "value": 60
       }
     }
   },

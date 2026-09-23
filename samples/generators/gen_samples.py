@@ -544,7 +544,11 @@ def gen_categorical():
 
 def gen_stress_strain():
     """A tensile stress–strain curve (a flagship materials-testing extraction case):
-    elastic rise → yield → strain hardening → a gentle post-peak decline. Navy so
+    elastic rise → rounded yield → strain hardening, reaching 54.05 MPa at 15%
+    strain. ⚑ The y-limit is 60 so the WHOLE curve is drawn: at 50 (until
+    2026-09-23) it left the frame at x = 9.2 and 24 truth points were never on
+    the figure. The quadratic term only slows the hardening inside 0-15%; it
+    never turns the curve down, so there is no post-peak decline. Navy so
     the colour-trace e2e (target #1f4e79) still matches; drawn thick so the
     segment-fill flood has a solid line to follow. Truth = a dense sampling of the
     curve (a continuous curve's ground truth is the curve itself)."""
@@ -558,14 +562,14 @@ def gen_stress_strain():
     fig.patch.set_facecolor("white")
     ax.plot(x, stress, color=NAVY, linewidth=2.6, solid_capstyle="round")
     ax.set_xlim(0, 15)
-    ax.set_ylim(0, 50)
+    ax.set_ylim(0, 60)
     ax.set_xlabel("Strain (%)", fontsize=13)
     ax.set_ylabel("Stress (MPa)", fontsize=13)
     ax.set_title("Tensile stress–strain curve", fontsize=15)
     ax.grid(True, color="#dddddd", linewidth=0.8)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
-    calib = _xy_calibration(fig, ax, 0, 15, 0, 50)
+    calib = _xy_calibration(fig, ax, 0, 15, 0, 60)
     _save(fig, name)
     # Dense truth: 61 evenly-spaced samples along the curve (enough to score a
     # trace against without storing all 400 render points).
@@ -575,7 +579,7 @@ def gen_stress_strain():
         "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - a dense sampling of the plotted curve (continuous: the truth is the curve)."},
         "graphType": "xy",
         "axes": {"x": {"label": "Strain (%)", "min": 0, "max": 15},
-                 "y": {"label": "Stress (MPa)", "min": 0, "max": 50}},
+                 "y": {"label": "Stress (MPa)", "min": 0, "max": 60}},
         "calibration": calib,
         "series": [{"name": "stress", "points": [{"x": round(float(a), 3), "y": round(float(b), 3)} for a, b in zip(xs, ys)]}],
     })
