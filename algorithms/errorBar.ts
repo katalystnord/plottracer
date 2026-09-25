@@ -76,8 +76,8 @@ export interface ErrorBarPoint {
  *
  * The taxonomy CLAUDE.md calls "genuinely new work" - symmetric Y, asymmetric
  * Y, X error, a 2D cross - is not four features; it is these four roles in
- * combination (docs/error-bars-design.md). A confidence band is the same model
- * at higher density, so it needs nothing added either.
+ * combination (docs/error-bars-design.md). A confidence band is not yet one of
+ * them - see the note in engine/errorRelation.ts.
  */
 export type ErrorRole = 'upper' | 'lower' | 'left' | 'right';
 

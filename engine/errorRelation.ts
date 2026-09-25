@@ -5,9 +5,14 @@
  * **The whole model is "an error series is an ordinary series, plus a stored
  * relationship to another series"** (docs/error-bars-design.md, agreed with
  * David 2026-07-16). Everything that used to look like separate work falls out
- * of it: the taxonomy is the four roles, a confidence band is the same relation
- * at higher density, and "only some points carry error" needs no support at all
- * because the error series simply has fewer points.
+ * of it: the taxonomy is the four roles, and "only some points carry error"
+ * needs no support at all because the error series simply has fewer points.
+ *
+ * ⚠️ **A confidence BAND is NOT covered yet**, whatever the design doc hoped. It
+ * is the same relation drawn continuously - two measured edges at a shared x,
+ * with no centre unless one is drawn (v2.6 sweep, 2026-09-23) - but nothing
+ * captures it that way: a By-colour trace of a filled band records its MIDLINE,
+ * one value per column, which is neither edge. That is v2.6 work.
  *
  * **No format invention - both halves already round-trip.** The error series is
  * a `Dataset` in `datasetColl`; the relationship is a key in that dataset's own
