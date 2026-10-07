@@ -6400,7 +6400,9 @@ describe('Workspace: Help / examples (checkpoint 46)', () => {
     // committed for two commits with no entry in `examples.ts`, so the one type
     // whose card you could pick had nothing to open. This assertion is the
     // reason a silent example cannot survive a board run.
-    expect(await page.locator('[data-testid^="example-"]').count()).toBe(29);
+    // 29 -> 30 with v2.6's contour plot (potential-energy surface) - the new
+    // Contour type's only figure, so without it the card opens nothing.
+    expect(await page.locator('[data-testid^="example-"]').count()).toBe(30);
 
     await page.getByTestId('example-polar').click();
     await waitForImageFitted();
