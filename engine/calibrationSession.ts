@@ -273,6 +273,12 @@ import {
   clearErrorRelationsTo,
   type ErrorRelation,
 } from './errorRelation.js';
+import {
+  getContourLevel as readContourLevel,
+  setContourLevel as writeContourLevel,
+  type ContourLevel,
+  type ContourLevelSource,
+} from './contourLevel.js';
 import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from './seriesNames.js';
 import { valueAtPixel, exportLabelsFor, type ExportValue } from '../core/exportValues.js';
 import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../core/exportPrecision.js';
@@ -1508,6 +1514,21 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return caps;
   }
 
+  /** A contour line's level (v2.6), or null when none is set - see
+   * `engine/contourLevel.ts`. */
+  getContourLevel(index: number): ContourLevel | null {
+    const entry = this.datasetEntries[index];
+    return entry ? readContourLevel(entry.dataset) : null;
+  }
+
+  /** Set a contour line's level, or clear it with null. Returns the refusal to
+   * show when `value` is not a finite number, else null. */
+  setContourLevel(index: number, value: number | null, source: ContourLevelSource = 'typed'): string | null {
+    const entry = this.datasetEntries[index];
+    if (!entry) return null;
+    return writeContourLevel(entry.dataset, value === null ? null : { value, source });
+  }
+
   /** The relation a series declares, or null if it is an ordinary series. */
   getErrorRelation(index: number): ErrorRelation | null {
     const entry = this.datasetEntries[index];
@@ -2505,7 +2526,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * The tuple table would give one series read off the nearest ray - the v1.4
    * audit's export defect.
    */
-  getExportShape(): 'flat' | 'tuples' | 'bins' | 'heatmap' {
+  /** True where a series' datum IS a point, so its entry counts points - every
+   * shape whose rows are one per point: plain series, and contour lines (v2.6),
+   * which are plain series carrying a level. */
+  recordsPoints(): boolean {
+    const shape = this.getExportShape();
+    return shape === 'flat' || shape === 'contour';
+  }
+
+  getExportShape(): NonNullable<AxesTypeConfig<A>['exportShape']> | 'flat' {
     if (this.config.exportShape) return this.config.exportShape;
     const grouped = this.hasSlots();
     return grouped && this.config.tupleMembers !== 'independent' ? 'tuples' : 'flat';

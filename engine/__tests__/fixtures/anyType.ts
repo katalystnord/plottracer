@@ -40,6 +40,7 @@ import {
  */
 export const HEALTHY_PIXELS: Record<string, Array<[number, number]>> = {
   xy: [[100, 400], [500, 400], [100, 400], [100, 100]],
+  contour: [[100, 400], [500, 400], [100, 400], [100, 100]], // XY's calibration
   histogram: [[100, 400], [500, 400], [100, 400], [100, 100]],
   // ⚑⚑ FOUR CLICKS SINCE v2.3: two on the VALUE axis, then the two ends of the
   // CATEGORY axis. A bar chart has two axes and only one of them used to be

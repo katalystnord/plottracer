@@ -154,6 +154,9 @@ import graphStackedSvg from '../../icons/custom/graph-stacked.svg?raw';
 import graphTernarySvg from '../../icons/custom/graph-ternary.svg?raw';
 import graphMapSvg from '../../icons/custom/graph-map.svg?raw';
 import graphCcrSvg from '../../icons/custom/graph-ccr.svg?raw';
+// ⚑ Nested loops with one cut open: the inner line breaks where a level label
+// would sit, the way a contour plot is printed.
+import graphContourSvg from '../../icons/custom/graph-contour.svg?raw';
 
 // Every icons/*.svg is hand-authored at a fixed 24x24 (this set's own
 // convention). A caller that needs a SMALLER glyph (Workspace.tsx's Open
@@ -218,6 +221,7 @@ export const ErrorBarsIcon = ({ size }: GraphIconProps = {}) => <Icon svg={error
 export const GraphXyIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphXySvg} size={size} />;
 export const GraphHistogramIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphHistogramSvg} size={size} />;
 export const GraphHeatmapIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphHeatmapSvg} size={size} />;
+export const GraphContourIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphContourSvg} size={size} />;
 export const GraphBarIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphBarSvg} size={size} />;
 export const GraphCategoricalLineIcon = ({ size }: GraphIconProps = {}) => <Icon svg={graphCategoricalLineSvg} size={size} />;
 export const GraphBoxPlotIcon = ({ size }: GraphIconProps = {}) => <Icon svg={boxPlotSvg} size={size} />;
@@ -261,5 +265,6 @@ export const GRAPH_TYPE_ICONS: Record<string, (props?: GraphIconProps) => React.
   ternary: GraphTernaryIcon,
   map: GraphMapIcon,
   ccr: GraphCcrIcon,
+  contour: GraphContourIcon,
   errorbars: ErrorBarsIcon,
 };

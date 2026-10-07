@@ -563,6 +563,7 @@ describe('the config table - how many clicks each type asks for', () => {
     // maths ignores.
     const expected: Record<string, number> = {
       xy: 4,
+      contour: 4, // XY's calibration, by spread
       histogram: 4,
       // ⚑⚑ FOUR, NOT TWO, SINCE v2.3 - and the extra pair is the point. Two of
       // these clicks calibrate the VALUE axis, which is all `BarAxes` reads;

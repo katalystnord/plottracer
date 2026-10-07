@@ -1733,6 +1733,59 @@ def gen_heatmap_timecourse():
     _save(fig, name)
 
 
+
+def gen_contour():
+    """Potential-energy surface over two coordinates - BLACK contour lines with
+    inline level labels, the commonest way a paper draws one (v2.6 Contour type).
+    Two wells, so some levels are one closed loop and some are two, and the outer
+    levels run off the plot as OPEN lines. Truth = every line's vertices BEFORE
+    the labels cut gaps into it (a label gap is how the line is drawn, not data),
+    each with its level. A closed line ends on its first vertex, as matplotlib's
+    allsegs and R's contourLines() both store it."""
+    name = "contour-potential-energy"
+    x = np.linspace(0, 4, 400)
+    y = np.linspace(0, 3, 300)
+    X, Y = np.meshgrid(x, y)
+    Z = (
+        6.0
+        - 4.0 * np.exp(-((X - 1.2) ** 2 + (Y - 1.6) ** 2) / 0.5)
+        - 3.0 * np.exp(-((X - 2.9) ** 2 + (Y - 1.2) ** 2) / 0.35)
+        + 0.6 * X
+    )
+    levels = [3.0, 4.0, 5.0, 6.0, 7.0]
+    fig, ax = plt.subplots(figsize=(9, 7), dpi=100)
+    fig.patch.set_facecolor("white")
+    full = ax.contour(X, Y, Z, levels=levels, colors="none")
+    segs = [[np.array(sg) for sg in level_segs] for level_segs in full.allsegs]
+    cs = ax.contour(X, Y, Z, levels=levels, colors="#222222", linewidths=1.3)
+    ax.clabel(cs, fmt="%.0f", fontsize=10)
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 3)
+    ax.set_xlabel("Reaction coordinate q1 (Å)", fontsize=13)
+    ax.set_ylabel("Reaction coordinate q2 (Å)", fontsize=13)
+    ax.set_title("Potential-energy surface (kJ/mol)", fontsize=15)
+    ax.tick_params(labelsize=11)
+    fig.tight_layout()
+    calib = _xy_calibration(fig, ax, 0, 4, 0, 3)
+    _save(fig, name)
+    series = []
+    for level, level_segs in zip(levels, segs):
+        for i, sg in enumerate(level_segs):
+            series.append({
+                "name": f"{level:g} kJ/mol" + (f" ({i + 1})" if len(level_segs) > 1 else ""),
+                "level": level,
+                "closed": bool(np.allclose(sg[0], sg[-1])),
+                "points": [{"x": round(float(a), 4), "y": round(float(b), 4)} for a, b in sg],
+            })
+    _write_truth(name, {
+        "source": {"imagePath": name + ".png", "note": "Synthetic ground truth - every contour line's vertices before the inline labels cut it, each with its level. A closed line ends on its first vertex."},
+        "graphType": "contour",
+        "axes": {"x": {"label": "Reaction coordinate q1 (Å)", "min": 0, "max": 4},
+                 "y": {"label": "Reaction coordinate q2 (Å)", "min": 0, "max": 3}},
+        "calibration": calib,
+        "series": series,
+    })
+
 if __name__ == "__main__":
     gen_scatter()
     gen_multiseries()
@@ -1766,4 +1819,5 @@ if __name__ == "__main__":
     gen_heatmap_weld()
     gen_heatmap_assay()
     gen_heatmap_timecourse()
+    gen_contour()
     print("generated all 25 examples (+ .truth.json each): 11 PNG series types, ternary, map, multipage-pdf, spider, pie, exploded pie, donut, grouped bar, grouped bar with a missing category, stacked bar, floating bar.")

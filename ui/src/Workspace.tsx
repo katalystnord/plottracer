@@ -9776,7 +9776,7 @@ export function Workspace() {
         // ⚑ `getExportShape()` is the one thing that can answer it - the shape
         // is DYNAMIC (a Bar session carrying box-plot groups exports as tuples),
         // which is why its own doc says never to read the config field directly.
-        showPointCount={session.getExportShape() === 'flat'}
+        showPointCount={session.recordsPoints()}
         nameDraft={nameDraft}
         nameNotice={nameNotice}
         colorAnchor={colorAnchor}

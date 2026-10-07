@@ -50,7 +50,7 @@ import {
   type CurveFitExport,
   type MeasurementCsvRow,
 } from './csvExport.js';
-import type { TableSection } from './tableFormats.js';
+import type { Cell, TableSection } from './tableFormats.js';
 import type { GeometryResult } from '../algorithms/geometry.js';
 
 /** Which series an export covers: the active one, or every one. */
@@ -187,6 +187,17 @@ export function buildExportJson(input: ExportAssemblyInput): string {
   // invariant is ever violated, blank is the honest answer, not a name that
   // could be confused for a real series someone captured.
   const activeName = session.getDatasetInfos().find((i) => i.active)?.name ?? '';
+  if (exportShape === 'contour') {
+    // The same long-form rows as every other format, as objects - one source,
+    // so the JSON and the CSV cannot disagree about a line or its level.
+    const block = contourSection(session, scope, input.precision);
+    const keys = block.header.map(String);
+    return JSON.stringify(
+      { type: 'contour', rows: block.rows.map((row) => Object.fromEntries(keys.map((k, i) => [k, row[i] === '' || row[i] === undefined ? null : row[i]]))) },
+      null,
+      2
+    );
+  }
   if (exportShape === 'heatmap') {
     return buildHeatmapJSON(input.heatmapCells ?? [], measures, input.heatmapKey);
   }
@@ -316,6 +327,49 @@ export function errorColumnsByTuple(
   };
 }
 
+/**
+ * The CONTOUR record (v2.6): one row per point - line, level, x, y - in drawn
+ * order, line after line. It is the long form R's `contourLines()` returns and
+ * ggplot2 draws from (`geom_path(group = Line, colour = Level)`); grouping its
+ * rows by level gives matplotlib's `ContourSet(ax, levels, allsegs)` its input.
+ * A line with no level exports a BLANK level (''), never 0.
+ *
+ * ⚑ The derived-value columns ride along exactly as the flat export's do, and
+ * only when something needs them: `Point` (anchor / interpolated) when a line
+ * was captured with guide points, `Level from` when a level was interpolated
+ * rather than typed - so an invented value never wears the record's clothes.
+ */
+export function contourSection(
+  session: ExportAssemblyInput['session'],
+  scope: ExportAssemblyInput['scope'],
+  precision: PrecisionMode = 'auto'
+): TableSection {
+  const active = session.getActiveDatasetIndex();
+  const infos = session.getDatasetInfos().filter((i) => scope === 'all' || i.index === active);
+  const raw: { cells: Cell[]; role: string | null; levelFrom: string | null }[] = [];
+  // A blank cell is '' - the export's own blank (a `Cell` has no null).
+  for (const info of infos) {
+    const level = session.getContourLevel(info.index);
+    for (const r of session.getExportRows(info.index, precision)) {
+      raw.push({
+        cells: [info.name, level ? level.value : '', r.values[0] ?? '', r.values[1] ?? ''],
+        role: r.role ?? null,
+        levelFrom: level ? level.source : null,
+      });
+    }
+  }
+  const withRole = raw.some((r) => r.role !== null);
+  const withLevelFrom = raw.some((r) => r.levelFrom === 'interpolated');
+  return {
+    header: ['Line', 'Level', 'X', 'Y', ...(withRole ? ['Point'] : []), ...(withLevelFrom ? ['Level from'] : [])],
+    rows: raw.map((r) => [
+      ...r.cells,
+      ...(withRole ? [r.role ?? ''] : []),
+      ...(withLevelFrom ? [r.levelFrom ?? ''] : []),
+    ]),
+  };
+}
+
 export function buildExportSections(input: ExportAssemblyInput): TableSection[] {
   const { session, axes, configId, scope, measures } = input;
   const rounder = makeRounder(axes, input.precision);
@@ -338,7 +392,9 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
   // Bar-with-box-plot-groups case is dynamic, and getExportShape is the one
   // place that knows.
   const exportShape = session.getExportShape();
-  if (exportShape === 'heatmap') {
+  if (exportShape === 'contour') {
+    sections.push(contourSection(session, scope, input.precision));
+  } else if (exportShape === 'heatmap') {
     // ⚑ The record FIRST, the convenience view second. A reader opening the file
     // meets the long form - bounds, centre, value and the evidence for it -
     // before the pivoted matrix, which is derived from it.

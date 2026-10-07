@@ -35,6 +35,7 @@ import pieTiltedSample from '../../samples/pie-tilted-market-segments.png';
 import ternarySample from '../../samples/ternary-blend-composition.png';
 import mapSample from '../../samples/map-collection-sites.png';
 import ccrSample from '../../samples/circular-temperature-recording.png';
+import contourSample from '../../samples/contour-potential-energy.png';
 import multipagePdfSample from '../../samples/multipage-figures.pdf?url';
 
 /**
@@ -192,6 +193,9 @@ export const EXAMPLES: readonly { id: string; name: string; src: string; axes: s
   { id: 'pie-tilted', name: 'Tilted / 3D top face', src: pieTiltedSample, axes: 'pie' },
   { id: 'ternary', name: 'Blend composition', src: ternarySample, axes: 'ternary' },
   { id: 'map', name: 'Collection sites', src: mapSample, axes: 'map' },
+  // v2.6: black lines with inline labels, two wells, open outer levels - and
+  // not every line labelled, as printed contour plots usually are.
+  { id: 'contour', name: 'Potential-energy surface', src: contourSample, axes: 'contour' },
   { id: 'ccr', name: 'Temperature', src: ccrSample, axes: 'ccr' },
   // A multi-page PDF (checkpoint 114) -- opens the PDF (not a single image), so
   // the page flipper appears on its own and you can capture a figure per page.

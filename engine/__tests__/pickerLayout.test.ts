@@ -40,6 +40,8 @@ describe('the graph-type picker lays out as agreed', () => {
       ['Box Plot', 'Candlestick', 'Pie / Donut'],
       ['Heatmap', 'Map', 'Spider / Radar'],
       ['Polar', 'Ternary', 'Circular Chart Recorder'],
+      // ⚠️ v2.6: appended on a row of its own until David places it.
+      ['Contour'],
     ]);
   });
 

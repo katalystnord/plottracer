@@ -1058,12 +1058,16 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
    *   heatmap's cells are read from the image through the grid, so the caller
    *   supplies them (see `ExportAssemblyInput.heatmapCells`).
    *
+   * - `'contour'` (v2.6) - one row per point: line, level, x, y, in drawn order,
+   *   across every series. The long form R's `contourLines()` returns and ggplot2
+   *   draws from; grouping it by level gives matplotlib's `allsegs`.
+   *
    * ⚑ Resolve it through `session.getExportShape()`, never by reading this field
    * directly: Box Plot is ALSO reachable as a toggle on a Bar session, so the
    * shape depends on the series as well as the type. That method is the one place
    * that knows.
    */
-  exportShape?: 'flat' | 'tuples' | 'bins' | 'heatmap';
+  exportShape?: 'flat' | 'tuples' | 'bins' | 'heatmap' | 'contour';
 
   /**
    * Which data panel this type shows below the figure (v2.3) - the READ side of
@@ -1504,6 +1508,28 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       skipRotation: String(axes.noRotation()),
     };
   },
+};
+
+/**
+ * CONTOUR (v2.6) - lines on an XY plane, each carrying a LEVEL. Agreed with
+ * David 2026-10-07 as its own type: captured as plain XY curves, a contour plot
+ * loses the level (it can only be typed into a series name) - and a level is a
+ * third coordinate, not a label.
+ *
+ * ⚑ EVERYTHING ELSE IS XY'S, by spread rather than by copy, so the calibration,
+ * its guards and the capture tools cannot drift apart. Measured 2026-10-07
+ * (research/v2.6-today/): today's Flood-fill, By colour and Guide points
+ * already capture each contour line; what was missing was the level.
+ * Curve fit and geometry are off: a contour line is not a function to fit, and
+ * its area is the reader's business, not the record's.
+ */
+export const CONTOUR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
+  ...XY_AXES_CONFIG,
+  id: 'contour',
+  label: 'Contour',
+  supportsCurveFit: false,
+  supportsGeometry: false,
+  exportShape: 'contour',
 };
 
 /** Group names for a Histogram bin's two captured top corners. Order is the
@@ -4279,4 +4305,8 @@ export const ALL_AXES_TYPE_CONFIGS: readonly AxesTypeConfig<CalibratedAxes>[] = 
   POLAR_AXES_CONFIG,
   TERNARY_AXES_CONFIG,
   CIRCULAR_CHART_RECORDER_AXES_CONFIG,
+  // ⚠️ v2.6: appended, so the 15-card grid gains a 16th card on a row of its
+  // own. Its place in the grid is David's call (Heatmap is its data relative:
+  // both are a plane plus a value on a third axis).
+  CONTOUR_AXES_CONFIG,
 ];

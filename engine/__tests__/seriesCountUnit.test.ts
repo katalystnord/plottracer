@@ -40,6 +40,7 @@ import { ALL_TYPES, calibratedHealthy, labelOf } from './fixtures/anyType.js';
  */
 const RECORDS_POINTS: Record<string, boolean> = {
   xy: true,
+  contour: true, // a contour line is an XY polyline that carries a level
   categorical: true, // one point per category - a plain click, no second end
   polar: true,
   ternary: true,
@@ -65,7 +66,7 @@ describe('a series entry counts points only where a datum IS a point', () => {
   for (const [id, config] of ALL_TYPES) {
     it(`${labelOf(id)}: ${RECORDS_POINTS[id] ? 'counts points' : 'does NOT count points'}`, () => {
       const session: CalibrationSession<CalibratedAxes> = calibratedHealthy(id, config);
-      expect(session.getExportShape() === 'flat').toBe(RECORDS_POINTS[id]);
+      expect(session.recordsPoints()).toBe(RECORDS_POINTS[id]);
     });
   }
 
@@ -77,7 +78,7 @@ describe('a series entry counts points only where a datum IS a point', () => {
       path.join(import.meta.dirname, '..', '..', 'ui', 'src', 'Workspace.tsx'),
       'utf8'
     );
-    expect(workspace).toMatch(/showPointCount=\{[^}]*getExportShape\(\)/);
+    expect(workspace).toMatch(/showPointCount=\{session\.recordsPoints\(\)\}/);
     expect(workspace).not.toMatch(/showPointCount=\{config\.outputPanel/);
   });
 });
