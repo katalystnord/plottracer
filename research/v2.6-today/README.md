@@ -66,3 +66,11 @@ run at 40/80/120.
 
 Regenerate the figures with `python3 gen_all.py` (in `ideas/`) or
 `python3 gen_rungs.py` (in `ladder/`).
+
+## A correction to the simulated clicks
+
+In the `s4_same_touch` Guide points rows of `TODAY.md`, the simulated user is
+forbidden from clicking within 12 px of the other curve. That means it never
+clicks at the touch itself, which is exactly where a real user would click.
+`ideas/TOUCH.md` is the same figure with that rule lifted, keeping only the
+Guide points rows. Read it instead of those TODAY.md rows.
