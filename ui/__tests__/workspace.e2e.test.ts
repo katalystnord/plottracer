@@ -271,7 +271,7 @@ async function waitForImageFitted(timeoutMs = 8000) {
 // 'errorbar' is deliberately absent (checkpoint 79): the graph type is retired,
 // so it is no longer selectable here. Error bars are rail tool 6 now.
 async function resetWorkspace(
-  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'span' | 'stacked' | 'categorical' | 'boxplot' | 'candlestick' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr',
+  axesTypeId: 'xy' | 'histogram' | 'heatmap' | 'bar' | 'span' | 'stacked' | 'categorical' | 'boxplot' | 'candlestick' | 'polar' | 'spider' | 'pie' | 'ternary' | 'map' | 'ccr' | 'contour',
   // Checkpoint 103: capture is a MANDATORY first step -- axis calibration is
   // blocked until the figure-of-record is established. So resetWorkspace captures
   // the (whole, fitted) figure by default, matching what a user must do before
@@ -11812,5 +11812,46 @@ describe('Workspace: a stacked bar chart', () => {
     await expect.poll(() => textOf('bar-cell-1-0-max'), { timeout: 8000 }).toMatch(/6/);
     // And the one below is untouched.
     expect(await textOf('bar-cell-0-0-max')).toMatch(/2/);
+  });
+});
+
+describe('Workspace: a contour line carries a level (v2.6)', () => {
+  // Gate 4: every step below is one the screen asks for. The calibration walk
+  // is XY's, prompt for prompt; the level field is labelled "Level" and says
+  // "not set" until something is typed.
+  async function levelText(): Promise<string> {
+    return page.getByTestId('series-level').inputValue();
+  }
+
+  it('C1 a typed level is kept per line, a word is refused at the field, and XY has no level at all', async () => {
+    await resetWorkspace('xy');
+    expect(await page.getByTestId('series-level').count(), 'an XY series has no level').toBe(0);
+
+    await resetWorkspace('contour');
+    await calibrateXYStandard();
+    expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
+    await clickAt(150, 200);
+    await clickAt(250, 180);
+    await clickAt(350, 210);
+
+    const field = page.getByTestId('series-level');
+    expect(await field.getAttribute('placeholder')).toBe('not set');
+
+    await field.fill('lots');
+    await field.press('Enter');
+    await expect.poll(() => textOf('series-level-error'), { timeout: 5000 }).toMatch(/not a number/i);
+
+    await page.getByTestId('series-level').fill('0.4');
+    await page.getByTestId('series-level').press('Enter');
+    await expect.poll(() => page.getByTestId('series-level-error').count(), { timeout: 5000 }).toBe(0);
+    expect(await levelText()).toBe('0.4');
+
+    // A second line starts with no level; the first keeps its own.
+    await page.getByTestId('add-series').click();
+    await page.waitForTimeout(150);
+    expect(await levelText(), 'a new line has no level until one is typed').toBe('');
+    await page.getByTestId('series-select').selectOption('0');
+    await page.waitForTimeout(150);
+    expect(await levelText()).toBe('0.4');
   });
 });

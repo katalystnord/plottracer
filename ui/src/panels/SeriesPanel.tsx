@@ -41,6 +41,17 @@ export interface SeriesPanelProps {
   canvasHasImage: boolean;
   onCommitPendingEdit: () => void;
   onArmEyedropper: (target: 'series') => void;
+  /**
+   * v2.6: the active line's LEVEL - present only on a Contour figure, where a
+   * line's level is a number beside its points rather than text in its name
+   * (`engine/contourLevel.ts`). `text` is what the field shows ('' = not set).
+   */
+  level?: {
+    text: string;
+    interpolated: boolean;
+    notice: string | null;
+    onCommit: (text: string) => void;
+  };
 }
 
 /**
@@ -70,6 +81,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
     canvasHasImage,
     onCommitPendingEdit,
     onArmEyedropper,
+    level,
   } = props;
   return (
     <SidebarSection>
@@ -242,6 +254,40 @@ export function SeriesPanel(props: SeriesPanelProps) {
             </button>
           )}
         </div>
+      )}
+      {level && activeInfo && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+          <label htmlFor="series-level" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+            Level
+          </label>
+          <input
+            id="series-level"
+            data-testid="series-level"
+            // Re-mounted when the series or its stored level changes, so the
+            // field always starts from what is recorded.
+            key={`${activeIndex}:${level.text}`}
+            defaultValue={level.text}
+            placeholder="not set"
+            title="This line's contour level - the value printed on it. Leave blank if it has none."
+            inputMode="decimal"
+            onBlur={(e) => level.onCommit(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+            aria-invalid={level.notice !== null}
+            style={{ width: 96, fontStyle: level.interpolated ? 'italic' : undefined }}
+          />
+          {level.interpolated && (
+            <span data-testid="series-level-interpolated" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
+              interpolated
+            </span>
+          )}
+        </div>
+      )}
+      {level?.notice && (
+        <p data-testid="series-level-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
+          {level.notice}
+        </p>
       )}
       {nameNotice && (
         <p data-testid="series-name-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>

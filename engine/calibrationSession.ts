@@ -275,6 +275,7 @@ import {
 } from './errorRelation.js';
 import {
   getContourLevel as readContourLevel,
+  parseContourLevel,
   setContourLevel as writeContourLevel,
   type ContourLevel,
   type ContourLevelSource,
@@ -1519,6 +1520,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
   getContourLevel(index: number): ContourLevel | null {
     const entry = this.datasetEntries[index];
     return entry ? readContourLevel(entry.dataset) : null;
+  }
+
+  /** Set a contour line's level from what the user typed; blank clears it.
+   * Returns the refusal to show (the level is then left as it was), else null. */
+  setContourLevelFromText(index: number, text: string): string | null {
+    const parsed = parseContourLevel(text);
+    if (parsed && 'error' in parsed) return parsed.error;
+    return this.setContourLevel(index, parsed ? parsed.value : null, 'typed');
   }
 
   /** Set a contour line's level, or clear it with null. Returns the refusal to

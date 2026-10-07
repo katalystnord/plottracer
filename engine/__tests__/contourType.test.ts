@@ -168,6 +168,24 @@ describe('v2.6 contour - the record', () => {
     expect(roles).toEqual(new Set(['anchor', 'interpolated']));
   });
 
+  it('C1 a level is typed the way every value in the app is typed - and words are refused, saying so', () => {
+    const s = calibratedContour();
+    trace(s, OPEN);
+    // The same parser as every calibration field, so the same answers: "1,000"
+    // is REFUSED there (core/inputParser.ts - it once read as 1, every value
+    // 1000x wrong), and it is refused here.
+    expect(s.setContourLevelFromText(0, '1,000')).toMatch(/not a number/i);
+    expect(s.getContourLevel(0)).toBeNull();
+    expect(s.setContourLevelFromText(0, '1e3')).toBeNull();
+    expect(s.getContourLevel(0)?.value).toBe(1000);
+    expect(s.setContourLevelFromText(0, '-2.5')).toBeNull();
+    expect(s.getContourLevel(0)?.value).toBe(-2.5);
+    expect(s.setContourLevelFromText(0, 'lots')).toMatch(/not a number/i);
+    expect(s.getContourLevel(0)?.value, 'a refused entry leaves the level as it was').toBe(-2.5);
+    expect(s.setContourLevelFromText(0, '   ')).toBeNull();
+    expect(s.getContourLevel(0), 'clearing the field clears the level').toBeNull();
+  });
+
   it('C4 a level that is not a finite number is refused - when typed, and when a file says so', () => {
     const s = calibratedContour();
     trace(s, OPEN);

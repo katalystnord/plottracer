@@ -21,6 +21,7 @@
  * points are shown.
  */
 import type { Dataset } from '../core/dataset.js';
+import { InputParser } from '../core/inputParser.js';
 
 export type ContourLevelSource = 'typed' | 'interpolated';
 
@@ -51,4 +52,22 @@ export function setContourLevel(dataset: Dataset, level: ContourLevel | null): s
   else delete meta[CONTOUR_LEVEL_METADATA_KEY];
   dataset.setMetadata(meta);
   return null;
+}
+
+/**
+ * A level as the user TYPED it: parsed the way every value in the app is
+ * (`core/inputParser.ts` - the WHOLE string must be a number, so "1,000" and
+ * "5 kJ" are refused rather than read as 1 and 5), so the level field cannot
+ * read a number differently from the calibration fields beside it.
+ * Blank clears. Returns the level, null for "clear", or the refusal to show.
+ */
+export function parseContourLevel(text: string): { value: number } | null | { error: string } {
+  const t = text.trim();
+  if (t === '') return null;
+  const ip = new InputParser();
+  const v = ip.parse(t);
+  if (!ip.isValid || ip.isDate || typeof v !== 'number' || !Number.isFinite(v)) {
+    return { error: `"${t}" is not a number - the level was not changed.` };
+  }
+  return { value: v };
 }

@@ -6330,6 +6330,8 @@ export function Workspace() {
   // gotcha -- the compiler wants the declaration first.
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [nameNotice, setNameNotice] = useState<string | null>(null);
+  /** Why the last typed contour level was refused (v2.6) - shown under the field. */
+  const [levelNotice, setLevelNotice] = useState<string | null>(null);
 
   const handleSelectDataset = useCallback(
     (index: number) => {
@@ -6407,6 +6409,23 @@ export function Workspace() {
       commit();
     },
     [session, commit]
+  );
+
+  /** A contour line's level, typed (v2.6). Parsed by the engine with the app's
+   * own number parser; a refusal leaves the level as it was and says why. */
+  const handleCommitLevel = useCallback(
+    (index: number, text: string) => {
+      const before = session.getContourLevel(index);
+      const refusal = session.setContourLevelFromText(index, text);
+      setLevelNotice(refusal);
+      const after = session.getContourLevel(index);
+      if (refusal || (before?.value === after?.value && before?.source === after?.source)) {
+        bump();
+        return;
+      }
+      commit();
+    },
+    [session, commit, bump]
   );
 
   const handleSetDatasetColor = useCallback(
@@ -9791,6 +9810,16 @@ export function Workspace() {
         canvasHasImage={canvasHasImage}
         onCommitPendingEdit={commitPendingEdit}
         onArmEyedropper={setEyedropper}
+        {...(session.getExportShape() === 'contour'
+          ? {
+              level: {
+                text: String(session.getContourLevel(activeDatasetIndex)?.value ?? ''),
+                interpolated: session.getContourLevel(activeDatasetIndex)?.source === 'interpolated',
+                notice: levelNotice,
+                onCommit: (text: string) => handleCommitLevel(activeDatasetIndex, text),
+              },
+            }
+          : {})}
       />
 
 
