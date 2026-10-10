@@ -281,6 +281,8 @@ import {
   type ContourLevelSource,
 } from './contourLevel.js';
 import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from './seriesNames.js';
+import { cutLine, isClosedLine, joinLines, insertionIndex, type LinePoint } from './lineEdits.js';
+import { getLabelRead, setLabelRead, type LabelRead } from './contourLabel.js';
 import { valueAtPixel, exportLabelsFor, type ExportValue } from '../core/exportValues.js';
 import { halfPixelResolution, roundToResolution, type PrecisionMode } from '../core/exportPrecision.js';
 import { valueColumnNames, valueCells, isReshaped } from './valueColumns.js';
@@ -331,7 +333,17 @@ import {
  * stored words as the exported vocabulary is deliberate (David, 2026-07-25) -
  * we export the fact the record holds, and leave "so is it trustworthy?" to the
  * reader (tenets 9 + 10). */
-export type PointRole = 'anchor' | 'interpolated';
+export type PointRole = 'anchor' | 'interpolated' | 'bridged' | 'shared';
+
+/** The roles a pixel's metadata may carry. `bridged` and `shared` come from
+ * Find lines (v2.6): a bridged point fills a gap the figure drew no ink in (a
+ * label, a dash gap, a crossing) by a fair interpolation between the line's
+ * ends; a shared point lies on a stretch two lines run along together, and is
+ * recorded in both. Unlike `interpolated`, neither is regenerated from anything,
+ * so both stay editable like any point. */
+function pointRoleOf(r: unknown): PointRole | null {
+  return r === 'anchor' || r === 'interpolated' || r === 'bridged' || r === 'shared' ? r : null;
+}
 
 export interface PlacedCalibPoint {
   px: number;
@@ -2564,10 +2576,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // StarryDigitizer's 194k-curve database can no longer undo. Absent (undefined)
     // for an ordinary point, so a series with no interpolation exports byte-for-byte
     // as before.
-    const roleAt = (i: number): PointRole | undefined => {
-      const r = pixels[i]?.metadata?.['role'];
-      return r === 'anchor' || r === 'interpolated' ? r : undefined;
-    };
+    const roleAt = (i: number): PointRole | undefined => pointRoleOf(pixels[i]?.metadata?.['role']) ?? undefined;
     // ⚑⚑ TRANSLATED INTO THIS TYPE'S OWN COLUMNS (A4), because a data DIMENSION
     // and an export FIELD are not the same index and only this method knows the
     // mapping. XY writes `X, Y`, so dim 1 is column 1; a spider writes `Axis,
@@ -3624,6 +3633,128 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
+   * Find lines' result (v2.6): each found line becomes its OWN series, in the
+   * colour it was found in, its points carrying their roles (bridged, shared).
+   * The first line fills the active series if that is still empty; the rest
+   * are new series. Returns the indices of the series it filled, in order.
+   */
+  addFoundLines(lines: readonly (readonly LinePoint[])[], colour: readonly [number, number, number]): number[] {
+    if (!this.axes) return [];
+    const created: number[] = [];
+    lines.forEach((pts, k) => {
+      const active = this.activeEntry.dataset;
+      const idx = k === 0 && active.getCount() === 0 && !active.hasSlots() ? this.activeDatasetIndex : this.addDataset();
+      this.writeLinePoints(idx, pts);
+      this.setDatasetColor(idx, colour);
+      created.push(idx);
+    });
+    if (created.length) this.switchActiveDataset(created[0]!);
+    return created;
+  }
+
+  /** A plain series' points with their line roles, or null for a series whose
+   * points belong to slots (a box, a bar) - those are not lines. */
+  getLinePoints(index: number): LinePoint[] | null {
+    const entry = this.datasetEntries[index];
+    if (!entry || entry.dataset.hasSlots()) return null;
+    return entry.dataset.getAllPixels().map((p) => {
+      const r = p.metadata?.['role'];
+      return { x: p.x, y: p.y, role: r === 'bridged' || r === 'shared' ? r : null };
+    });
+  }
+
+  private writeLinePoints(index: number, pts: readonly LinePoint[]): void {
+    const ds = this.datasetEntries[index]!.dataset;
+    // ⚑ clearAll also empties the SERIES' metadata - its level and the label's
+    // evidence - so it is kept across the rewrite. Without this a Cut, Join or
+    // Move silently dropped the line's level.
+    const meta = ds.getMetadata();
+    ds.clearAll();
+    ds.setMetadata(meta);
+    for (const p of pts) ds.addPixel(p.x, p.y, p.role ? { role: p.role } : undefined);
+  }
+
+  /**
+   * CUT (K2): the line becomes two at point `pointIndex` - or, if it is closed,
+   * opens there. The second part is a new series with the same colour, level and
+   * label evidence; the original stays active. Returns the refusal, else null.
+   */
+  cutLineAt(index: number, pointIndex: number): string | null {
+    const pts = this.getLinePoints(index);
+    if (!pts) return 'Only a line can be cut.';
+    const closed = isClosedLine(pts);
+    const parts = cutLine(pts, pointIndex);
+    if (parts.length === 1 && !closed) return 'That is the end of the line - click where the line should be cut.';
+    this.writeLinePoints(index, parts[0]!);
+    if (parts.length === 2) {
+      const src = this.datasetEntries[index]!.dataset;
+      const keepActive = this.activeDatasetIndex;
+      const ni = this.addDataset(src.name);
+      const nd = this.datasetEntries[ni]!.dataset;
+      const [r, g, b] = src.colorRGB.getRGB();
+      nd.colorRGB = new Color(r, g, b);
+      nd.setMetadata({ ...src.getMetadata() });
+      this.writeLinePoints(ni, parts[1]!);
+      this.switchActiveDataset(keepActive);
+    }
+    return null;
+  }
+
+  /**
+   * JOIN (K3): line `other` is joined onto line `index` at their nearest ends,
+   * the gap bridged by the fair interpolation and marked bridged, and `other`
+   * is removed. Two lines with DIFFERENT levels are refused: one line has one
+   * level, and which of the two is right is not ours to guess.
+   */
+  joinLines(index: number, other: number): string | null {
+    if (index === other) return 'Pick a different line to join with.';
+    const a = this.getLinePoints(index), b = this.getLinePoints(other);
+    if (!a || !b) return 'Only lines can be joined.';
+    const la = this.getContourLevel(index), lb = this.getContourLevel(other);
+    if (la && lb && la.value !== lb.value) {
+      return `These lines have different levels (${la.value} and ${lb.value}), so they cannot be one line. Change one of the levels first if one is wrong.`;
+    }
+    this.writeLinePoints(index, joinLines(a, b));
+    if (!la && lb) this.setContourLevel(index, lb.value, lb.source);
+    const keep = this.datasetEntries[index]!.dataset;
+    this.removeDataset(other);
+    const ni = this.datasetEntries.findIndex((e) => e.dataset === keep);
+    if (ni >= 0) this.switchActiveDataset(ni);
+    return null;
+  }
+
+  /**
+   * MOVE (K4): the points at `pointIndices` of line `from` move to line `to`,
+   * each slotted between the two points of `to` it sits closest to, so `to`
+   * stays in drawn order. Returns how many moved.
+   */
+  movePointsToLine(from: number, pointIndices: readonly number[], to: number): number {
+    if (from === to) return 0;
+    const src = this.getLinePoints(from), dst = this.getLinePoints(to);
+    if (!src || !dst) return 0;
+    const pick = new Set(pointIndices.filter((i) => i >= 0 && i < src.length));
+    if (!pick.size) return 0;
+    const moving = src.filter((_, i) => pick.has(i));
+    const next = [...dst];
+    for (const p of moving) next.splice(insertionIndex(next, p), 0, { ...p });
+    this.writeLinePoints(from, src.filter((_, i) => !pick.has(i)));
+    this.writeLinePoints(to, next);
+    return moving.length;
+  }
+
+  /** What a contour line's label said, kept with the line as the evidence for
+   * its level (S5) - see `engine/contourLabel.ts`. */
+  getLabelRead(index: number): LabelRead | null {
+    const entry = this.datasetEntries[index];
+    return entry ? getLabelRead(entry.dataset) : null;
+  }
+
+  setLabelRead(index: number, read: LabelRead | null): void {
+    const entry = this.datasetEntries[index];
+    if (entry) setLabelRead(entry.dataset, read);
+  }
+
+  /**
    * Record an axis-aware colour trace's readings into this series' spider slots
    * (v1.4) - one entry per spoke, in spoke order, null where the trace declined to
    * offer one. The grouped sibling of addSegmentFillPoints: a spider trace DOES
@@ -3842,10 +3973,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   getDataPointRolesFor(datasetIndex: number): (PointRole | null)[] {
     const entry = this.datasetEntries[datasetIndex];
     if (!entry) return [];
-    return entry.dataset.getAllPixels().map((p) => {
-      const r = p.metadata?.['role'];
-      return r === 'anchor' || r === 'interpolated' ? r : null;
-    });
+    return entry.dataset.getAllPixels().map((p) => pointRoleOf(p.metadata?.['role']));
   }
 
   /**
