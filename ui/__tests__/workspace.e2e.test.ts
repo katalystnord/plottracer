@@ -11939,6 +11939,31 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(found, { timeout: 60000 }).toBeGreaterThan(0);
     expect(await found(), 'the legend\'s sample lines are no longer found').toBeLessThan(without);
     expect(await page.getByTestId('series-select').locator('option').count(), 'replaced, not stacked').toBe(await found());
+
+    // Picking a line by clicking ON it, with Select - no hunting in the list.
+    await page.getByTestId('mode-select').click();
+    expect(await textOf('tips-bar')).toMatch(/Click any line to pick it/);
+    const before = await page.getByTestId('series-select').inputValue();
+    const [lx2, ly2] = toPx(t.series[1]!.points[Math.floor(t.series[1]!.points.length * 0.5)]!);
+    await clickImagePixel(lx2, ly2);
+    await expect.poll(() => page.getByTestId('series-select').inputValue(), { timeout: 5000 }).not.toBe(before);
+
+    // Erasing wrong bits from EVERY line with one box (the tangle at the origin).
+    await page.getByTestId('mode-eraser').click();
+    expect(await textOf('tips-bar')).toMatch(/drag a box over wrong bits/);
+    const total = async () =>
+      (await page.getByTestId('series-select').locator('option').allTextContents())
+        .reduce((n, o) => n + Number(o.match(/\((\d+)\)/)?.[1] ?? 0), 0);
+    const pointsBefore = await total();
+    const q0 = await imageToLocal(a.x1.px + 3, a.y2.py + (a.y1.py - a.y2.py) * 0.8);
+    const q1 = await imageToLocal(a.x1.px + 60, a.y1.py - 3);
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + q0.lx, canvasBox.y + q0.ly);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + (q0.lx + q1.lx) / 2, canvasBox.y + (q0.ly + q1.ly) / 2, { steps: 4 });
+    await page.mouse.move(canvasBox.x + q1.lx, canvasBox.y + q1.ly, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(total, { timeout: 5000 }).toBeLessThan(pointsBefore);
   });
 
   it('F1/F9/K1-K3 one press finds every contour line, says what it did, and a found line can be cut and joined again', async () => {

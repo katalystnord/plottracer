@@ -194,3 +194,38 @@ describe('regions marked as not data (N4) are part of the figure', () => {
     expect(opened.notDataRegions).toEqual([{ x: 300, y: 120, width: 60, height: 30 }]);
   });
 });
+
+describe('erasing wrong bits with a box (David, 2026-10-10)', () => {
+  it('a box removes the points of EVERY line inside it, not only the active one', () => {
+    const s = calibrated();
+    s.addFoundLines([line([[120, 200], [140, 200], [160, 200]]), line([[120, 230], [140, 230], [160, 230]])]);
+    expect(s.eraseLinesInRect({ x: 155, y: 190, width: 20, height: 50 })).toBe(2);
+    expect(s.getLinePoints(0)!.map((p) => p.x)).toEqual([120, 140]);
+    expect(s.getLinePoints(1)!.map((p) => p.x)).toEqual([120, 140]);
+  });
+
+  it('a line the box cuts through is SPLIT at the hole, so nothing is drawn across what was erased', () => {
+    const s = calibrated();
+    s.addFoundLines([line([[120, 200], [140, 200], [160, 200], [180, 200], [200, 200]])]);
+    s.eraseLinesInRect({ x: 150, y: 190, width: 20, height: 20 });
+    expect(s.getDatasetInfos().length).toBe(2);
+    expect(s.getLinePoints(0)!.map((p) => p.x)).toEqual([120, 140]);
+    expect(s.getLinePoints(1)!.map((p) => p.x)).toEqual([180, 200]);
+  });
+
+  it('a stray line wholly inside the box is removed', () => {
+    const s = calibrated();
+    s.addFoundLines([OPEN, line([[300, 120], [305, 125], [310, 128]])]);
+    s.eraseLinesInRect({ x: 290, y: 110, width: 30, height: 30 });
+    expect(s.getDatasetInfos().length).toBe(1);
+    expect(s.getLinePoints(0)!.length).toBe(5);
+  });
+
+  it('clicking near a line picks it', () => {
+    const s = calibrated();
+    s.addFoundLines([OPEN, line([[120, 230], [200, 230]])]);
+    expect(s.lineNearest(150, 228, 6)).toBe(1);
+    expect(s.lineNearest(150, 202, 6)).toBe(0);
+    expect(s.lineNearest(150, 215, 6)).toBe(-1);
+  });
+});

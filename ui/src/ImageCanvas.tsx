@@ -1545,6 +1545,14 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
             const report =
               selectMode === 'rectangle' ? onSelectRect : regionMode ? onRegionRect : onCropRect;
             report?.({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
+          } else if ((selectMode === 'rectangle' || regionMode) && !cropMode) {
+            // ⚑ A plain CLICK in a marquee mode is still a click. It used to be
+            // dropped here as "too small to be a box", so a click ON a drawn line
+            // (lines do not listen; the press lands on the stage) did nothing -
+            // and picking a found line meant hunting for it in the series list
+            // (David, 2026-10-10). The router decides what a click means per
+            // mode: in Select it picks the line under it.
+            onImageClick?.(b.x, b.y);
           }
         }
         setCropCurrent(null);

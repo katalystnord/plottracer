@@ -3773,6 +3773,82 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return moving.length;
   }
 
+  /**
+   * ERASE A REGION (v2.6): every point of every LINE inside `rect` is removed.
+   * A line the box cuts through is split at the hole - the parts either side
+   * become separate lines, so no straight segment is drawn across what was
+   * erased - and a line left with fewer than two points is removed (the figure
+   * keeps one series, emptied if it has to be). David, 2026-10-10, over a Find
+   * lines result with stray bits on several lines: *"we need to make it simpler
+   * for me to select erroneous parts and remove them."* Returns how many points
+   * went.
+   */
+  eraseLinesInRect(rect: { x: number; y: number; width: number; height: number }): number {
+    const inside = (p: { x: number; y: number }): boolean =>
+      p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height;
+    let removed = 0;
+    const keepActive = this.datasetEntries[this.activeDatasetIndex]!.dataset;
+    // walk a snapshot of the entries, since splitting adds and removing deletes
+    for (const entry of [...this.datasetEntries]) {
+      const index = this.datasetEntries.indexOf(entry);
+      const pts = this.getLinePoints(index);
+      if (!pts || !pts.some(inside)) continue;
+      const runs: LinePoint[][] = [];
+      let run: LinePoint[] = [];
+      for (const p of pts) {
+        if (inside(p)) {
+          removed++;
+          if (run.length) runs.push(run);
+          run = [];
+        } else run.push(p);
+      }
+      if (run.length) runs.push(run);
+      const kept = runs.filter((r) => r.length >= 2);
+      removed += runs.filter((r) => r.length < 2).reduce((n, r) => n + r.length, 0);
+      if (!kept.length) {
+        if (this.datasetEntries.length > 1) this.removeDataset(index);
+        else this.writeLinePoints(index, []);
+        continue;
+      }
+      this.writeLinePoints(index, kept[0]!);
+      for (const part of kept.slice(1)) {
+        const src = entry.dataset;
+        const ni = this.addDataset(src.name);
+        const nd = this.datasetEntries[ni]!.dataset;
+        const [r, g, b] = src.colorRGB.getRGB();
+        nd.colorRGB = new Color(r, g, b);
+        nd.setMetadata({ ...src.getMetadata() });
+        this.writeLinePoints(ni, part);
+      }
+    }
+    const ai = this.datasetEntries.findIndex((e) => e.dataset === keepActive);
+    this.switchActiveDataset(ai >= 0 ? ai : Math.min(this.activeDatasetIndex, this.datasetEntries.length - 1));
+    return removed;
+  }
+
+  /** The line nearest image point (x, y) within `radius` px, or -1 - so a click
+   * on a line can pick it without the series list. */
+  lineNearest(x: number, y: number, radius: number): number {
+    let best = -1, bd = radius;
+    this.datasetEntries.forEach((_, i) => {
+      const pts = this.getLinePoints(i);
+      if (!pts) return;
+      for (let k = 0; k < pts.length; k++) {
+        const a = pts[k]!;
+        const b = pts[k + 1] ?? a;
+        const vx = b.x - a.x, vy = b.y - a.y;
+        const L2 = vx * vx + vy * vy;
+        const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / L2)) : 0;
+        const d = Math.hypot(a.x + t * vx - x, a.y + t * vy - y);
+        if (d < bd) {
+          bd = d;
+          best = i;
+        }
+      }
+    });
+    return best;
+  }
+
   /** What a contour line's label said, kept with the line as the evidence for
    * its level (S5) - see `engine/contourLabel.ts`. */
   getLabelRead(index: number): LabelRead | null {

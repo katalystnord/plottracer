@@ -391,7 +391,11 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // No points to select yet -- point the user at Add rather than inviting a
       // click on an empty canvas (the post-calibration default is Add, so this is
       // only reached by choosing Select first).
+      // On a type whose record is LINES (v2.6), a click on any line picks it, so
+      // the active series being empty does not mean there is nothing to select.
       if (dataPointCount === 0) return 'No points yet - switch to Add points (3) to place some, then come back to Select.';
+      if (config.id === 'xy' || config.id === 'contour')
+        return 'Click any line to pick it, then click a point or drag a box over its points: Del removes, arrows nudge. To clear wrong bits from several lines at once, drag a box with the Eraser. (Data points only - calibration handles are safe.)';
       return 'Click a point to select it, or drag a box to select a range. Then Del removes, arrows nudge. (Data points only - calibration handles are safe.)';
     }
     if (mode === 'place-point') {
@@ -554,7 +558,10 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
         return 'Anchor selected - ↑ ↓ ← → nudge (Shift = coarse), Q/W step anchors, Del removes it - the curve refits. Or click to add another.';
       return 'Interpolate - click to add a guide point (Q/W to step between anchors); the fill redraws as you go.';
     }
-    if (mode === 'eraser') return 'Eraser - click a data point to remove it.';
+    if (mode === 'eraser')
+      return config.id === 'xy' || config.id === 'contour'
+        ? 'Eraser - click a data point to remove it, or drag a box over wrong bits: every point of every line inside it is removed.'
+        : 'Eraser - click a data point to remove it.';
     if (mode === 'cut') return 'Cut - click a line where it should be cut: it becomes two lines there. A closed line opens at the cut.';
     if (mode === 'find-lines')
       return 'Find lines - pick the lines’ colour (or take it from the image with the pipette), then press Find lines: every line of that colour becomes its own line. A plain click does nothing.';

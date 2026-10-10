@@ -3969,10 +3969,20 @@ export function Workspace() {
         }
         case 'ignore':
           return;
-        case 'clear-selection':
+        case 'clear-selection': {
           setSelectedPointIndices([]);
           setActivePointIndex(null);
+          // A click ON a line picks that line (v2.6) - so a stray bit can be
+          // selected without first hunting down which series it ended up in.
+          if (findLinesKind(session.getConfig().id)) {
+            const hit = session.lineNearest(px, py, 8);
+            if (hit >= 0 && hit !== session.getActiveDatasetIndex()) {
+              session.setActiveDataset(hit);
+              bump();
+            }
+          }
           return;
+        }
         case 'measure':
           handleMeasureClick(px, py);
           return;
@@ -9321,7 +9331,7 @@ export function Workspace() {
           <IconButton
             testId="mode-eraser"
             icon={<EraseIcon />}
-            label="Erase a point - click a point to remove it"
+            label={findLinesKind(config.id) ? 'Erase - click a point, or drag a box over wrong bits to remove them from every line' : 'Erase a point - click a point to remove it'}
             pressed={mode === 'eraser'}
             disabled={toolDisabled('eraser', dataPoints.length === 0)}
             disabledReason={toolReason('eraser', 'Add data points first')}
@@ -9600,11 +9610,17 @@ export function Workspace() {
           // active, EXCEPT while the eyedropper is armed (that click samples a
           // colour). A bare click in this mode is already a no-op (see
           // handleImageClick), so an always-live drag clobbers nothing.
-          regionMode={(mode === 'color-trace' || (mode === 'find-lines' && leavingOut)) && eyedropper === null}
+          regionMode={(mode === 'color-trace' || (mode === 'find-lines' && leavingOut) || (mode === 'eraser' && !!findLinesKind(config.id))) && eyedropper === null}
           // v2.0 pre-launch audit: the click-vs-drag guard (a zero-area region
           // would match nothing) is now ImageCanvas.tsx's own job, consolidated
           // with crop/select's identical guard -- see its endDrag comment.
           onRegionRect={(r) => {
+            if (mode === 'eraser') {
+              // a box over wrong bits: every line's points inside it go, in one undo
+              if (session.eraseLinesInRect(r) > 0) commit();
+              else bump();
+              return;
+            }
             if (mode === 'find-lines') {
               // a box drawn after "Leave out a region": not data, saved with the figure
               session.setNotDataRegions([...session.getNotDataRegions(), r]);
