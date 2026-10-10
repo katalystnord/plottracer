@@ -6851,7 +6851,8 @@ describe('Workspace: Select tool (marquee range-select + bulk delete)', () => {
 
     await page.keyboard.press('Escape');
     await page.waitForTimeout(50);
-    expect(await textOf('tips-bar')).toMatch(/Click a point to select it/);
+    // On XY the tip also says a click on a line picks it (v2.6); both name the point click.
+    expect(await textOf('tips-bar')).toMatch(/click a point/i);
   });
 
   it('switching the active series clears a marquee selection (no cross-series delete)', async () => {
