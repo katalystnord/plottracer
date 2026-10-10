@@ -428,62 +428,50 @@
   </div>
 </section>
 
-<!-- ===================== WHAT'S NEW IN 2.5 ===================== -->
+<!-- ===================== WHAT'S NEW IN 2.6 ===================== -->
 <section class="whatsnew">
   <div class="wrap">
     <div class="wn-head">
-      <span class="eyebrow">New in 2.5</span>
-      <h2>The release that learned what a band is.</h2>
-      <p>Span charts, candlesticks, and stacked bars rebuilt as their own connected type.
-        A legend drawn inside the plot can be painted out. Labels are read off a heatmap's
-        own columns and rows. And a heatmap axis now says what kind it is, which decides
-        where its cell boundaries come from.</p>
+      <span class="eyebrow">New in 2.6</span>
+      <h2>The release that tells same-colour lines apart.</h2>
+      <p>One press finds every line of one colour, each as its own line - through
+        crossings, shared stretches and their own labels - and says where it was unsure.
+        Contour plots join as a chart type, with their labels read and their levels taken
+        from a colour key.</p>
     </div>
     <div class="wn-grid">
 
       <div class="wn">
-        <h3>A stacked bar is its own chart type</h3>
-        <p>Its segments are connected: a segment's base <b>is</b> the top of the one below,
-          so the edge the figure drew once is measured once. The value reported is a
-          height rather than a position on the axis, and moving a boundary carries the
-          stack above it, whether you drag it or type it.</p>
+        <h3>Find lines</h3>
+        <p>Every line of the picked colour becomes its own line, even where lines of the
+          same ink cross, touch or run together. A gap the figure drew no ink in is bridged
+          by a fair interpolation and <b>marked</b> as bridged; a stretch two curves share
+          is recorded in both. A first version, and the button says so.</p>
       </div>
 
       <div class="wn">
-        <h3>Span charts and candlesticks</h3>
-        <p>A span is captured by its two ends, because a range is what the figure drew.
-          A candlestick reads which way the period went from the figure's own colours,
-          and says what it read before offering to change it.</p>
+        <h3>Where it is unsure, it says so</h3>
+        <p>It never guesses a join. The pieces stay apart and the place is listed under
+          <b>Places to check</b>: one click takes you there, and Cut, Join with, Move and a
+          box that selects across every line put it right. One Undo reverses any of it.</p>
       </div>
 
       <div class="wn">
-        <h3>Mask the legend out of the way</h3>
-        <p>A legend drawn inside the plot box wears the series' own ink at the series'
-          own size, so no colour filter and no plot-area rule can tell it from the bars
-          it describes. Drag a box over it and it is painted out with the paper colour
-          measured around it - once, for every mechanism that reads pixels.</p>
+        <h3>Contour, a new chart type</h3>
+        <p>A contour line carries its level as a number, so the export redraws the plot on
+          its own. Lines that share a level sit together under it, and a line clicked all
+          the way round closes on its own ink.</p>
       </div>
 
       <div class="wn">
-        <h3>Heatmap names, read off the figure</h3>
-        <p>The label reader now serves a heatmap's own columns and rows, the same drag
-          and the same review card as any other category chart. A piece of bar ink caught
-          in the label band no longer rides into the name it was read beside.</p>
-      </div>
-
-      <div class="wn">
-        <h3>A measured axis is asked different questions</h3>
-        <p>A named heatmap axis derives its bands from a declared count, so it is asked
-          whether the figure's marks sit between the bands or under them. A measured axis
-          is asked neither: its boundaries are in the ink, its clicks are the extent, and
-          its cells are identified by their coordinates.</p>
+        <h3>Levels from the labels, or the key</h3>
+        <p>Each line's own label is read and <b>offered</b> beside its level - never
+          written in unasked, because a wrong level looks exactly like a right one. On a
+          coloured plot, a colour key calibrates the levels instead, linear or log.</p>
       </div>
 
     </div>
-    <p class="wn-foot">All of it runs on your machine. The reader and its English data are
-      <b>bundled in the app</b>, and no part of a figure leaves it to have a label read -
-      which is tested rather than asserted: the test removes the network functions outright
-      and the labels still read.</p>
+    <p class="wn-foot">All of it runs on your machine; no part of a figure leaves it.</p>
     <p class="wn-foot" style="margin-top:14px;"><a href="releases.html">Every release, newest first</a>
       - what each one fixed, as plainly as what it added.</p>
   </div>
@@ -629,9 +617,9 @@
     <div class="sec-head">
       <span class="eyebrow">Breadth</span>
       <h2>Every graph your sources use.</h2>
-      <p>Fifteen graph types over eight axis systems - XY curves, bar charts,
+      <p>Sixteen graph types over eight axis systems - XY curves, bar charts,
         histograms, span charts, stacked bars, candlesticks, box plots, categorical
-        lines, pie and donut charts, heatmaps, ternary phase diagrams, polar plots,
+        lines, pie and donut charts, heatmaps, contour plots, ternary phase diagrams, polar plots,
         spider charts, maps, and circular chart recorders. A bar is recorded as an
         interval, not a point, so a span keeps both ends and a stacked column's
         segments stay joined at the edge the figure drew once. Histograms capture true bin edges, and every
@@ -678,6 +666,10 @@
         <span class="label">Heatmap</span>
       </div>
       <div class="glyph">
+        <svg viewBox="0 0 120 74"><path class="g-axis" d="M14 8v58h94"/><g class="g-teal" fill="none"><ellipse cx="54" cy="38" rx="11" ry="8"/><ellipse cx="54" cy="38" rx="22" ry="16"/><path d="M20 62 C 40 58 70 66 104 50"/></g><circle class="g-amber" cx="76" cy="38" r="3"/></svg>
+        <span class="label">Contour</span>
+      </div>
+      <div class="glyph">
         <svg viewBox="0 0 120 74"><path class="g-axis" d="M60 8 L 104 66 H 16 Z"/><circle class="g-amber" cx="60" cy="40" r="4"/><circle class="g-amber" cx="74" cy="52" r="4"/></svg>
         <span class="label">Ternary</span>
       </div>
@@ -710,7 +702,7 @@
 
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M6 16c4-1 6-8 12-11"/></svg>
-        <h3>Fifteen chart types</h3>
+        <h3>Sixteen chart types</h3>
         <p>XY, bar, categorical line, histogram, span, stacked bar, candlestick, box plot, polar, spider/radar, pie/donut, heatmap, ternary, map and circular chart recorders - each calibrated the way that figure is actually drawn.</p>
       </div>
 
@@ -916,7 +908,7 @@
       manual extraction routes, reading labels off a figure, and what each type records
       and why. Free to read without installing anything.
     </p>
-    <p class="free-note">Current release: <span class="data" id="release-tag">v2.5.1</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
+    <p class="free-note">Current release: <span class="data" id="release-tag">v2.6.0</span> &nbsp;·&nbsp; AGPL-3.0 &nbsp;·&nbsp; source on GitHub</p>
   </div>
 </section>
 
