@@ -829,6 +829,15 @@ export function Workspace() {
   // existing single-select paths stay untouched. Never contains calibration
   // handles -- the Select tool only ever selects data points.
   const [selectedPointIndices, setSelectedPointIndices] = useState<readonly number[]>([]);
+  /**
+   * A Select box or lasso across EVERY line (v2.6, XY and Contour): the points
+   * of any line inside it, by series and point index. David, 2026-10-10: the
+   * tool "refuses to select them, and if there is more than one that it is
+   * trying to select, it also refuses" - a selection confined to the active
+   * series meant hunting down which series each stray bit ended up in. Cleared
+   * everywhere `selectedPointIndices` is.
+   */
+  const [lineSelection, setLineSelection] = useState<readonly { index: number; point: number }[]>([]);
   // The Select tool's active sub-mode (v1.1 #6) + whether its fold-out picker card
   // is open. Rectangle is the default so first-use behaviour matches the old
   // unified Select (click a point OR drag a box). Picking a sub-mode folds the
@@ -3080,7 +3089,7 @@ export function Workspace() {
     setCurveFitError(null);
     setGridRemovalError(null);
     setActivePointIndex(null); // the restored point set may differ -- clear the selection
-    setSelectedPointIndices([]); // ...and the marquee selection: its indices refer to a point set that may no longer exist
+    setSelectedPointIndices([]); setLineSelection([]); // ...and the marquee selection: its indices refer to a point set that may no longer exist
     // ⚑⚑ ...and the shapes a trace HELD BACK, for the identical reason: an undo
     // rolls the trace itself back, and the offer would then file a legend swatch
     // into a session that no longer holds the bars it was measured against -
@@ -3188,7 +3197,7 @@ export function Workspace() {
       setFigureNameNotice(null);
       // Selections index into a point set that the incoming figure does not have.
       setActivePointIndex(null);
-      setSelectedPointIndices([]);
+      setSelectedPointIndices([]); setLineSelection([]);
       setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
       setLastFound([]);
       setLinePlaces([]);
@@ -3452,7 +3461,7 @@ export function Workspace() {
           ctxMenuOpen: ctxMenu !== null,
           settingScale,
           pendingMeasureCount: pendingMeasure.length,
-          selectedPointCount: selectedPointIndices.length,
+          selectedPointCount: Math.max(selectedPointIndices.length, lineSelection.length),
           activePointIndex,
           activeHandleKey,
           hasActiveMeasure: activeMeasure != null,
@@ -3484,7 +3493,7 @@ export function Workspace() {
           setScaleDraftPx(null);
           setMeasureError(null);
           return;
-        case 'clear-marquee': setSelectedPointIndices([]); return;
+        case 'clear-marquee': setSelectedPointIndices([]); setLineSelection([]); return;
         case 'clear-active-point': setActivePointIndex(null); return;
         case 'clear-active-handle': setActiveHandleKey(null); return;
         case 'clear-active-measure': setActiveMeasure(null); return;
@@ -3537,8 +3546,10 @@ export function Workspace() {
           return;
         }
         case 'delete-selection':
-          session.removeDataPoints(selectedPointIndices);
-          setSelectedPointIndices([]);
+          // a selection across several lines goes from all of them, split where needed
+          if (lineSelection.length) session.removeLinePoints(lineSelection);
+          else session.removeDataPoints(selectedPointIndices);
+          setSelectedPointIndices([]); setLineSelection([]);
           setActivePointIndex(null);
           commit();
           return;
@@ -3582,7 +3593,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, lineSelection, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -3970,7 +3981,7 @@ export function Workspace() {
         case 'ignore':
           return;
         case 'clear-selection': {
-          setSelectedPointIndices([]);
+          setSelectedPointIndices([]); setLineSelection([]);
           setActivePointIndex(null);
           // A click ON a line picks that line (v2.6) - so a stray bit can be
           // selected without first hunting down which series it ended up in.
@@ -4190,6 +4201,30 @@ export function Workspace() {
     }
   }, [mode, removeDataPointByIndex, selectSubMode, session]);
 
+  /**
+   * On a LINES type (XY, Contour - v2.6) a Select box or lasso takes the points
+   * of EVERY line inside it, not only the active one's: Del then removes them
+   * all at once. The active line's share also lands in `selectedPointIndices`,
+   * so nudging and Move keep working on it. Returns false on other types.
+   */
+  const selectAcrossLines = useCallback(
+    (inside: (p: { x: number; y: number }) => boolean): boolean => {
+      if (!findLinesKind(session.getConfig().id)) return false;
+      const sel: { index: number; point: number }[] = [];
+      for (const info of session.getDatasetInfos()) {
+        (session.getLinePoints(info.index) ?? []).forEach((p, k) => {
+          if (inside(p)) sel.push({ index: info.index, point: k });
+        });
+      }
+      const active = session.getActiveDatasetIndex();
+      setLineSelection(sel);
+      setSelectedPointIndices(sel.filter((x) => x.index === active).map((x) => x.point));
+      setActivePointIndex(null);
+      return true;
+    },
+    [session]
+  );
+
   // The Select tool's marquee (David 2026-07-21): every active-series DATA point
   // whose pixel falls inside the dragged box becomes selected. Only data points --
   // calibration handles are not in getDataPoints(), so a box over the origin or an
@@ -4218,6 +4253,7 @@ export function Workspace() {
       const y0 = rect.y;
       const x1 = rect.x + rect.width;
       const y1 = rect.y + rect.height;
+      if (selectAcrossLines((p) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1)) return;
       const inside: number[] = [];
       session.getDataPoints().forEach((p, i) => {
         if (p.px >= x0 && p.px <= x1 && p.py >= y0 && p.py <= y1) inside.push(i);
@@ -4225,7 +4261,7 @@ export function Workspace() {
       setSelectedPointIndices(inside);
       setActivePointIndex(null);
     },
-    [heatmapActive, heatmapCells, session]
+    [heatmapActive, heatmapCells, session, selectAcrossLines]
   );
 
   // The Select tool's LASSO (v1.1 #6): every active-series DATA point inside the
@@ -4250,6 +4286,7 @@ export function Workspace() {
         setSelectedCells(new Set(keys));
         return;
       }
+      if (selectAcrossLines((p) => pointInPolygon(p, polygon))) return;
       const inside: number[] = [];
       session.getDataPoints().forEach((p, i) => {
         if (pointInPolygon({ x: p.px, y: p.py }, polygon)) inside.push(i);
@@ -4257,7 +4294,7 @@ export function Workspace() {
       setSelectedPointIndices(inside);
       setActivePointIndex(null);
     },
-    [heatmapActive, heatmapCells, session]
+    [heatmapActive, heatmapCells, session, selectAcrossLines]
   );
 
   // Select a recorded measurement's vertex for keyboard nudge (checkpoint 128).
@@ -6522,7 +6559,7 @@ export function Workspace() {
     (to: number) => {
       const moved = session.movePointsToLine(session.getActiveDatasetIndex(), selectedPointIndices, to);
       if (!moved) return;
-      setSelectedPointIndices([]);
+      setSelectedPointIndices([]); setLineSelection([]);
       commit();
     },
     [session, selectedPointIndices, commit]
@@ -6606,7 +6643,7 @@ export function Workspace() {
       // new active index still rides along in the next real action's snapshot.
       session.setActiveDataset(index);
       setActivePointIndex(null); // selection is per-series; clear on switch
-      setSelectedPointIndices([]); // the marquee set indexes the OLD series -- clear it, or Del would act on the new one
+      setSelectedPointIndices([]); setLineSelection([]); // the marquee set indexes the OLD series -- clear it, or Del would act on the new one
       setNameDraft(null); // a half-typed name belongs to the series it was typed on
       setNameNotice(null);
       // The Closed-curve toggle is per-series: reload it from the new series'
@@ -6736,7 +6773,7 @@ export function Workspace() {
       session.removeDataset(index);
       if (removingActive) {
         setActivePointIndex(null);
-        setSelectedPointIndices([]);
+        setSelectedPointIndices([]); setLineSelection([]);
         // ⚑ The SAME per-series draft state handleSelectDataset clears, and for
         // its stated reason: a half-typed name belongs to the series it was
         // typed on, and the Closed-curve toggle must not leak into a series
@@ -7398,9 +7435,13 @@ export function Workspace() {
   // changed. Same family as the activeHandleKey/activeMeasure guards above, and the
   // reason all three exist: a selection must be cleared at EVERY entrance, not one.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (mode !== 'select' && selectedPointIndices.length) setSelectedPointIndices([]);
-  }, [mode, selectedPointIndices]);
+    if (mode !== 'select' && (selectedPointIndices.length || lineSelection.length)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedPointIndices([]);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLineSelection([]);
+    }
+  }, [mode, selectedPointIndices, lineSelection]);
 
   // One data-value in the XY datapoint table: a text span at rest (so the cell
   // still reads "(x, y)"), swapping to a focused input while it's the cell
@@ -7986,7 +8027,7 @@ export function Workspace() {
     pendingValueFieldCount: pendingValueFields.length,
     stepIndex: session.getStepIndex(),
     stepCount: steps.length,
-    selectedPointCount: selectedPointIndices.length,
+    selectedPointCount: Math.max(selectedPointIndices.length, lineSelection.length),
     dataPointCount: dataPoints.length,
     activePointIndex,
     // ⚑ So the tip names the READING, not the pixel - a cap is a pixel of its
@@ -9631,6 +9672,16 @@ export function Workspace() {
             setColorTraceRegion(r);
           }}
           notDataRects={mode === 'find-lines' ? session.getNotDataRegions() : null}
+          // a selection across lines: the points selected on lines other than the
+          // active one, ringed exactly as a selected point of the active line is
+          extraSelected={
+            mode === 'select' && lineSelection.length
+              ? lineSelection
+                  .filter((x) => x.index !== activeDatasetIndex)
+                  .map((x) => session.getLinePoints(x.index)?.[x.point])
+                  .filter((p): p is NonNullable<typeof p> => !!p)
+              : null
+          }
           regionRect={mode === 'color-trace' ? colorTraceRegion : null}
           // ⚑ Only while the tool that produced them is open. The offer lives in
           // the Auto-extract card, so outlines drawn with that card shut would

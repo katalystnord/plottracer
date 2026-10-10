@@ -3705,6 +3705,17 @@ export class CalibrationSession<A extends CalibratedAxes> {
     for (const p of pts) ds.addPixel(p.x, p.y, p.role ? { role: p.role } : undefined);
   }
 
+  /** The name for a piece split off a line: a found line ("Line 3") gives the
+   * next free "Line N", so the series list never shows "Line 3 (2)" - which
+   * reads as a point count; any other name is kept and disambiguated. */
+  private pieceName(src: string): string {
+    if (!/^Line \d+$/.test(src.trim())) return src;
+    const taken = new Set(this.datasetEntries.map((e) => e.dataset.name.trim()));
+    let n = 1;
+    while (taken.has(`Line ${n}`)) n++;
+    return `Line ${n}`;
+  }
+
   /**
    * CUT (K2): the line becomes two at point `pointIndex` - or, if it is closed,
    * opens there. The second part is a new series with the same colour, level and
@@ -3720,7 +3731,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (parts.length === 2) {
       const src = this.datasetEntries[index]!.dataset;
       const keepActive = this.activeDatasetIndex;
-      const ni = this.addDataset(src.name);
+      const ni = this.addDataset(this.pieceName(src.name));
       const nd = this.datasetEntries[ni]!.dataset;
       const [r, g, b] = src.colorRGB.getRGB();
       nd.colorRGB = new Color(r, g, b);
@@ -3784,19 +3795,33 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * went.
    */
   eraseLinesInRect(rect: { x: number; y: number; width: number; height: number }): number {
-    const inside = (p: { x: number; y: number }): boolean =>
-      p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height;
+    return this.removeLinePointsWhere((_, __, p) =>
+      p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height);
+  }
+
+  /** Remove the given points from the lines they belong to - a selection that
+   * spans several lines (v2.6), removed in one go, each line split where a
+   * stretch was cut out of its middle. */
+  removeLinePoints(selection: readonly { index: number; point: number }[]): number {
+    const pick = new Set(selection.map((s) => `${s.index}:${s.point}`));
+    return this.removeLinePointsWhere((index, point) => pick.has(`${index}:${point}`));
+  }
+
+  private removeLinePointsWhere(remove: (index: number, point: number, p: LinePoint) => boolean): number {
     let removed = 0;
+    const origIndex = new Map(this.datasetEntries.map((e, i) => [e, i] as const));
     const keepActive = this.datasetEntries[this.activeDatasetIndex]!.dataset;
     // walk a snapshot of the entries, since splitting adds and removing deletes
     for (const entry of [...this.datasetEntries]) {
       const index = this.datasetEntries.indexOf(entry);
+      const orig = origIndex.get(entry)!;
       const pts = this.getLinePoints(index);
-      if (!pts || !pts.some(inside)) continue;
+      if (!pts || !pts.some((p, k) => remove(orig, k, p))) continue;
       const runs: LinePoint[][] = [];
       let run: LinePoint[] = [];
-      for (const p of pts) {
-        if (inside(p)) {
+      for (let k = 0; k < pts.length; k++) {
+        const p = pts[k]!;
+        if (remove(orig, k, p)) {
           removed++;
           if (run.length) runs.push(run);
           run = [];
@@ -3813,7 +3838,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       this.writeLinePoints(index, kept[0]!);
       for (const part of kept.slice(1)) {
         const src = entry.dataset;
-        const ni = this.addDataset(src.name);
+        const ni = this.addDataset(this.pieceName(src.name));
         const nd = this.datasetEntries[ni]!.dataset;
         const [r, g, b] = src.colorRGB.getRGB();
         nd.colorRGB = new Color(r, g, b);

@@ -11954,7 +11954,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('tips-bar')).toMatch(/drag a box over wrong bits/);
     const total = async () =>
       (await page.getByTestId('series-select').locator('option').allTextContents())
-        .reduce((n, o) => n + Number(o.match(/\((\d+)\)/)?.[1] ?? 0), 0);
+        .reduce((n, o) => n + Number(o.match(/\((\d+)\)\s*$/)?.[1] ?? 0), 0);
     const pointsBefore = await total();
     const q0 = await imageToLocal(a.x1.px + 3, a.y2.py + (a.y1.py - a.y2.py) * 0.8);
     const q1 = await imageToLocal(a.x1.px + 60, a.y1.py - 3);
@@ -11965,7 +11965,24 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.mouse.move(canvasBox.x + q1.lx, canvasBox.y + q1.ly, { steps: 4 });
     await page.mouse.up();
     await expect.poll(total, { timeout: 5000 }).toBeLessThan(pointsBefore);
-  });
+
+    // Select: a box over points of SEVERAL lines selects all of them, and Del
+    // removes them from every line (it used to take only the active line's).
+    await page.getByTestId('mode-select').click();
+    const r0 = await imageToLocal(...toPx({ x: 10.5, y: 100 }));
+    const r1 = await imageToLocal(...toPx({ x: 11.2, y: 45 }));
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + r0.lx, canvasBox.y + r0.ly);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + (r0.lx + r1.lx) / 2, canvasBox.y + (r0.ly + r1.ly) / 2, { steps: 4 });
+    await page.mouse.move(canvasBox.x + r1.lx, canvasBox.y + r1.ly, { steps: 4 });
+    await page.mouse.up();
+    const sel = Number(((await textOf('tips-bar')).match(/(\d+) points? selected/) ?? [])[1] ?? 0);
+    expect(sel, 'points on several lines were selected').toBeGreaterThan(0);
+    const beforeDel = await total();
+    await page.keyboard.press('Delete');
+    await expect.poll(total, { timeout: 5000 }).toBe(beforeDel - sel);
+  }, 120000);
 
   it('F1/F9/K1-K3 one press finds every contour line, says what it did, and a found line can be cut and joined again', async () => {
     await page.getByTestId('help-trigger').click();
@@ -12048,5 +12065,5 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const lastOption = await join.locator('option').last().getAttribute('value');
     await join.selectOption(lastOption!);
     await expect.poll(seriesCount, { timeout: 5000 }).toBe(7);
-  });
+  }, 180000);
 });

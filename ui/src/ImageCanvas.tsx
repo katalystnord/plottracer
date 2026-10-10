@@ -453,6 +453,9 @@ interface ImageCanvasProps {
    * amber box that restricts a trace TO something - two meanings, two looks.
    */
   notDataRects?: readonly { x: number; y: number; width: number; height: number }[] | null;
+  /** Points SELECTED on lines other than the active one (v2.6), image pixels -
+   * ringed exactly like a selected point, so "selected" looks the same on every line. */
+  extraSelected?: readonly { x: number; y: number }[] | null;
   /** Bar capture (v2.0): when true, a background drag draws a rectangle
    * reported (image-pixel space) via onBoxRect -- the SAME shared gesture as
    * crop/region/select-marquee (one drag mechanism, four destinations), but
@@ -635,7 +638,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, notDataRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, notDataRects, extraSelected, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1984,6 +1987,10 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     />
                   ))
                 )}
+                {extraSelected?.map((p, i) => {
+                  const q = imageToScreen(view, p.x, p.y);
+                  return <Circle key={`xsel-${i}`} x={q.x} y={q.y} radius={7.5} stroke={theme.color.primary.main} strokeWidth={2.5} listening={false} />;
+                })}
                 {points?.map((point) => {
                   const { x: screenX, y: screenY } = imageToScreen(view, point.x, point.y);
                   const interactive = point.draggable ?? false;

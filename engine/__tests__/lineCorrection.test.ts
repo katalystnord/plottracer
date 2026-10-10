@@ -229,3 +229,15 @@ describe('erasing wrong bits with a box (David, 2026-10-10)', () => {
     expect(s.lineNearest(150, 215, 6)).toBe(-1);
   });
 });
+
+describe('a selection across several lines (David, 2026-10-10: "if there is more than one ... it also refuses")', () => {
+  it('points selected on several lines are removed from all of them at once, each line split where needed', () => {
+    const s = calibrated();
+    s.addFoundLines([line([[120, 200], [140, 200], [160, 200], [180, 200]]), line([[120, 230], [140, 230], [160, 230]])]);
+    expect(s.removeLinePoints([{ index: 0, point: 1 }, { index: 1, point: 2 }])).toBe(3);
+    // line 0 lost its 2nd point: [120] alone is dropped, [160,180] remains; line 1 lost its last
+    const lines = s.getDatasetInfos().map((i) => s.getLinePoints(i.index)!.map((p) => p.x));
+    expect(lines).toContainEqual([160, 180]);
+    expect(lines).toContainEqual([120, 140]);
+  });
+});
