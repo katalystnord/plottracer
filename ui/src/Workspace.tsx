@@ -13,11 +13,11 @@ import {
 } from '../../engine/calibrationSession.js';
 import { describeCaptureProgress } from '../../engine/captureProgress.js';
 import { AUTO_EXTRACT_MODES, autoExtractModesFor, findLinesKind, type ToolMode } from '../../engine/toolMode.js';
-import { findLines } from '../../algorithms/findLines/lines.js';
+import { findLinesInWorker } from './findLinesClient.js';
 import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
 import { inferLevelsInScale } from '../../algorithms/findLines/levels.js';
 import { inkClosesLoop } from '../../algorithms/findLines/closure.js';
-import { readLineKey, keyPosition, keyPositionOfColour, keyValueAt, lineInkColour } from '../../algorithms/findLines/lineKey.js';
+import { readLineKey, keyPosition, keyPositionOfColour, keyValueAt, keyResolution, lineInkColour } from '../../algorithms/findLines/lineKey.js';
 import { thinFoundLine } from '../../engine/lineEdits.js';
 import type { LabelRead } from '../../engine/contourLabel.js';
 import { PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
@@ -4504,8 +4504,10 @@ export function Workspace() {
         if (cur?.source === 'key') s.setContourLevel(info.index, null);
         continue;
       }
-      // as many significant figures as the key's own labels warrant, and no more
-      s.setContourLevel(info.index, Number(v.toPrecision(4)), 'key');
+      // rounded to what one pixel of the key resolves - no finer, no coarser (audit B8)
+      const res = keyResolution(Math.hypot(key.to[0] - key.from[0], key.to[1] - key.from[1]), ta, tb, log, pos!);
+      const decimals = res > 0 ? Math.max(0, -Math.floor(Math.log10(res))) : 6;
+      s.setContourLevel(info.index, Number(v.toFixed(Math.min(12, decimals))), 'key');
       set++;
     }
     return { set, offKey };
@@ -6480,12 +6482,19 @@ export function Workspace() {
     setFindLinesSummary(null);
     setFillLevelsNotice(null);
     setFindLinesBusy('Finding lines…');
-    // let the card show that it is working before the search holds the thread
-    await new Promise((r) => setTimeout(r, 30));
     // the user's not-data regions, with a 4 px margin as the research measured them
     const masks = session.getNotDataRegions().map((r) => ({ x0: r.x - 4, y0: r.y - 4, x1: r.x + r.width + 4, y1: r.y + r.height + 4 }));
-    const res = findLines(imageData.data, imageData.width, imageData.height, target,
+    // off the UI thread (audit B7); undo waits until the whole result is in (B2)
+    findLinesBusyRef.current = true;
+    const found = await findLinesInWorker(imageData.data, imageData.width, imageData.height, target,
       { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height }, { contour: kind === 'contours', masks, coloursAreLevels: kind === 'contours' && session.getOptions()['hasColourKey'] === 'true' });
+    findLinesBusyRef.current = false;
+    if ('error' in found || sessionRef.current !== session) {
+      setFindLinesBusy(null);
+      setFindLinesSummary('error' in found ? found.error : null);
+      return;
+    }
+    const res = found;
     if (!res.lines.length) {
       setFindLinesBusy(null);
       setFindLinesSummary('No line of that colour was found inside the plot box. Repick the colour from a line.');

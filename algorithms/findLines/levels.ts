@@ -255,7 +255,8 @@ export function inferLevelsInScale(lines: readonly LevelInput[], w: number, h: n
   const back = (v: number): number => Number(Math.pow(10, v).toPrecision(12));
   return {
     step: f.step === null ? null : f.step,
-    uneven: f.uneven,
+    // the message is about the levels the user sees, not their log10 (audit D3)
+    uneven: f.uneven ? `the levels ${[...new Set(lines.map((l) => l.read).filter((v): v is number => v !== null))].sort((x, y) => x - y).join(', ')} are not equal steps on a log scale` : null,
     levels: f.levels.map((o, k) => ({
       value: o.value === null ? null : o.source === 'label' ? lines[k]!.read : back(o.value),
       source: o.source,

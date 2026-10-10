@@ -12,8 +12,8 @@
  * - "02" style reads are refused: no number format prints a leading zero, so
  *   the decimal point was lost;
  * - ONE FORMAT PER FIGURE: a library labels every line with the same format,
- *   so a read with fewer decimals than the figure's confident reads is refused
- *   (a reader loses a decimal point; it never invents one).
+ *   so where at least two confident reads show the figure's decimals, a read of
+ *   two or more digits with FEWER is refused (a lost decimal point).
  */
 import type { FoundLine } from './lines.js';
 import type { Pt } from './geom.js';
@@ -154,16 +154,23 @@ export function readSlots(raw: readonly { text: string; confidence: number | nul
     if (!pre[i] && pat.test(t)) decs.push(t.includes('.') ? t.split('.')[1]!.length : 0);
   });
   // ⚑ The figure's format is the MOST decimals among confident reads, not the
-  // commonest: a reader loses a decimal point ("1.0" read as "10") but never
+  // commonest: a reader loses a decimal point ("1.0" read as "10") but rarely
   // invents one. Measured on the reference figures: with the commonest format,
   // lost-point reads outvoted the right ones and every read came out wrong.
-  const dec: number | null = decs.length ? Math.max(...decs) : null;
+  // ⚑⚑ BUT ONE READ IS NOT A FORMAT (audit C7): it takes TWO confident reads
+  // with that many decimals before a read with fewer is refused - one odd
+  // "4.0" among 10, 20, 30 must not veto all three - and only a read of two or
+  // more digits can have lost a point, so %g-style labels (0, 0.5, 1, 1.5) and
+  // single digits stand.
+  const maxDec = decs.length ? Math.max(...decs) : 0;
+  const dec: number | null = maxDec > 0 && decs.filter((d) => d === maxDec).length >= 2 ? maxDec : null;
   return tidy.map((t, i) => {
     const base = { text: t, confidence: raw[i]!.confidence };
     if (pre[i]) return { ...base, value: null, refused: pre[i]! };
     if (!pat.test(t)) return { ...base, value: null, refused: t ? 'it is not a number' : 'nothing could be read' };
     const d = t.includes('.') ? t.split('.')[1]!.length : 0;
-    if (dec !== null && d !== dec) return { ...base, value: null, refused: `${d} decimals where this figure's labels have ${dec}` };
+    const digits = t.replace(/[^0-9]/g, '').length;
+    if (dec !== null && d < dec && digits >= 2) return { ...base, value: null, refused: `${d} decimals where this figure's labels have ${dec} - the decimal point may have been lost` };
     return { ...base, value: Number(t), refused: null };
   });
 }

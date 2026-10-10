@@ -238,7 +238,33 @@ function bestMatching(n: number, cost: number[][], contour: boolean, angles: num
   return { pairs: best.m, best: best.c, runner: results.length > 1 ? results[1]!.c : best.c + 99 };
 }
 
+/**
+ * Find lines inside `box`. ⚑ The image is CROPPED to the box (plus a margin
+ * for the background estimate and the ridge filters) before any image work
+ * (audit B7): every stage is per-pixel, and run over a whole 3000x3000 scan
+ * it held the UI thread ~18 s for ink that can only be inside the box anyway.
+ */
 export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, colour: RGB, box: Box, opts: FindLinesOptions): FindLinesResult {
+  const m = 16;
+  const x0 = Math.max(0, Math.floor(Math.min(box.x0, box.x1)) - m), y0 = Math.max(0, Math.floor(Math.min(box.y0, box.y1)) - m);
+  const x1 = Math.min(w - 1, Math.ceil(Math.max(box.x0, box.x1)) + m), y1 = Math.min(h - 1, Math.ceil(Math.max(box.y0, box.y1)) + m);
+  if (x1 <= x0 || y1 <= y0) return { lines: [], labelInk: [], unresolved: [], places: [], lineWidth: 1.5 };
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+  const crop = new Uint8ClampedArray(cw * ch * 4);
+  for (let y = 0; y < ch; y++) crop.set(rgba.subarray(((y0 + y) * w + x0) * 4, ((y0 + y) * w + x1 + 1) * 4), y * cw * 4);
+  const shiftBox = (b: Box): Box => ({ x0: b.x0 - x0, y0: b.y0 - y0, x1: b.x1 - x0, y1: b.y1 - y0 });
+  const res = findLinesInCrop(crop, cw, ch, colour, shiftBox(box), { ...opts, masks: (opts.masks ?? []).map(shiftBox) });
+  const back = (p: Pt): Pt => [p[0] + x0, p[1] + y0];
+  return {
+    lines: res.lines.map((L) => ({ ...L, points: L.points.map(back), gaps: L.gaps.map(([a, b]) => [back(a), back(b)] as [Pt, Pt]) })),
+    labelInk: res.labelInk.map((q) => q.map(back)),
+    unresolved: res.unresolved.map((q) => q.map(back)),
+    places: res.places.map((pl) => ({ ...pl, at: back(pl.at) })),
+    lineWidth: res.lineWidth,
+  };
+}
+
+function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, colour: RGB, box: Box, opts: FindLinesOptions): FindLinesResult {
   const contour = opts.contour;
   const masks = opts.masks ?? [];
   const cov = inkCoverage(rgba, w, h, colour);
@@ -637,7 +663,9 @@ export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: nu
   }
   cand.sort((x, y) => x.cost - y.cost);
 
-  // NO PASSING (tree rings, ice layers): a bridge never crosses another line
+  // NO PASSING (tree rings, ice layers): on a CONTOUR plot a bridge never
+  // crosses another line - contours cannot cross. Curves may cross, so for them
+  // a dash-gap bridge is not held to it (audit D4).
   const ownerImg = new Int32Array(w * h).fill(-1);
   P.forEach((pc, ii) => {
     if (pc.length() < O.labelExt) return;
@@ -937,6 +965,43 @@ function sliceLine(L: FoundLine, a: number, b: number): FoundLine {
   };
 }
 
+/** A closed line opened at the bridge [b0, b1]: from b1 round to b0. */
+function openRingAt(L: FoundLine, b0: number, b1: number): FoundLine {
+  const n = L.points.length - 1; // the last point repeats the first
+  const order: number[] = [];
+  for (let i = b1; i < n; i++) order.push(i);
+  for (let i = 0; i <= b0; i++) order.push(i);
+  const pts = order.map((i) => L.points[i]!);
+  const keys = new Set(pts.map((p) => `${p[0]},${p[1]}`));
+  return {
+    points: pts,
+    roles: order.map((i) => L.roles[i]!),
+    closed: false,
+    gaps: L.gaps.filter(([p, q]) => keys.has(`${p[0]},${p[1]}`) && keys.has(`${q[0]},${q[1]}`)),
+  };
+}
+
+/** Close a line across the gap between its ends with the fair interpolation:
+ * bridged points, the gap recorded (so a label sitting in it gets its slot -
+ * audit C8), ending on its first point (S4). */
+function closeAcrossGap(L: FoundLine): void {
+  const p = L.points;
+  const a = p[p.length - 1]!, b = p[0]!;
+  const gap = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (gap > 1.5) {
+    const t0 = unit(sub(a, p[Math.max(0, p.length - 8)]!));
+    const t1 = p.length > 1 ? unit(sub(p[Math.min(p.length - 1, 1)]!, b)) : t0;
+    for (const q of hermite(a, t0, b, t1)) {
+      L.points.push(q);
+      L.roles.push('bridged');
+    }
+    L.gaps.push([a, b]);
+  }
+  L.points.push([b[0], b[1]]);
+  L.roles.push(L.roles[0]!);
+  L.closed = true;
+}
+
 /** Contours never cross: where two output lines do, cut the BRIDGE nearest the
  * crossing. Crossings with no bridge near are measured ink and left alone. */
 export function uncross(lines: FoundLine[], iters = 30): FoundLine[] {
@@ -956,7 +1021,12 @@ export function uncross(lines: FoundLine[], iters = 30): FoundLine[] {
     if (!best) break;
     const [, li, b0, b1] = best;
     const L = cur[li]!;
-    const parts = [sliceLine(L, 0, b0), sliceLine(L, b1, L.points.length - 1)].filter((x) => x.points.length >= 2);
+    // ⚑ A CLOSED line cut at one bridge is ONE open line (audit B4): it runs
+    // from the far side of the bridge round through its old start to the near
+    // side - cutting it at both ends of the bridge made two lines of one contour.
+    const parts = L.closed
+      ? [openRingAt(L, b0, b1)].filter((x) => x.points.length >= 2)
+      : [sliceLine(L, 0, b0), sliceLine(L, b1, L.points.length - 1)].filter((x) => x.points.length >= 2);
     cur = [...cur.slice(0, li), ...parts, ...cur.slice(li + 1)];
   }
   return cur;
@@ -1025,11 +1095,8 @@ export function unspiral(lines: FoundLine[], closeGap: number): FoundLine[] {
     }
     const [, b0, b1] = best;
     for (const X of [sliceLine(L, 0, b0), sliceLine(L, b1, L.points.length - 1)]) {
-      if (closesOnItself(X.points)) {
-        X.points.push([X.points[0]![0], X.points[0]![1]]);
-        X.roles.push(X.roles[0]!);
-        X.closed = true;
-      }
+      // ⚑ closed by a BRIDGE, never a straight step recorded as measured (audit B5)
+      if (closesOnItself(X.points)) closeAcrossGap(X);
       if (X.points.length >= 2) todo.push(X);
     }
   }
@@ -1062,17 +1129,7 @@ function closeLoops(lines: FoundLine[], labelInk: Pt[][], onFrame: (p: Pt) => bo
       }
     }
     if (!ok) continue;
-    if (gap > 1.5) {
-      const t0 = unit(sub(p[p.length - 1]!, p[Math.max(0, p.length - 8)]!));
-      const t1 = p.length > 1 ? unit(sub(p[1]!, p[0]!)) : t0;
-      for (const q of hermite(p[p.length - 1]!, t0, p[0]!, t1)) {
-        L.points.push(q);
-        L.roles.push('bridged');
-      }
-    }
-    L.points.push([p[0]![0], p[0]![1]]);
-    L.roles.push(L.roles[0]!);
-    L.closed = true;
+    closeAcrossGap(L);
   }
 }
 
@@ -1084,10 +1141,12 @@ function closeLoops(lines: FoundLine[], labelInk: Pt[][], onFrame: (p: Pt) => bo
  * margin over that, never below 5: on a clean render the ink's own pixels sit
  * at 0, and the next level's colour at ~22.
  */
-function ownInkResidual(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, colour: RGB, cov: { alpha: Float64Array; residual: Float64Array }, box: Box): number {
+function ownInkResidual(rgba: Uint8ClampedArray | Uint8Array, w: number, _h: number, colour: RGB, cov: { alpha: Float64Array; residual: Float64Array }, box: Box): number {
   const vals: number[] = [];
-  for (let y = Math.ceil(box.y0); y <= Math.floor(box.y1); y++) {
-    for (let x = Math.ceil(box.x0); x <= Math.floor(box.x1); x++) {
+  // clamped to the image: a box past an edge wrapped rows or read past the end (audit D6)
+  const h = rgba.length / 4 / w;
+  for (let y = Math.max(0, Math.ceil(box.y0)); y <= Math.min(h - 1, Math.floor(box.y1)); y++) {
+    for (let x = Math.max(0, Math.ceil(box.x0)); x <= Math.min(w - 1, Math.floor(box.x1)); x++) {
       const i = y * w + x;
       const o = i * 4;
       const d = Math.hypot(rgba[o]! - colour[0], rgba[o + 1]! - colour[1], rgba[o + 2]! - colour[2]);

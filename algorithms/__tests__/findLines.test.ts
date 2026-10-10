@@ -95,22 +95,32 @@ describe('Find lines on the bundled contour example (same-colour contours, label
     }
   });
 
-  it('F3 never the frame: no point outside the plot box', () => {
+  it('F3 never the frame: no point on or outside the plot box\'s frame line', () => {
     expect(f.res.lines.length).toBe(f.truth.length);
+    // the frame's ink is ~1.3 px wide on the box edge (column 76 for x0 = 75.73,
+    // measured): a point within 2 px of an edge would be ON the frame (audit B9)
     for (const L of f.res.lines) {
       for (const [x, y] of L.points) {
-        expect(x).toBeGreaterThan(f.box.x0);
-        expect(x).toBeLessThan(f.box.x1);
-        expect(y).toBeGreaterThan(f.box.y0);
-        expect(y).toBeLessThan(f.box.y1);
+        expect(x).toBeGreaterThan(f.box.x0 + 2);
+        expect(x).toBeLessThan(f.box.x1 - 2);
+        expect(y).toBeGreaterThan(f.box.y0 + 2);
+        expect(y).toBeLessThan(f.box.y1 - 2);
       }
     }
   });
 
-  it('F4 a line cut by its own label is ONE line, the gap filled with bridged points', () => {
+  it('F4 a line cut by its own label is ONE line, the gap filled with bridged points that lie on the line', () => {
     expect(f.res.lines.length).toBe(f.truth.length);
-    // every line on this figure carries an inline label, so every line has a bridged stretch
-    for (const L of f.res.lines) expect(L.roles.includes('bridged')).toBe(true);
+    const truthD = f.truth.map((T) => densify(T.points));
+    // every line on this figure carries an inline label, so every line has a
+    // bridged stretch - and the bridge is a FAIR interpolation: it lies on the
+    // line the label cut, not merely somewhere (audit B9)
+    for (const L of f.res.lines) {
+      const bridged = L.points.filter((_, i) => L.roles[i] === 'bridged');
+      expect(bridged.length).toBeGreaterThan(5);
+      const T = truthD.find((t) => share(densify(L.points), t) >= 0.9)!;
+      expect(share(bridged, T), 'the bridge follows the line under the label').toBeGreaterThanOrEqual(0.9);
+    }
     expect(f.res.lines.every((L) => L.gaps.length >= 1)).toBe(true);
   });
 
@@ -178,8 +188,13 @@ describe('Find lines on same-colour curves', () => {
     const whole = wholeLines(f);
     expect(whole.every((i) => i !== null)).toBe(true);
     const a = f.res.lines[whole[0]!]!, b = f.res.lines[whole[1]!]!;
-    expect(a.roles.includes('shared')).toBe(true);
-    expect(b.roles.includes('shared')).toBe(true);
+    // the shared points lie where the two curves run together - on BOTH (audit B9)
+    const ta = densify(f.truth[0]!.points), tb = densify(f.truth[1]!.points);
+    for (const L of [a, b]) {
+      const shared = L.points.filter((_, i) => L.roles[i] === 'shared');
+      expect(shared.length).toBeGreaterThan(20);
+      expect(shared.filter((p) => near(p, ta) && near(p, tb)).length / shared.length).toBeGreaterThanOrEqual(0.9);
+    }
   });
 });
 

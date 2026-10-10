@@ -12007,6 +12007,11 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('find-lines-run').click();
     await expect.poll(found, { timeout: 60000 }).toBeGreaterThan(0);
     const without = await found();
+    // K1: dashed curves leave pieces - the places are listed, BELOW the data they are about
+    await expect.poll(() => page.getByTestId('places-to-check').count(), { timeout: 5000 }).toBe(1);
+    const dataBox = await page.getByTestId('data-points-panel').boundingBox();
+    expect((await page.getByTestId('places-to-check').boundingBox())!.y).toBeGreaterThan(dataBox!.y);
+    expect(await textOf('places-to-check')).toMatch(/stops here, inside the plot/);
 
     // The card points at the mask the app already has (v2.5's Image ▸ Mask an
     // area) - one gesture for every reader, and Find lines remembers where it is.
@@ -12122,11 +12127,12 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('find-lines-run').click();
     await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 120000 }).toMatch(/7 lines found/);
     expect(await seriesCount()).toBe(7);
-    // Places to check sits BELOW the data it is about (David, 2026-10-10)
-    const dataBox = await page.getByTestId('data-points-panel').boundingBox();
-    const placesCount = await page.getByTestId('places-to-check').count();
-    if (placesCount) expect((await page.getByTestId('places-to-check').boundingBox())!.y).toBeGreaterThan(dataBox!.y);
     expect(await textOf('find-lines-summary')).toMatch(/Undo removes the whole result/);
+    // K6: the screen promises one Undo removes the whole result - it does
+    await page.getByTestId('undo').click();
+    await expect.poll(seriesCount, { timeout: 5000 }).toBe(1);
+    await page.getByTestId('redo').click();
+    await expect.poll(seriesCount, { timeout: 5000 }).toBe(7);
 
     // A read label is OFFERED beside the Level field, and one press uses it.
     let offered = -1;
@@ -12137,6 +12143,9 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     }
     expect(offered, 'at least one label read is offered').toBeGreaterThanOrEqual(0);
     const reads = (await textOf('series-label-read')).match(/reads ([-\d.]+)/)![1]!;
+    // F5: what is offered is one of the figure's own levels (its truth file)
+    const truthLevels = new Set((truth.series as unknown as { level: number }[]).map((x) => x.level));
+    expect(truthLevels.has(Number(reads)), `offered read ${reads}`).toBe(true);
     await page.getByTestId('series-use-label').click();
     await expect.poll(() => page.getByTestId('series-level').inputValue(), { timeout: 5000 }).toBe(reads);
     expect(await textOf('series-level-from-label')).toBe('from label');
@@ -12144,6 +12153,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // Cut a line where the rail tool says: click ON a line.
     await page.getByTestId('mode-cut').click();
     expect(await textOf('tips-bar')).toMatch(/click a line where it should be cut/);
+    const optsBefore = await page.getByTestId('series-select').locator('option').allTextContents();
     const open = truth.series.find((s) => {
       const p = s.points;
       return p[0]!.x !== p[p.length - 1]!.x || p[0]!.y !== p[p.length - 1]!.y;
@@ -12153,12 +12163,19 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const sy = (a.y2.py - a.y1.py) / (a.y2.value - a.y1.value);
     await clickImagePixel(a.x1.px + (mid.x - a.x1.value) * sx, a.y1.py + (mid.y - a.y1.value) * sy);
     await expect.poll(seriesCount, { timeout: 5000 }).toBe(8);
+    // the cut line is the active one; its point count before the cut
+    const activeName = ((await page.getByTestId('series-select').locator('option:checked').textContent()) ?? '').replace(/\s*\(\d+\)\s*$/, '');
+    const beforeCut = Number((optsBefore.find((o) => o.startsWith(activeName + ' ')) ?? '').match(/\((\d+)\)\s*$/)?.[1]);
 
-    // ...and Join the two parts again from the series panel.
+    // ...and Join the two parts again from the series panel: the line comes
+    // back whole, exactly the points it had before the cut
+    const countOf = async (label: string) => Number(label.match(/\((\d+)\)\s*$/)?.[1]);
     const join = page.getByTestId('series-join');
     const lastOption = await join.locator('option').last().getAttribute('value');
     await join.selectOption(lastOption!);
     await expect.poll(seriesCount, { timeout: 5000 }).toBe(7);
+    const joined = await countOf((await page.getByTestId('series-select').locator('option:checked').textContent()) ?? '');
+    expect(joined, 'the cut point is not doubled').toBe(beforeCut);
 
     // C2: two lines given the same level sit together under ONE "Level 5"
     // header in the data table.

@@ -66,7 +66,12 @@ describe('F11 on a plot whose levels each have their own colour', () => {
       byLevel.set(L.level, [...(byLevel.get(L.level) ?? []), ...pts]);
     }
     const long = res.lines.filter((L) => L.points.length >= 20);
-    expect(long.length).toBeGreaterThan(0);
+    // every line of the level, and nothing else (audit B9: > 0 passed with one missing)
+    const n24 = (t.lines as { level: number; points: unknown[] }[]).filter((l) => l.level === 24 && l.points.length >= 20).length;
+    expect(long.length).toBe(n24);
+    const all = res.lines.flatMap((L) => L.points.map(([x, y]) => ({ x, y })));
+    const cover = byLevel.get(24)!.filter((p) => near(p, all)).length / byLevel.get(24)!.length;
+    expect(cover).toBeGreaterThan(0.95);
     for (const L of long) {
       const pts = L.points.map(([x, y]) => ({ x, y })).filter((_, i) => L.roles[i] === 'measured');
       const on24 = pts.filter((p) => near(p, byLevel.get(24)!)).length / pts.length;

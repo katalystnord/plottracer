@@ -72,9 +72,12 @@ export function keyPosition(key: LineKey, p: [number, number]): number {
  * The position on the key of the sample nearest in colour to `rgb`, or null
  * when no sample is near enough to be the same ink (`maxDist`, RGB distance).
  * Where several adjacent samples match (a stroke is a few px thick), their
- * middle is taken.
+ * middle is taken. The nearest stroke always wins; `maxDist` only decides when a
+ * colour is on no stroke at all. 30: a line's anti-aliased ink sits up to ~20
+ * from its own stroke, and the old 45 was twice the ~22 between neighbouring
+ * levels (contour-coloured-key, audit D5).
  */
-export function keyPositionOfColour(key: LineKey, rgb: RGB, maxDist = 45): number | null {
+export function keyPositionOfColour(key: LineKey, rgb: RGB, maxDist = 30): number | null {
   const d = key.samples.map((s) => Math.hypot(s.rgb[0] - rgb[0], s.rgb[1] - rgb[1], s.rgb[2] - rgb[2]));
   let best = -1;
   for (let i = 0; i < d.length; i++) if (best < 0 || d[i]! < d[best]!) best = i;
@@ -115,4 +118,20 @@ export function lineInkColour(rgba: Uint8ClampedArray | Uint8Array, w: number, h
   }
   if (cs.length < 3) return null;
   return [0, 1, 2].map((k) => cs.map((c) => c[k]!).sort((p, q) => p - q)[Math.floor(cs.length / 2)]!) as unknown as RGB;
+}
+
+/**
+ * The resolution a level read off the key has (audit B8): how much the value
+ * changes over one pixel of the key at position t. A level is rounded to this
+ * and no further - a fixed number of significant figures gave every line on a
+ * key from 10000 to 10010 the same level, 10000.
+ */
+export function keyResolution(keyLengthPx: number, tickA: { t: number; value: number }, tickB: { t: number; value: number }, log: boolean, t: number): number {
+  const dt = 1 / Math.max(1, keyLengthPx);
+  const a = keyValueAt(t, tickA, tickB, log), b = keyValueAt(t + dt, tickA, tickB, log);
+  if (a === null || b === null) return 0;
+  const step = Math.abs(b - a);
+  if (!(step > 0)) return 0;
+  // one significant figure of the per-pixel step: a power of ten at or below it
+  return Math.pow(10, Math.floor(Math.log10(step)));
 }

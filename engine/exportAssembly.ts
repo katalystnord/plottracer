@@ -335,9 +335,10 @@ export function errorColumnsByTuple(
  * A line with no level exports a BLANK level (''), never 0.
  *
  * ⚑ The derived-value columns ride along exactly as the flat export's do, and
- * only when something needs them: `Point` (anchor / interpolated) when a line
- * was captured with guide points, `Level from` when a level was interpolated
- * rather than typed - so an invented value never wears the record's clothes.
+ * only when something needs them: `Point` when any point is not plainly
+ * measured (anchor / interpolated from guide points; bridged / shared from
+ * Find lines), `Level from` when any level was not typed (label, key or
+ * interpolated) - so an invented value never wears the record's clothes.
  */
 export function contourSection(
   session: ExportAssemblyInput['session'],

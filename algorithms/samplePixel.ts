@@ -41,30 +41,53 @@ export function samplePixelRgb(image: PixelSource, x: number, y: number): RGB {
  */
 export function sampleInkRgb(image: PixelSource, x: number, y: number, radius = 3): RGB {
   const cx = Math.round(x), cy = Math.round(y);
-  const px: RGB[] = [];
-  for (let yy = cy - radius; yy <= cy + radius; yy++) {
-    for (let xx = cx - radius; xx <= cx + radius; xx++) {
-      if (xx < 0 || yy < 0 || xx >= image.width || yy >= image.height) continue;
-      const o = (yy * image.width + xx) * 4;
-      px.push([image.data[o]!, image.data[o + 1]!, image.data[o + 2]!]);
-    }
-  }
-  if (!px.length) return samplePixelRgb(image, x, y);
+  const at = (xx: number, yy: number): RGB | null => {
+    if (xx < 0 || yy < 0 || xx >= image.width || yy >= image.height) return null;
+    const o = (yy * image.width + xx) * 4;
+    return [image.data[o]!, image.data[o + 1]!, image.data[o + 2]!];
+  };
+  // ⚑ THE PAPER IS READ FROM A RING AROUND THE CLICK, not from the window the
+  // ink is looked for in (audit B6): a thick line fills a small window, and its
+  // own ink became "the commonest colour" - the pipette then returned white.
   const counts = new Map<string, { c: RGB; n: number }>();
-  for (const c of px) {
-    const k = c.map((v) => v >> 4).join(',');
-    const e = counts.get(k);
-    if (e) e.n++;
-    else counts.set(k, { c, n: 1 });
-  }
-  const paper = [...counts.values()].sort((a, b) => b.n - a.n)[0]!.c;
-  let best = px[0]!, bd = -1;
-  for (const c of px) {
-    const d = (c[0] - paper[0]) ** 2 + (c[1] - paper[1]) ** 2 + (c[2] - paper[2]) ** 2;
-    if (d > bd) {
-      bd = d;
-      best = c;
+  for (let yy = cy - 12; yy <= cy + 12; yy++) {
+    for (let xx = cx - 12; xx <= cx + 12; xx++) {
+      const r = Math.hypot(xx - cx, yy - cy);
+      if (r < 8 || r > 12) continue;
+      const c = at(xx, yy);
+      if (!c) continue;
+      const k = c.map((v) => v >> 4).join(',');
+      const e = counts.get(k);
+      if (e) e.n++;
+      else counts.set(k, { c, n: 1 });
     }
   }
-  return best;
+  if (!counts.size) return samplePixelRgb(image, x, y);
+  const paper = [...counts.values()].sort((a, b) => b.n - a.n)[0]!.c;
+  const far = (c: RGB): number => (c[0] - paper[0]) ** 2 + (c[1] - paper[1]) ** 2 + (c[2] - paper[2]) ** 2;
+  // ⚑ NEAREST INK FIRST: a pixel at or beside the click that is clearly not
+  // paper is the line clicked on - a darker neighbour further out (a black
+  // frame 2 px away) must not win just by contrasting more.
+  const strongest = (ox: number, oy: number, r: number): { c: RGB; x: number; y: number; d: number } | null => {
+    let best: { c: RGB; x: number; y: number; d: number } | null = null;
+    for (let yy = oy - r; yy <= oy + r; yy++) for (let xx = ox - r; xx <= ox + r; xx++) {
+      const c = at(xx, yy);
+      if (!c) continue;
+      const d = far(c);
+      if (!best || d > best.d) best = { c, x: xx, y: yy, d };
+    }
+    return best;
+  };
+  for (const r of [1, radius]) {
+    const hit = strongest(cx, cy, r);
+    if (!hit) continue;
+    if (Math.sqrt(hit.d) >= 60 || r === radius) {
+      // one step further INTO that line: the pixel beside the hit that is most
+      // its ink - a pale anti-aliased edge gives way to the line's core, and a
+      // separate line two pixels on is out of reach
+      const core = strongest(hit.x, hit.y, 1);
+      return core && core.d > hit.d ? core.c : hit.c;
+    }
+  }
+  return samplePixelRgb(image, x, y);
 }

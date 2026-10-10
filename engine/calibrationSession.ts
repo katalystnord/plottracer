@@ -1571,6 +1571,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
   setContourLevel(index: number, value: number | null, source: ContourLevelSource = 'typed'): string | null {
     const entry = this.datasetEntries[index];
     if (!entry) return null;
+    // a log level axis holds only levels above 0 - the same rule the key's ticks
+    // and the fill-in obey (audit C6)
+    if (value !== null && value <= 0 && this.optionValues['isLogLevel'] === 'true') {
+      return `A log level axis cannot hold ${value} - only levels above 0. Untick Log level if this plot's levels are linear.`;
+    }
     return writeContourLevel(entry.dataset, value === null ? null : { value, source });
   }
 
@@ -2961,7 +2966,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   setNotDataRegions(regions: readonly NotDataRegion[]): void {
-    this.notDataRegions = regions.filter((r) => r.width > 0 && r.height > 0).map((r) => ({ ...r }));
+    // only real rectangles - the same rule the file reader applies (audit D2)
+    this.notDataRegions = regions
+      .filter((r) => [r.x, r.y, r.width, r.height].every((v) => Number.isFinite(v)) && r.width > 0 && r.height > 0)
+      .map((r) => ({ ...r }));
   }
 
   /** Switches which dataset new points/slot actions apply to.

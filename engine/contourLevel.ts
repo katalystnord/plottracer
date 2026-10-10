@@ -15,8 +15,9 @@
  * level and opening a file - go through `getContourLevel`, which is where the
  * validity rule lives.
  *
- * **`source`** says whether the level was typed or interpolated between two
- * labelled lines. An interpolated level is a reading like any other and stays
+ * **`source`** says where the level came from: typed, read from the line's own
+ * label (and accepted), read off the colour key, or interpolated between
+ * other lines. An interpolated level is a reading like any other and stays
  * editable; the source is what lets the screen show it the way interpolated
  * points are shown.
  */

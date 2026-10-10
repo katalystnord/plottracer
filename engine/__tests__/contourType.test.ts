@@ -246,3 +246,44 @@ describe('v2.6 contour - the record', () => {
     expect(back.getContourLevel(0)).toBeNull();
   });
 });
+
+describe('v2.6 audit: the level axis refuses what it cannot hold (C5, C6, D2)', () => {
+  function withKey(clicks: [number, number, string | null][]) {
+    const s = new CalibrationSession<CalibratedAxes>(CONTOUR_AXES_CONFIG as never);
+    s.setOption('hasColourKey', 'true');
+    for (const [px, py, v] of [[100, 250, '0'], [400, 250, '10'], [100, 250, '0'], [100, 100, '10']] as const) {
+      s.handleCalibrationClick(px, py);
+      s.confirmCalibrationValues([v]);
+    }
+    for (const [px, py, v] of clicks) {
+      s.handleCalibrationClick(px, py);
+      if (v !== null) s.confirmCalibrationValues([v]);
+    }
+    return s;
+  }
+
+  it('C5 four colour-key clicks on one pixel do not calibrate', () => {
+    const s = withKey([[450, 100, null], [450, 100, null], [450, 100, '1'], [450, 100, '2']]);
+    expect(s.runCalibration()).toBe(false);
+  });
+
+  it('C5 a real key - opposite corners, two ticks - calibrates', () => {
+    const s = withKey([[440, 60, null], [460, 240, null], [450, 230, '14'], [450, 80, '34']]);
+    expect(s.runCalibration(), s.getCalibrationError() ?? '').toBe(true);
+  });
+
+  it('C6 a log level axis refuses a typed level of 0 or below, and says why', () => {
+    const s = calibratedContour();
+    s.setOption('isLogLevel', 'true');
+    trace(s, OPEN);
+    expect(s.setContourLevelFromText(0, '-3')).toMatch(/above 0/);
+    expect(s.getContourLevel(0)).toBeNull();
+    expect(s.setContourLevelFromText(0, '10')).toBeNull();
+  });
+
+  it('D2 a masked area with a non-number edge is not kept', () => {
+    const s = calibratedContour();
+    s.setNotDataRegions([{ x: Number.NaN, y: 1, width: 5, height: 5 }, { x: 1, y: 1, width: 5, height: 5 }]);
+    expect(s.getNotDataRegions()).toEqual([{ x: 1, y: 1, width: 5, height: 5 }]);
+  });
+});

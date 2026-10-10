@@ -91,7 +91,10 @@ export function joinLines(a: readonly LinePoint[], b: readonly LinePoint[]): Lin
   const t0 = tangentOut(first);
   const t1raw = tangentOut(rev(second));
   const bridge = bd < 1.5 ? [] : hermite([e.x, e.y], t0, [s.x, s.y], [-t1raw[0], -t1raw[1]]);
-  return [...first, ...bridge.map(([x, y]) => ({ x, y, role: 'bridged' as const })), ...second];
+  // ends that are the SAME point (the two halves of a Cut both keep the cut
+  // point) meet once, not twice
+  const rest = bd < 1e-9 ? second.slice(1) : second;
+  return [...first, ...bridge.map(([x, y]) => ({ x, y, role: 'bridged' as const })), ...rest];
 }
 
 /**

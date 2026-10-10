@@ -1555,8 +1555,18 @@ export const CONTOUR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       { key: 'kv2', label: 'Key value 2', color: '#d47fa8', prompt: 'Click a second labelled tick on the colour key and enter its level', valueFields: [{ key: 'kv2', label: 'Level', field: 'dy' }] },
     ];
   },
+  // ⚑ The key's clicks are checked HERE rather than by `distinctPixelSteps`,
+  // because the key's steps exist only while "Colour key" is ticked (audit C5).
   checkValues(cal, options) {
     if (!optionBool(options, 'hasColourKey')) return null;
+    const k1 = cal.getPoint(HEATMAP_KEY_POINTS.stripFrom), k2 = cal.getPoint(HEATMAP_KEY_POINTS.stripTo);
+    if (k1 && k2 && (Math.abs(k1.px - k2.px) < 3 || Math.abs(k1.py - k2.py) < 3)) {
+      return 'The colour key’s two corners must be OPPOSITE corners of the bar - click one corner, then the one diagonally across from it.';
+    }
+    const t1 = cal.getPoint(HEATMAP_KEY_POINTS.tickA), t2 = cal.getPoint(HEATMAP_KEY_POINTS.tickB);
+    if (t1 && t2 && Math.hypot(t1.px - t2.px, t1.py - t2.py) < 3) {
+      return 'The colour key’s two labelled ticks are at the same place - click two different ticks on the key.';
+    }
     const a = parseFloat(String(cal.getPoint(HEATMAP_KEY_POINTS.tickA)?.dy ?? ''));
     const b = parseFloat(String(cal.getPoint(HEATMAP_KEY_POINTS.tickB)?.dy ?? ''));
     if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
