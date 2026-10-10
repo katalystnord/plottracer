@@ -17,6 +17,7 @@ import { findLines } from '../../algorithms/findLines/lines.js';
 import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
 import { inferLevelsInScale } from '../../algorithms/findLines/levels.js';
 import { inkClosesLoop } from '../../algorithms/findLines/closure.js';
+import { readLineKey, keyPosition, keyPositionOfColour, keyValueAt, lineInkColour } from '../../algorithms/findLines/lineKey.js';
 import { thinFoundLine } from '../../engine/lineEdits.js';
 import type { LabelRead } from '../../engine/contourLabel.js';
 import { PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
@@ -4447,6 +4448,46 @@ export function Workspace() {
     }
   }, [session, dataValueInputs, commit, commonOrigin, adoptCommonOrigin]);
 
+  /**
+   * L3 (v2.6): every contour line's level read off the figure's colour key by
+   * the line's own colour - a MEASUREMENT, recorded as "from colour key". A
+   * level the user typed is never overwritten; one read from the key before is
+   * read again, so recalibrating the key moves every such level with it.
+   * Returns what it did, for the card to say.
+   */
+  const readLevelsFromKey = useCallback((): { set: number; offKey: number } | null => {
+    const s = sessionRef.current;
+    if (s.getConfig().id !== 'contour' || s.getOptions()['hasColourKey'] !== 'true') return null;
+    const placed = s.getPlacedPoints();
+    const k1 = placed['k1'], k2 = placed['k2'], kv1 = placed['kv1'], kv2 = placed['kv2'];
+    const imageData = imageCanvasRef.current?.getImageData();
+    if (!k1 || !k2 || !kv1 || !kv2 || !imageData) return null;
+    const key = readLineKey(imageData.data, imageData.width, imageData.height, [k1.px, k1.py], [k2.px, k2.py]);
+    if (!key) return null;
+    const ta = { t: keyPosition(key, [kv1.px, kv1.py]), value: Number(kv1.values[0]) };
+    const tb = { t: keyPosition(key, [kv2.px, kv2.py]), value: Number(kv2.values[0]) };
+    const log = s.getOptions()['isLogLevel'] === 'true';
+    let set = 0, offKey = 0;
+    for (const info of s.getDatasetInfos()) {
+      const cur = s.getContourLevel(info.index);
+      if (cur && cur.source !== 'key' && cur.source !== 'interpolated') continue;
+      const pts = s.getLinePoints(info.index);
+      if (!pts || pts.length < 2) continue;
+      const ink = lineInkColour(imageData.data, imageData.width, imageData.height, pts);
+      const pos = ink ? keyPositionOfColour(key, ink) : null;
+      const v = pos === null ? null : keyValueAt(pos, ta, tb, log);
+      if (v === null || !Number.isFinite(v)) {
+        offKey++;
+        if (cur?.source === 'key') s.setContourLevel(info.index, null);
+        continue;
+      }
+      // as many significant figures as the key's own labels warrant, and no more
+      s.setContourLevel(info.index, Number(v.toPrecision(4)), 'key');
+      set++;
+    }
+    return { set, offKey };
+  }, []);
+
   const runCalibration = useCallback(() => {
     if (session.runCalibration()) {
       setMode('place-point');
@@ -4457,6 +4498,8 @@ export function Workspace() {
       // reintroducing checkpoint 68's click-swallow: the tall state is opt-in,
       // reached by unfolding when you actually want to change Log Y or the like.
       setCalibExpanded(false);
+      // L3: a recalibrated colour key moves every level read off it
+      readLevelsFromKey();
       commit();
       // ⚑⚑ A HEATMAP READS ITS BOUNDARIES OFF THE FIGURE, HERE. The design said
       // the assist for a drawn-cell figure is *"DETECT the boundaries and
@@ -6419,7 +6462,7 @@ export function Workspace() {
     // the user's not-data regions, with a 4 px margin as the research measured them
     const masks = session.getNotDataRegions().map((r) => ({ x0: r.x - 4, y0: r.y - 4, x1: r.x + r.width + 4, y1: r.y + r.height + 4 }));
     const res = findLines(imageData.data, imageData.width, imageData.height, target,
-      { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height }, { contour: kind === 'contours', masks });
+      { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height }, { contour: kind === 'contours', masks, coloursAreLevels: kind === 'contours' && session.getOptions()['hasColourKey'] === 'true' });
     if (!res.lines.length) {
       setFindLinesBusy(null);
       setFindLinesSummary('No line of that colour was found inside the plot box. Repick the colour from a line.');
@@ -6437,6 +6480,7 @@ export function Workspace() {
     }
     const created = session.addFoundLines(res.lines.map((L) => thinFoundLine(L.points, L.roles)));
     setLastFound(created.map((i) => session.getDatasetInfos()[i]!.name));
+    const fromKey = readLevelsFromKey();
     const nameOf = (k: number): string => session.getDatasetInfos()[created[k]!]?.name ?? `line ${k + 1}`;
     const places: LinePlace[] = [];
     const placeText = (pl: (typeof res.places)[number]): string => {
@@ -6479,13 +6523,14 @@ export function Workspace() {
     setLinePlaces(places);
     setFindLinesSummary(
       `${res.lines.length} line${res.lines.length === 1 ? '' : 's'} found, ${gaps} gap${gaps === 1 ? '' : 's'} bridged` +
-        (kind === 'contours' ? `; labels read on ${read} line${read === 1 ? '' : 's'}, not used on ${notRead} - the read is offered beside each line's Level` : '') +
+        (fromKey ? `; levels read off the colour key on ${fromKey.set} line${fromKey.set === 1 ? '' : 's'}${fromKey.offKey ? `, ${fromKey.offKey} not on the key` : ''}` : '') +
+        (kind === 'contours' && !fromKey ? `; labels read on ${read} line${read === 1 ? '' : 's'}, not used on ${notRead} - the read is offered beside each line's Level` : '') +
         (res.labelInk.length ? `; ${res.labelInk.length} small mark${res.labelInk.length === 1 ? '' : 's'} (label text and the like) left out` : '') +
         `. ${places.length ? `${places.length} place${places.length === 1 ? '' : 's'} to check, listed on the right.` : 'Nothing it was unsure of.'} Undo removes the whole result.`
     );
     setFindLinesBusy(null);
     commit();
-  }, [session, colorTraceColor, commit, lastFound, setLastFound, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice]);
+  }, [session, colorTraceColor, commit, readLevelsFromKey, lastFound, setLastFound, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice]);
 
   /** C4: unset contour levels filled in from the ones the user has set, in equal
    * steps between them - refused, and saying why, where the levels are uneven. */
@@ -9553,6 +9598,19 @@ export function Workspace() {
                       onFind: () => void handleFindLines(),
                       replaces: datasetInfos.filter((i) => lastFound.includes(i.name) && i.pointCount > 0).length,
                       ...(findLinesKind(config.id) === 'contours' ? { onFillLevels: handleFillLevels } : {}),
+                      ...(config.id === 'contour' && session.getOptions()['hasColourKey'] === 'true'
+                        ? {
+                            onReadKey: () => {
+                              const r = readLevelsFromKey();
+                              setFillLevelsNotice(
+                                r === null
+                                  ? 'The colour key is not calibrated yet - place its two corners and two labelled ticks (Calibration card).'
+                                  : `${r.set} level${r.set === 1 ? '' : 's'} read off the colour key${r.offKey ? `; ${r.offKey} line${r.offKey === 1 ? '' : 's'} not on the key - type ${r.offKey === 1 ? 'its level' : 'their levels'}` : ''}.`
+                              );
+                              commit();
+                            },
+                          }
+                        : {}),
                       fillNotice: fillLevelsNotice,
                       masks: {
                         count: session.getNotDataRegions().length,
@@ -10230,6 +10288,7 @@ export function Workspace() {
                 text: String(session.getContourLevel(activeDatasetIndex)?.value ?? ''),
                 interpolated: session.getContourLevel(activeDatasetIndex)?.source === 'interpolated',
                 fromLabel: session.getContourLevel(activeDatasetIndex)?.source === 'label',
+                fromKey: session.getContourLevel(activeDatasetIndex)?.source === 'key',
                 notice: levelNotice,
                 onCommit: (text: string) => handleCommitLevel(activeDatasetIndex, text),
                 ...(() => {

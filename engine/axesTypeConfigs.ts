@@ -1535,7 +1535,35 @@ export const CONTOUR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   options: [
     ...(XY_AXES_CONFIG.options ?? []),
     { key: 'isLogLevel', label: 'Log level', kind: 'checkbox', default: false },
+    // L3: a coloured contour plot's key calibrates the level axis
+    { key: 'hasColourKey', label: 'Colour key', kind: 'checkbox', default: false },
   ],
+  /**
+   * L3: with "Colour key" ticked, the walk adds the heatmap's own four key
+   * steps - the bar's two opposite corners, then two labelled ticks - the same
+   * clicks and the same order, so a heatmap user and a contour user meet the
+   * same key the same way. ⚑ The first prompt asks for a CLICK: the heatmap's
+   * drag-across-the-key gesture belongs to its own walk.
+   */
+  stepsForOptions(steps, options) {
+    if (!optionBool(options, 'hasColourKey')) return [...steps];
+    return [
+      ...steps,
+      { key: 'k1', label: 'Key corner', color: '#a87fd4', prompt: 'Click one corner of the colour key', valueFields: [], labelBelow: true },
+      { key: 'k2', label: 'Opposite corner', color: '#a87fd4', prompt: 'Click the OPPOSITE corner of the colour key', valueFields: [], labelBelow: true },
+      { key: 'kv1', label: 'Key value 1', color: '#d47fa8', prompt: 'Click a labelled tick on the colour key and enter the level printed there', valueFields: [{ key: 'kv1', label: 'Level', field: 'dy' }] },
+      { key: 'kv2', label: 'Key value 2', color: '#d47fa8', prompt: 'Click a second labelled tick on the colour key and enter its level', valueFields: [{ key: 'kv2', label: 'Level', field: 'dy' }] },
+    ];
+  },
+  checkValues(cal, options) {
+    if (!optionBool(options, 'hasColourKey')) return null;
+    const a = parseFloat(String(cal.getPoint(HEATMAP_KEY_POINTS.tickA)?.dy ?? ''));
+    const b = parseFloat(String(cal.getPoint(HEATMAP_KEY_POINTS.tickB)?.dy ?? ''));
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    if (a === b) return 'The colour key’s two labelled ticks have the same level - they must differ, or every line reads the same level.';
+    if (optionBool(options, 'isLogLevel') && (a <= 0 || b <= 0)) return 'A log level axis cannot pass through zero or go negative - enter positive levels on the key (e.g. 1 and 100).';
+    return null;
+  },
   // ⚑⚑ WITHOUT THE STAMP A SAVED CONTOUR PROJECT REOPENED AS AN XY CHART - it
   // shares `XYAxes` and, unlike every other such type, never said which it was.
   // Found 2026-10-10 adding the level scale, which needs the same metadata to
@@ -1549,6 +1577,7 @@ export const CONTOUR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
       ...result.axes.getMetadata(),
       [GRAPH_TYPE_METADATA_KEY]: 'contour',
       contourLogLevel: String(optionBool(ctx.options, 'isLogLevel')),
+      contourColourKey: String(optionBool(ctx.options, 'hasColourKey')),
     });
     return result;
   },
@@ -1557,6 +1586,7 @@ export const CONTOUR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     return {
       ...XY_AXES_CONFIG.extractOptions!(axes),
       isLogLevel: String(meta['contourLogLevel'] === 'true'),
+      hasColourKey: String(meta['contourColourKey'] === 'true'),
     };
   },
 };

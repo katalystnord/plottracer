@@ -23,9 +23,10 @@
 import type { Dataset } from '../core/dataset.js';
 import { InputParser } from '../core/inputParser.js';
 
-/** typed by the user, read from the line's own label (and accepted), or
- * interpolated from the levels around it. */
-export type ContourLevelSource = 'typed' | 'label' | 'interpolated';
+/** typed by the user, read from the line's own label (and accepted), read off
+ * the figure's colour key by the line's colour, or interpolated from the levels
+ * around it. */
+export type ContourLevelSource = 'typed' | 'label' | 'key' | 'interpolated';
 
 export interface ContourLevel {
   value: number;
@@ -41,7 +42,7 @@ export function getContourLevel(dataset: Dataset): ContourLevel | null {
   if (raw == null || typeof raw !== 'object') return null;
   const { value, source } = raw as Record<string, unknown>;
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  if (source !== 'typed' && source !== 'label' && source !== 'interpolated') return null;
+  if (source !== 'typed' && source !== 'label' && source !== 'key' && source !== 'interpolated') return null;
   return { value, source };
 }
 

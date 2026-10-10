@@ -81,6 +81,8 @@ export interface AutoExtractCardProps {
     replaces: number;
     /** Contours: fill unset levels from the ones set (C4). */
     onFillLevels?: () => void;
+    /** Contours with a calibrated colour key: read every line's level off it (L3). */
+    onReadKey?: () => void;
     fillNotice: string | null;
     /** Regions marked as not data (a legend), and the gesture that adds one. */
     masks: {
@@ -294,6 +296,11 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
               <span style={{ fontSize: theme.font.size.small }}>
                 Set the levels you can see (type them, or use what a label reads), then fill in the rest - in equal steps between the lines you set.
               </span>
+              {findLines.onReadKey && (
+                <button type="button" data-testid="find-lines-read-key" onClick={findLines.onReadKey} style={{ alignSelf: 'flex-start' }} title="Give every line the level its colour has on the figure's colour key">
+                  Read levels from the colour key
+                </button>
+              )}
               <button type="button" data-testid="find-lines-fill-levels" onClick={findLines.onFillLevels} style={{ alignSelf: 'flex-start' }}>
                 Fill in the other levels
               </button>

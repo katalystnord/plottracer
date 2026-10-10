@@ -75,6 +75,11 @@ export interface FindLinesOptions {
   contour: boolean;
   /** Regions the user marked as not data (a legend). Lines may bridge across them. */
   masks?: readonly Box[];
+  /** Each level is drawn in its own colour (the figure has a colour key): only
+   * this colour's lines are wanted, so neighbouring colours must be refused. */
+  coloursAreLevels?: boolean;
+  /** For measurement only: override the residual tolerance. */
+  residualTolerance?: number;
 }
 
 const O = {
@@ -237,7 +242,21 @@ export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: nu
   const contour = opts.contour;
   const masks = opts.masks ?? [];
   const cov = inkCoverage(rgba, w, h, colour);
-  const mask = lineMask(cov, w, h, box, masks);
+  // ⚑⚑ WHEN EACH LEVEL HAS ITS OWN COLOUR, THE RESIDUAL MUST BE TIGHT. It is how
+  // far a pixel is from any paper-to-ink mix. 70 was measured on same-colour
+  // figures, where nothing near the picked colour is a different line - and a
+  // fixed tight value broke them (heldout2 337 -> 302 whole; on scan-like
+  // copies a coloured line's OWN pixels sit at ~44). On a viridis contour plot
+  // the next level's line sits only ~22 from the picked one (measured on
+  // contour-coloured-key: own line 0, neighbours 22-23), so with 70 one press
+  // took four levels' lines and merged them (F11). The user saying "this plot
+  // has a colour key" is what says the colours ARE the levels - and then the
+  // tolerance is MEASURED from the figure: how much the picked ink's own solid
+  // pixels stray from a pure mix (see ownInkResidual). Measured on the clean
+  // coloured-key figure: 5 keeps both level-24 lines (98.9% covered) and no
+  // other level; 15 let 19 pieces of levels 22 and 26 through.
+  const resTol = opts.residualTolerance ?? (opts.coloursAreLevels ? ownInkResidual(rgba, w, h, colour, cov, box) : 70);
+  const mask = lineMask(cov, w, h, box, masks, 0.3, resTol);
   const skel = skeletonize(mask, w, h);
   const graph = skeletonGraph(skel, w, h);
   const nodes = graph.nodes;
@@ -255,7 +274,8 @@ export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: nu
   // --- 2. where lines CROWD, the ridge chains take over from the centreline
   let crowd: Uint8Array | null = null;
   if (contour) {
-    const rp = ridgePoints(cov, w, h, box);
+    // the same residual as the mask - one rule for what counts as this ink
+    const rp = ridgePoints(cov, w, h, box, 0.7, 0.03, 3, 0.12, resTol);
     const cr = new Uint8Array(w * h);
     if (rp.count) {
       const near = new Map<number, number[]>();
@@ -1056,3 +1076,27 @@ function closeLoops(lines: FoundLine[], labelInk: Pt[][], onFrame: (p: Pt) => bo
   }
 }
 
+
+/**
+ * How far the picked ink's OWN pixels stray from a pure paper-to-ink mix - the
+ * figure's noise for that colour (JPEG, scanning), measured on pixels that are
+ * plainly the ink (nearly its colour, coverage near 1). The tolerance is a
+ * margin over that, never below 5: on a clean render the ink's own pixels sit
+ * at 0, and the next level's colour at ~22.
+ */
+function ownInkResidual(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, colour: RGB, cov: { alpha: Float64Array; residual: Float64Array }, box: Box): number {
+  const vals: number[] = [];
+  for (let y = Math.ceil(box.y0); y <= Math.floor(box.y1); y++) {
+    for (let x = Math.ceil(box.x0); x <= Math.floor(box.x1); x++) {
+      const i = y * w + x;
+      const o = i * 4;
+      const d = Math.hypot(rgba[o]! - colour[0], rgba[o + 1]! - colour[1], rgba[o + 2]! - colour[2]);
+      // within 12 of the picked colour: the next level's ink is ~22 away and must not count as this one
+      if (d < 12 && cov.alpha[i]! > 0.85 && cov.alpha[i]! < 1.15) vals.push(cov.residual[i]!);
+    }
+  }
+  if (vals.length < 20) return 15;
+  vals.sort((a, b) => a - b);
+  const p95 = vals[Math.floor(vals.length * 0.95)]!;
+  return Math.max(5, Math.min(70, 2 * p95 + 3));
+}

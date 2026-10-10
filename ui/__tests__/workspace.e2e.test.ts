@@ -11881,6 +11881,64 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
   }
   const seriesCount = () => page.getByTestId('series-select').locator('option').count();
 
+  it('L3 a coloured contour plot\'s colour key gives each found line its level', async () => {
+    const FIG = path.join(__dirname, '..', '..', 'algorithms', '__tests__', 'fixtures', 'findLines', 'contour-coloured-key');
+    const t = JSON.parse(fs.readFileSync(FIG + '.truth.json', 'utf8')) as {
+      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+      lines: { level: number; points: [number, number][] }[];
+    };
+    try {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, FIG + '.png');
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-contour').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    // the option the type offers, then the walk it adds - prompt for prompt
+    await page.getByTestId('calib-option-hasColourKey').check();
+    await page.waitForTimeout(150);
+    const a = t.calibration.anchors;
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    expect(await textOf('tips-bar')).toMatch(/one corner of the colour key/);
+    await clickImagePixel(761, 39.5);
+    expect(await textOf('tips-bar')).toMatch(/OPPOSITE corner of the colour key/);
+    await clickImagePixel(790.8, 636.7);
+    expect(await textOf('tips-bar')).toMatch(/labelled tick on the colour key/);
+    await clickImagePixel(775.9, 636.72);
+    await confirmValue('14');
+    await clickImagePixel(775.9, 93.64);
+    await confirmValue('34');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+
+    // Find lines on ONE level's colour (F11): its lines take their level off the key
+    const L24 = t.lines.filter((l) => l.level === 24).sort((p, q) => q.points.length - p.points.length)[0]!;
+    const [mx, my] = L24.points[Math.floor(L24.points.length / 2)]!;
+    const sx = (a.x2.px - a.x1.px) / (a.x2.value - a.x1.value), sy = (a.y2.py - a.y1.py) / (a.y2.value - a.y1.value);
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(a.x1.px + (mx - a.x1.value) * sx, a.y1.py + (my - a.y1.value) * sy);
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 60000 }).toMatch(/levels read off the colour key on [1-9]/);
+    expect(await page.getByTestId('series-level').inputValue()).toBe('24');
+    expect(await textOf('series-level-from-key')).toBe('from colour key');
+  }, 120000);
+
   it('C3 a contour line clicked all the way round by hand closes on its own ink', async () => {
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('example-contour').waitFor({ state: 'visible' });

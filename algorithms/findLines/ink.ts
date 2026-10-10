@@ -102,10 +102,10 @@ export interface RidgePoints {
 /** Sub-pixel centres at ridges of the smoothed coverage: the normal is the
  * Hessian's most negative eigenvector, the centre where the first derivative
  * along it crosses zero inside the pixel. */
-export function ridgePoints(cov: Coverage, w: number, h: number, box: Box, sigma = 0.7, thr = 0.03, inset = 3, amin = 0.12): RidgePoints {
+export function ridgePoints(cov: Coverage, w: number, h: number, box: Box, sigma = 0.7, thr = 0.03, inset = 3, amin = 0.12, resTol = 70): RidgePoints {
   const n = w * h;
   const a = new Float64Array(n);
-  for (let i = 0; i < n; i++) a[i] = cov.residual[i]! < 70 && cov.contrast[i]! > 40 ? cov.alpha[i]! : 0;
+  for (let i = 0; i < n; i++) a[i] = cov.residual[i]! < resTol && cov.contrast[i]! > 40 ? cov.alpha[i]! : 0;
   const p: Plane = { data: a, width: w, height: h };
   const g = gaussian(p, sigma, 0, 0);
   const gy = gaussian(p, sigma, 1, 0);

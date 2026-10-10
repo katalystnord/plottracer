@@ -51,6 +51,8 @@ export interface SeriesPanelProps {
     interpolated: boolean;
     /** The level was used from the line's own label (S3). */
     fromLabel?: boolean;
+    /** The level was read off the figure's colour key by the line's colour (L3). */
+    fromKey?: boolean;
     notice: string | null;
     onCommit: (text: string) => void;
     /**
@@ -299,6 +301,11 @@ export function SeriesPanel(props: SeriesPanelProps) {
           {level.interpolated && (
             <span data-testid="series-level-interpolated" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
               interpolated
+            </span>
+          )}
+          {level.fromKey && (
+            <span data-testid="series-level-from-key" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
+              from colour key
             </span>
           )}
           {level.fromLabel && (

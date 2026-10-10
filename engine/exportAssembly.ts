@@ -359,7 +359,7 @@ export function contourSection(
     }
   }
   const withRole = raw.some((r) => r.role !== null);
-  const withLevelFrom = raw.some((r) => r.levelFrom === 'interpolated' || r.levelFrom === 'label');
+  const withLevelFrom = raw.some((r) => r.levelFrom !== null && r.levelFrom !== 'typed');
   return {
     header: ['Line', 'Level', 'X', 'Y', ...(withRole ? ['Point'] : []), ...(withLevelFrom ? ['Level from'] : [])],
     rows: raw.map((r) => [
