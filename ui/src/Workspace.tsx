@@ -12,7 +12,13 @@ import {
   type SessionSnapshot,
 } from '../../engine/calibrationSession.js';
 import { describeCaptureProgress } from '../../engine/captureProgress.js';
-import { AUTO_EXTRACT_MODES, autoExtractModesFor, type ToolMode } from '../../engine/toolMode.js';
+import { AUTO_EXTRACT_MODES, autoExtractModesFor, findLinesKind, type ToolMode } from '../../engine/toolMode.js';
+import { findLines } from '../../algorithms/findLines/lines.js';
+import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
+import { inferLevels } from '../../algorithms/findLines/levels.js';
+import { thinFoundLine } from '../../engine/lineEdits.js';
+import type { LabelRead } from '../../engine/contourLabel.js';
+import { PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
 import {
@@ -24,7 +30,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop } from './ocrClient.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -77,6 +83,7 @@ import {
   CalibrateIcon,
   DeleteIcon,
   EraseIcon,
+  CutLineIcon,
   SelectBoxIcon,
   SelectLassoIcon,
   SelectSeriesIcon,
@@ -1768,6 +1775,12 @@ export function Workspace() {
     // is ENTERED, so without this the last-used mechanism could open a card
     // whose button would silently do nothing.
     if (autoExtractModesFor(session.getConfig().autoExtractKind).length === 1) lastAutoExtractMechRef.current = 'color-trace';
+    // Find lines exists only on XY and Contour: a last-used mechanism this type
+    // does not offer would open a card with nothing selected.
+    {
+      const offered = autoExtractModesFor(session.getConfig().autoExtractKind, session.getConfig().id);
+      if (offered.length && !offered.includes(lastAutoExtractMechRef.current)) lastAutoExtractMechRef.current = offered[0]!;
+    }
     setSegmentFillError(null);
     setColorTraceInfo(null);
     setMode((m) => {
@@ -3078,7 +3091,7 @@ export function Workspace() {
     // not. Generalized (v2.0 Phase 7) off autoExtractModesFor rather than
     // "any bar-family type": Bar itself now offers color-trace (bounding-box
     // detection), so it alone must NOT be kicked out of that one mechanism.
-    setMode((m) => (AUTO_EXTRACT_MODES.includes(m) && !autoExtractModesFor(s.getConfig().autoExtractKind).includes(m) ? 'place-point' : m));
+    setMode((m) => (AUTO_EXTRACT_MODES.includes(m) && !autoExtractModesFor(s.getConfig().autoExtractKind, s.getConfig().id).includes(m) ? 'place-point' : m));
   }, []);
 
   // --- Import another digitizer's project ---------------------------------
@@ -3870,6 +3883,9 @@ export function Workspace() {
   // already uses one line up, for the same reason.
   const colourScaleRef = useRef<ColorScale | null>(null);
   colourScaleRef.current = colourScale;
+  // Cut (v2.6) is defined further down, beside the other line corrections; the
+  // click router reaches it through this ref, as it reaches the colour key.
+  const cutAtPixelRef = useRef<((px: number, py: number) => void) | null>(null);
 
 
   const handleImageClick = useCallback(
@@ -3935,6 +3951,9 @@ export function Workspace() {
           return;
         case 'measure':
           handleMeasureClick(px, py);
+          return;
+        case 'cut':
+          cutAtPixelRef.current?.(px, py);
           return;
         case 'capture-first':
           setProjectError(route.message);
@@ -6281,6 +6300,206 @@ export function Workspace() {
     handleColorTrace();
   }, [session, handleColorTrace]);
 
+  // --- Find lines (v2.6, first version) -----------------------------------
+  // Every line of one colour as its own line, labels read and OFFERED, every
+  // place it was unsure listed for the user to check (docs/v2.6-curves-cases.md
+  // F1-F12, K1). The colour is By colour's own pick: the same question asked
+  // by a different reader.
+  const [findLinesBusy, setFindLinesBusy] = useState<string | null>(null);
+  const [findLinesSummary, setFindLinesSummary] = useState<string | null>(null);
+  const [fillLevelsNotice, setFillLevelsNotice] = useState<string | null>(null);
+  const [linePlaces, setLinePlaces] = useState<readonly LinePlace[]>([]);
+  const [joinNotice, setJoinNotice] = useState<string | null>(null);
+
+  const handleFindLines = useCallback(async () => {
+    const kind = findLinesKind(session.getConfig().id);
+    const imageData = imageCanvasRef.current?.getImageData();
+    const target = hexToRGB(colorTraceColor);
+    const box = calibrationBoxRegion(session.getPlacedPoints());
+    if (!kind || !imageData || !session.getAxes() || !box) {
+      setFindLinesSummary('Calibrate the axes first - Find lines looks inside the plot box they mark.');
+      return;
+    }
+    if (!target) {
+      setFindLinesSummary('Pick the lines’ colour first (Pick from image takes it off the figure).');
+      return;
+    }
+    setFindLinesSummary(null);
+    setFillLevelsNotice(null);
+    setFindLinesBusy('Finding lines…');
+    // let the card show that it is working before the search holds the thread
+    await new Promise((r) => setTimeout(r, 30));
+    const res = findLines(imageData.data, imageData.width, imageData.height, target,
+      { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height }, { contour: kind === 'contours' });
+    if (!res.lines.length) {
+      setFindLinesBusy(null);
+      setFindLinesSummary('No line of that colour was found inside the plot box. Repick the colour from a line.');
+      return;
+    }
+    const created = session.addFoundLines(res.lines.map((L) => thinFoundLine(L.points, L.roles)));
+    const nameOf = (k: number): string => session.getDatasetInfos()[created[k]!]?.name ?? `line ${k + 1}`;
+    const places: LinePlace[] = [];
+    const placeText = (pl: (typeof res.places)[number]): string => {
+      const names = pl.lines.map(nameOf).join(', ');
+      if (pl.kind === 'bridge') return `Lines meet here and were joined across it${names ? ` (${names})` : ''} - check each carries on the right way.`;
+      if (pl.kind === 'split') return `Unsure how the lines carry on here, so the pieces were left apart${names ? ` (${names})` : ''} - Join them if they are one line.`;
+      return 'Lines run together closer than the pixels can separate - this stretch is not recorded as a line.';
+    };
+    for (const pl of res.places) places.push({ id: places.length, kind: pl.kind, at: pl.at, text: placeText(pl) });
+    let read = 0, notRead = 0;
+    if (kind === 'contours') {
+      const slots = labelSlots(res.lines, res.labelInk, res.lineWidth);
+      const raw: { text: string; confidence: number | null }[] = [];
+      for (let i = 0; i < slots.length; i++) {
+        setFindLinesBusy(`Reading labels ${i + 1} of ${slots.length}…`);
+        const r = await readLabelCrop(slotCrop(imageData.data, imageData.width, imageData.height, slots[i]!));
+        raw.push(isOcrFailure(r) ? { text: '', confidence: null } : r);
+      }
+      const reads = readSlots(raw);
+      res.lines.forEach((_, k) => {
+        const mine = slots.map((sl, i) => ({ sl, r: reads[i]! })).filter((x) => x.sl.line === k);
+        if (!mine.length) return;
+        const at = (sl: (typeof slots)[number]): [number, number] => [(sl.p0[0] + sl.p1[0]) / 2, (sl.p0[1] + sl.p1[1]) / 2];
+        const ok = mine.filter((x) => x.r.value !== null);
+        const vals = [...new Set(ok.map((x) => x.r.value!))];
+        let lr: LabelRead;
+        if (vals.length === 1) lr = { text: ok[0]!.r.text, value: vals[0]!, refused: null, at: at(ok[0]!.sl) };
+        else if (vals.length > 1) lr = { text: ok.map((x) => x.r.text).join(' / '), value: null, refused: `its labels read ${vals.join(' and ')}`, at: at(ok[0]!.sl) };
+        else lr = { text: mine[0]!.r.text, value: null, refused: mine[0]!.r.refused, at: at(mine[0]!.sl) };
+        session.setLabelRead(created[k]!, lr);
+        if (lr.value !== null) read++;
+        else {
+          notRead++;
+          places.push({ id: places.length, kind: 'label', at: lr.at, text: `${nameOf(k)}: the label ${lr.text ? `read as “${lr.text}”` : 'could not be read'} was not used${lr.refused ? ` - ${lr.refused}` : ''}. Type its level.` });
+        }
+      });
+    }
+    const gaps = res.lines.reduce((n, L) => n + L.gaps.length, 0);
+    setLinePlaces(places);
+    setFindLinesSummary(
+      `${res.lines.length} line${res.lines.length === 1 ? '' : 's'} found, ${gaps} gap${gaps === 1 ? '' : 's'} bridged` +
+        (kind === 'contours' ? `; labels read on ${read} line${read === 1 ? '' : 's'}, not used on ${notRead} - the read is offered beside each line's Level` : '') +
+        (res.labelInk.length ? `; ${res.labelInk.length} small mark${res.labelInk.length === 1 ? '' : 's'} (label text and the like) left out` : '') +
+        `. ${places.length ? `${places.length} place${places.length === 1 ? '' : 's'} to check, listed on the right.` : 'Nothing it was unsure of.'} Undo removes the whole result.`
+    );
+    setFindLinesBusy(null);
+    commit();
+  }, [session, colorTraceColor, commit, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice]);
+
+  /** C4: unset contour levels filled in from the ones the user has set, in equal
+   * steps between them - refused, and saying why, where the levels are uneven. */
+  const handleFillLevels = useCallback(() => {
+    const imageData = imageCanvasRef.current?.getImageData();
+    if (!imageData) return;
+    const infos = session.getDatasetInfos();
+    const inputs = infos.map((i) => {
+      const lv = session.getContourLevel(i.index);
+      return {
+        points: (session.getLinePoints(i.index) ?? []).map((p) => [p.x, p.y] as [number, number]),
+        read: lv && lv.source !== 'interpolated' ? lv.value : null,
+      };
+    });
+    if (inputs.filter((x) => x.read !== null).length < 2) {
+      setFillLevelsNotice('Set at least two levels first - on neighbouring lines - so the step between lines is known.');
+      return;
+    }
+    const field = inferLevels(inputs, imageData.width, imageData.height);
+    if (field.uneven) {
+      setFillLevelsNotice(`Nothing filled in: ${field.uneven}, so the levels are values rather than equal steps. Type the rest.`);
+      return;
+    }
+    let filled = 0;
+    field.levels.forEach((lv, k) => {
+      if (inputs[k]!.read !== null) return;
+      if (lv.source === 'interpolated' && lv.value !== null) {
+        session.setContourLevel(infos[k]!.index, lv.value, 'interpolated');
+        filled++;
+      }
+    });
+    const disputed = field.levels.map((lv, k) => (lv.refused ? `${infos[k]!.name} (${lv.refused.read}: ${lv.refused.why})` : null)).filter(Boolean);
+    setFillLevelsNotice(
+      (filled ? `${filled} level${filled === 1 ? '' : 's'} filled in, shown as interpolated.` : 'No level could be filled in - set levels on lines next to the unset ones.') +
+        (disputed.length ? ` Check: ${disputed.join('; ')}.` : '')
+    );
+    if (filled) commit();
+    else bump();
+  }, [session, commit, bump]);
+
+  /** K2: cut the line nearest a click, there. */
+  const cutAtPixel = useCallback(
+    (px: number, py: number) => {
+      let best: { ds: number; i: number; d: number } | null = null;
+      for (const info of session.getDatasetInfos()) {
+        const pts = session.getLinePoints(info.index);
+        if (!pts) continue;
+        pts.forEach((p, i) => {
+          const d = Math.hypot(p.x - px, p.y - py);
+          if (!best || d < best.d) best = { ds: info.index, i, d };
+        });
+      }
+      const hit = best as { ds: number; i: number; d: number } | null;
+      if (!hit || hit.d > 12) {
+        setProjectError('Click ON a line to cut it there.');
+        return;
+      }
+      const refusal = session.cutLineAt(hit.ds, hit.i);
+      if (refusal) {
+        setProjectError(refusal);
+        return;
+      }
+      setProjectError(null);
+      session.setActiveDataset(hit.ds);
+      commit();
+    },
+    [session, commit]
+  );
+
+  cutAtPixelRef.current = cutAtPixel;
+
+  /** K3: join the active line with another. */
+  const handleJoinLines = useCallback(
+    (other: number) => {
+      const refusal = session.joinLines(session.getActiveDatasetIndex(), other);
+      setJoinNotice(refusal);
+      if (refusal) {
+        bump();
+        return;
+      }
+      commit();
+    },
+    [session, commit, bump]
+  );
+
+  /** K4: move the selected points of the active line to another line. */
+  const handleMovePoints = useCallback(
+    (to: number) => {
+      const moved = session.movePointsToLine(session.getActiveDatasetIndex(), selectedPointIndices, to);
+      if (!moved) return;
+      setSelectedPointIndices([]);
+      commit();
+    },
+    [session, selectedPointIndices, commit]
+  );
+
+  /** K1: take the view to a place to check, and make the line there active. */
+  const goToPlace = useCallback(
+    (pl: LinePlace) => {
+      imageCanvasRef.current?.centreOn(pl.at[0], pl.at[1], 3);
+      let best: { ds: number; d: number } | null = null;
+      for (const info of session.getDatasetInfos()) {
+        for (const p of session.getLinePoints(info.index) ?? []) {
+          const d = Math.hypot(p.x - pl.at[0], p.y - pl.at[1]);
+          if (!best || d < best.d) best = { ds: info.index, d };
+        }
+      }
+      const hit = best as { ds: number; d: number } | null;
+      if (hit) session.setActiveDataset(hit.ds);
+      bump();
+    },
+    [session, bump]
+  );
+
+
   /**
    * File the shapes the trace held back, after all.
    *
@@ -6425,7 +6644,7 @@ export function Workspace() {
       }
       commit();
     },
-    [session, commit, bump]
+    [session, commit, bump, setLevelNotice]
   );
 
   const handleSetDatasetColor = useCallback(
@@ -9071,6 +9290,20 @@ export function Workspace() {
             disabledReason={toolReason('eraser', 'Add data points first')}
             onClick={() => setMode('eraser')}
           />
+          {/* Cut (v2.6, K2): correcting a found line - beside the eraser, since
+              both change a line at the point you click. Only where lines are
+              the record (XY, Contour). */}
+          {findLinesKind(config.id) && (
+            <IconButton
+              testId="mode-cut"
+              icon={<CutLineIcon />}
+              label="Cut a line - click a line where it should become two"
+              pressed={mode === 'cut'}
+              disabled={toolDisabled('cut', dataPoints.length === 0 && !datasetInfos.some((d) => d.pointCount > 0))}
+              disabledReason={toolReason('cut', 'Add or find lines first')}
+              onClick={() => setMode('cut')}
+            />
+          )}
           </RailGroup>
           {/* Analyze (downstream / derived -- Tenet 9): Measure + the Curve Fit /
               Geometry fly-outs (8, 9). */}
@@ -9178,6 +9411,18 @@ export function Workspace() {
               heldBackOffer={swatchHoldBackOffer(heldBackBars.length)}
               onAddHeldBackBars={addHeldBackBars}
               onArmEyedropper={setEyedropper}
+              {...(findLinesKind(config.id)
+                ? {
+                    findLines: {
+                      kind: findLinesKind(config.id)!,
+                      busy: findLinesBusy,
+                      summary: findLinesSummary,
+                      onFind: () => void handleFindLines(),
+                      ...(findLinesKind(config.id) === 'contours' ? { onFillLevels: handleFillLevels } : {}),
+                      fillNotice: fillLevelsNotice,
+                    },
+                  }
+                : {})}
             />
           )}
           {/* The Measure card folds out to the right of the rail while the ruler
@@ -9815,11 +10060,41 @@ export function Workspace() {
               level: {
                 text: String(session.getContourLevel(activeDatasetIndex)?.value ?? ''),
                 interpolated: session.getContourLevel(activeDatasetIndex)?.source === 'interpolated',
+                fromLabel: session.getContourLevel(activeDatasetIndex)?.source === 'label',
                 notice: levelNotice,
                 onCommit: (text: string) => handleCommitLevel(activeDatasetIndex, text),
+                ...(() => {
+                  const lr = session.getLabelRead(activeDatasetIndex);
+                  if (!lr) return {};
+                  return {
+                    labelRead: { text: lr.text, value: lr.value, refused: lr.refused },
+                    onUseLabel: () => {
+                      if (lr.value === null) return;
+                      session.setContourLevel(activeDatasetIndex, lr.value, 'label');
+                      setLevelNotice(null);
+                      commit();
+                    },
+                  };
+                })(),
               },
             }
           : {})}
+        {...(findLinesKind(config.id) && session.getLinePoints(activeDatasetIndex)
+          ? {
+              join: {
+                others: datasetInfos.filter((i) => i.index !== activeDatasetIndex && session.getLinePoints(i.index) !== null).map((i) => ({ index: i.index, name: i.name })),
+                onJoin: handleJoinLines,
+                notice: joinNotice,
+              },
+            }
+          : {})}
+      />
+
+      <PlacesToCheck
+        places={linePlaces}
+        onGo={goToPlace}
+        onDone={(id) => setLinePlaces((ps) => ps.filter((p) => p.id !== id))}
+        onClear={() => setLinePlaces([])}
       />
 
 
@@ -9955,6 +10230,25 @@ export function Workspace() {
                   >
                     Sort ↝ nearest
                   </button>
+                )}
+                {/* Move (v2.6, K4): the selected points to another line. Shown
+                    while points are selected on a line type - the selection the
+                    Select tool already makes. */}
+                {findLinesKind(config.id) && selectedPointIndices.length > 0 && session.getLinePoints(activeDatasetIndex) && datasetInfos.length > 1 && (
+                  <select
+                    data-testid="move-points-to"
+                    value=""
+                    title="Move the selected points to another line - each is slotted in where it sits along that line"
+                    onChange={(e) => {
+                      if (e.target.value !== '') handleMovePoints(Number(e.target.value));
+                    }}
+                    style={{ fontSize: theme.font.size.small }}
+                  >
+                    <option value="">Move {selectedPointIndices.length} selected to…</option>
+                    {datasetInfos.filter((i) => i.index !== activeDatasetIndex && session.getLinePoints(i.index) !== null).map((i) => (
+                      <option key={i.index} value={i.index}>{i.name}</option>
+                    ))}
+                  </select>
                 )}
               </div>
               {/* CSV export scope (checkpoint 60): active series vs all series.

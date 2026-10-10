@@ -28,10 +28,28 @@ export type ToolMode =
   | 'measure'
   | 'image-edit'
   | 'error-bars'
-  | 'interpolate';
+  | 'interpolate'
+  | 'find-lines'
+  | 'cut';
 
-/** The three modes fronted by the single Auto-extract rail tool. */
-export const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['segment-fill', 'color-trace', 'interpolate'];
+/** The modes fronted by the single Auto-extract rail tool. Find lines (v2.6)
+ * comes first because, where it applies, it does the whole job in one press. */
+export const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['find-lines', 'segment-fill', 'color-trace', 'interpolate'];
+
+/**
+ * Does Find lines apply to this graph type, and as what?
+ *
+ * Only to the two types whose record is LINES on a plain x/y plane: XY curves
+ * (which may cross) and Contour lines (which never cross - a rule Find lines
+ * uses). Answered by the type's id, not by spreading a flag through the
+ * configs, because Histogram and Heatmap are built by spreading XY's config
+ * and would silently inherit it.
+ */
+export function findLinesKind(configId: string): 'curves' | 'contours' | null {
+  if (configId === 'xy') return 'curves';
+  if (configId === 'contour') return 'contours';
+  return null;
+}
 
 /** Which of the three Auto-extract modes actually apply to a graph type's
  * declared `autoExtractKind` (generalizes the spider-only restriction
@@ -44,10 +62,11 @@ export const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['segment-fill', 'color-t
  * offers none at all (auto-extract is refused outright: Box Plot,
  * categorical Line -- neither has a shape a colour trace could reduce to). */
 export function autoExtractModesFor(
-  kind: AxesTypeConfig<CalibratedAxes>['autoExtractKind']
+  kind: AxesTypeConfig<CalibratedAxes>['autoExtractKind'],
+  configId?: string
 ): readonly ToolMode[] {
   const k = kind ?? 'curve';
   if (k === 'none') return [];
-  if (k === 'curve') return AUTO_EXTRACT_MODES;
+  if (k === 'curve') return AUTO_EXTRACT_MODES.filter((m) => m !== 'find-lines' || (configId !== undefined && findLinesKind(configId) !== null));
   return ['color-trace'];
 }

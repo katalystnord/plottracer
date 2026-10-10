@@ -6,7 +6,7 @@ import {
   type GuidanceTipInput,
   type GuidanceConfig,
 } from '../guidanceTip.js';
-import { autoExtractModesFor, AUTO_EXTRACT_MODES, type ToolMode } from '../toolMode.js';
+import { autoExtractModesFor, findLinesKind, AUTO_EXTRACT_MODES, type ToolMode } from '../toolMode.js';
 import {
   XY_AXES_CONFIG,
   HISTOGRAM_AXES_CONFIG,
@@ -974,9 +974,20 @@ describe('guidanceTip - measure click counts at their boundaries', () => {
 });
 
 describe('autoExtractModesFor', () => {
-  it('offers all three mechanisms to an undeclared (curve) type', () => {
-    expect(autoExtractModesFor(undefined)).toEqual(AUTO_EXTRACT_MODES);
-    expect(autoExtractModesFor('curve')).toEqual(AUTO_EXTRACT_MODES);
+  it('offers the three curve mechanisms to an undeclared (curve) type', () => {
+    const three = ['segment-fill', 'color-trace', 'interpolate'];
+    expect(autoExtractModesFor(undefined)).toEqual(three);
+    expect(autoExtractModesFor('curve')).toEqual(three);
+    expect(autoExtractModesFor('curve', 'polar')).toEqual(three);
+  });
+
+  it('F10 Find lines is offered FIRST on XY and Contour, and only there', () => {
+    expect(autoExtractModesFor('curve', 'xy')).toEqual(AUTO_EXTRACT_MODES);
+    expect(autoExtractModesFor('curve', 'contour')).toEqual(AUTO_EXTRACT_MODES);
+    expect(AUTO_EXTRACT_MODES[0]).toBe('find-lines');
+    // types built by spreading XY's config must not inherit it
+    expect(findLinesKind('histogram')).toBeNull();
+    expect(findLinesKind('heatmap')).toBeNull();
   });
 
   it('narrows the two shape-reading kinds to By colour alone', () => {

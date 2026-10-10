@@ -11857,3 +11857,95 @@ describe('Workspace: a contour line carries a level (v2.6)', () => {
     expect(await levelText()).toBe('0.4');
   });
 });
+
+describe('Workspace: Find lines, first version (v2.6)', () => {
+  // Gate 4: every step is one the screen names. The example is in Help; the
+  // calibration walk is the one its prompts ask for, aimed through the view at
+  // the axis positions the example's own truth file states; Find lines, its
+  // colour field, Cut and "Join with" are labelled controls.
+  const truth = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'contour-potential-energy.truth.json'), 'utf8')) as {
+    calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+    series: { points: { x: number; y: number }[] }[];
+  };
+  async function imageToLocal(x: number, y: number): Promise<{ lx: number; ly: number }> {
+    const text = (await page.getByTestId('view-state').textContent()) ?? '';
+    const m = /scale: ([\d.]+), offset: \(([-\d.]+), ([-\d.]+)\)/.exec(text);
+    if (!m) throw new Error(`could not read the view state: ${text}`);
+    const scale = Number(m[1]);
+    return { lx: Number(m[2]) + x * scale, ly: Number(m[3]) + y * scale };
+  }
+  async function clickImagePixel(x: number, y: number) {
+    const { lx, ly } = await imageToLocal(x, y);
+    await clickAt(lx, ly);
+  }
+  const seriesCount = () => page.getByTestId('series-select').locator('option').count();
+
+  it('F1/F9/K1-K3 one press finds every contour line, says what it did, and a found line can be cut and joined again', async () => {
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-contour').waitFor({ state: 'visible' });
+    await page.getByTestId('example-contour').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    expect(await textOf('axes-type-trigger')).toContain('Contour');
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+
+    // Calibrate where the prompts say: two known X values, then the shared
+    // origin's Y (already placed), then a known Y value.
+    const a = truth.calibration.anchors;
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+
+    // Auto-extract offers Find lines first, tagged as a first version.
+    await page.getByTestId('mode-auto-extract').click();
+    const tabs = page.getByTestId('auto-extract-card').locator('button[aria-pressed]');
+    expect(await tabs.first().textContent()).toBe('Find lines');
+    await page.getByTestId('auto-extract-find').click();
+    expect(await textOf('tips-bar')).toMatch(/pick the lines’ colour/);
+    expect(await textOf('find-lines-first-version')).toBe('first version');
+    await page.getByTestId('color-trace-color').fill('#222222');
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 120000 }).toMatch(/7 lines found/);
+    expect(await seriesCount()).toBe(7);
+    expect(await textOf('find-lines-summary')).toMatch(/Undo removes the whole result/);
+
+    // A read label is OFFERED beside the Level field, and one press uses it.
+    let offered = -1;
+    for (let i = 0; i < 7 && offered < 0; i++) {
+      await page.getByTestId('series-select').selectOption(String(i));
+      await page.waitForTimeout(100);
+      if ((await page.getByTestId('series-use-label').count()) > 0) offered = i;
+    }
+    expect(offered, 'at least one label read is offered').toBeGreaterThanOrEqual(0);
+    const reads = (await textOf('series-label-read')).match(/reads ([-\d.]+)/)![1]!;
+    await page.getByTestId('series-use-label').click();
+    await expect.poll(() => page.getByTestId('series-level').inputValue(), { timeout: 5000 }).toBe(reads);
+    expect(await textOf('series-level-from-label')).toBe('from label');
+
+    // Cut a line where the rail tool says: click ON a line.
+    await page.getByTestId('mode-cut').click();
+    expect(await textOf('tips-bar')).toMatch(/click a line where it should be cut/);
+    const open = truth.series.find((s) => {
+      const p = s.points;
+      return p[0]!.x !== p[p.length - 1]!.x || p[0]!.y !== p[p.length - 1]!.y;
+    })!;
+    const mid = open.points[Math.floor(open.points.length / 2)]!;
+    const sx = (a.x2.px - a.x1.px) / (a.x2.value - a.x1.value);
+    const sy = (a.y2.py - a.y1.py) / (a.y2.value - a.y1.value);
+    await clickImagePixel(a.x1.px + (mid.x - a.x1.value) * sx, a.y1.py + (mid.y - a.y1.value) * sy);
+    await expect.poll(seriesCount, { timeout: 5000 }).toBe(8);
+
+    // ...and Join the two parts again from the series panel.
+    const join = page.getByTestId('series-join');
+    const lastOption = await join.locator('option').last().getAttribute('value');
+    await join.selectOption(lastOption!);
+    await expect.poll(seriesCount, { timeout: 5000 }).toBe(7);
+  });
+});

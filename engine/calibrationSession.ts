@@ -3633,19 +3633,26 @@ export class CalibrationSession<A extends CalibratedAxes> {
   }
 
   /**
-   * Find lines' result (v2.6): each found line becomes its OWN series, in the
-   * colour it was found in, its points carrying their roles (bridged, shared).
-   * The first line fills the active series if that is still empty; the rest
-   * are new series. Returns the indices of the series it filled, in order.
+   * Find lines' result (v2.6): each found line becomes its OWN series, its
+   * points carrying their roles (bridged, shared). The first line fills the
+   * active series if that is still empty; the rest are new series. Returns the
+   * indices of the series it filled, in order.
+   *
+   * ⚑⚑ EACH LINE GETS ITS OWN PALETTE COLOUR, NOT THE INK'S. A colour trace
+   * adopts the ink it was traced from, because there one colour IS one series.
+   * Here every line shares one ink - that is the problem Find lines solves - so
+   * adopting it drew seven lines exactly on top of the figure's own black ink:
+   * nothing on screen showed what had been found, or which line was which.
+   * Seen on the screenshot bench before anyone drove it.
    */
-  addFoundLines(lines: readonly (readonly LinePoint[])[], colour: readonly [number, number, number]): number[] {
+  addFoundLines(lines: readonly (readonly LinePoint[])[]): number[] {
     if (!this.axes) return [];
     const created: number[] = [];
     lines.forEach((pts, k) => {
       const active = this.activeEntry.dataset;
       const idx = k === 0 && active.getCount() === 0 && !active.hasSlots() ? this.activeDatasetIndex : this.addDataset();
       this.writeLinePoints(idx, pts);
-      this.setDatasetColor(idx, colour);
+      this.setDatasetColor(idx, SERIES_COLOR_PALETTE[idx % SERIES_COLOR_PALETTE.length]!);
       created.push(idx);
     });
     if (created.length) this.switchActiveDataset(created[0]!);

@@ -44,6 +44,10 @@ import deleteSvg from '../../icons/delete.svg?raw';
 // remove-a-point mode, distinct from the top-bar "Clear all points". Reinstates
 // the retired eraser art (icons/erase.svg), normalized to 24x24.
 import eraseSvg from '../../icons/erase.svg?raw';
+// Cut a line (v2.6, K2): a new original - a curve broken at a cut, both cut ends
+// marked. Beside the eraser on the rail, because both change a line at the
+// point you click.
+import cutLineSvg from '../../icons/custom/cut-line.svg?raw';
 import openSvg from '../../icons/open.svg?raw';
 import placePointSvg from '../../icons/custom/place-point.svg?raw';
 import chevronDownSvg from '../../icons/custom/chevron-down.svg?raw';
@@ -184,6 +188,7 @@ export const HandIcon = () => <Icon svg={handSvg} />;
 export const PlusIcon = () => <Icon svg={plusSvg} />;
 export const DeleteIcon = () => <Icon svg={deleteSvg} />;
 export const EraseIcon = () => <Icon svg={eraseSvg} />;
+export const CutLineIcon = () => <Icon svg={cutLineSvg} />;
 export const OpenIcon = () => <Icon svg={openSvg} />;
 // The reticle glyph (icons/custom/place-point.svg) is used for the CALIBRATE
 // tool: it deliberately mirrors the on-canvas calibration markers, while Place

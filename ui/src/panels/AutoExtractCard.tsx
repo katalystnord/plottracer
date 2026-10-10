@@ -10,7 +10,7 @@ export const COLOR_TRACE_PREVIEW_RGBA: readonly [number, number, number, number]
 
 export interface AutoExtractCardProps {
   mode: ToolMode;
-  config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind'>;
+  config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'id'>;
   /** What one captured shape is called on this type - "bar", "bin", "box". */
   tupleNoun: string;
   onSetMechanism: (mode: ToolMode) => void;
@@ -64,6 +64,23 @@ export interface AutoExtractCardProps {
   onAddHeldBackBars: () => void;
 
   onArmEyedropper: (target: 'trace') => void;
+
+  /**
+   * Find lines (v2.6, first version) - present only on the types it applies to
+   * (`findLinesKind`). Shares the By-colour colour pick: it is the same question
+   * ("which ink are the lines?") asked by a different reader.
+   */
+  findLines?: {
+    kind: 'curves' | 'contours';
+    /** What it is doing right now ("Reading labels 3 of 9"), or null when idle. */
+    busy: string | null;
+    /** What the last press did (F9: the press has an ending), or null. */
+    summary: string | null;
+    onFind: () => void;
+    /** Contours: fill unset levels from the ones set (C4). */
+    onFillLevels?: () => void;
+    fillNotice: string | null;
+  };
 }
 
 /**
@@ -105,7 +122,34 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
   heldBackOffer,
   onAddHeldBackBars,
     onArmEyedropper,
+    findLines,
   } = props;
+  const colourRow = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span>Colour:</span>
+      <span
+        data-testid="color-trace-swatch"
+        style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${theme.color.border.regular}`, background: colorTraceColor, flex: '0 0 auto' }}
+      />
+      <input
+        type="text"
+        data-testid="color-trace-color"
+        value={colorTraceColor}
+        onChange={(e) => onColorTraceColorChange(e.target.value)}
+        spellCheck={false}
+        style={{ width: 84 }}
+      />
+      <button
+        type="button"
+        data-testid="color-trace-eyedropper"
+        onClick={() => onArmEyedropper('trace')}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+      >
+        <EyedropperIcon />
+        Pick from image
+      </button>
+    </div>
+  );
   return (
     <div
       data-testid="auto-extract-card"
@@ -136,6 +180,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
           dashed). */}
       <div style={{ display: 'flex', gap: 4 }}>
         {([
+          { m: 'find-lines' as ToolMode, id: 'find', label: 'Find lines', hint: 'every line of a colour' },
           { m: 'segment-fill' as ToolMode, id: 'flood', label: 'Flood-fill', hint: 'solid line' },
           { m: 'color-trace' as ToolMode, id: 'colour', label: 'By colour', hint: 'dashed / coloured' },
           { m: 'interpolate' as ToolMode, id: 'guide', label: 'Guide points', hint: 'by eye' },
@@ -145,7 +190,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
           // a spider's axis slots nor a bar's two-corner slots have anywhere to
           // file one: they would have run and recorded nothing, which reads as
           // a broken button rather than as a tool that does not apply here.
-          .filter(({ m }) => autoExtractModesFor(config.autoExtractKind).includes(m))
+          .filter(({ m }) => autoExtractModesFor(config.autoExtractKind, config.id).includes(m))
           .map(({ m, id, label }) => (
           <button
             key={id}
@@ -169,6 +214,56 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
           </button>
         ))}
       </div>
+
+      {mode === 'find-lines' && findLines && (
+        <div data-testid="find-lines-controls" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
+          <span>
+            Finds every line of one colour, each as its own line - also where same-colour lines
+            {findLines.kind === 'contours' ? ' run together or are cut by their labels, and reads each line\u2019s label.' : ' cross, touch or run together.'}
+            {' '}Where it is unsure it leaves the pieces apart and lists the place under Places to check.
+          </span>
+          {colourRow}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              data-testid="find-lines-run"
+              onClick={findLines.onFind}
+              disabled={findLines.busy !== null}
+              style={{
+                background: theme.color.primary.main,
+                color: '#fff',
+                border: `1px solid ${theme.color.primary.main}`,
+                borderRadius: theme.border.radius.regular,
+                padding: '3px 16px',
+                fontWeight: 600,
+                cursor: findLines.busy !== null ? 'default' : 'pointer',
+              }}
+            >
+              Find lines
+            </button>
+            <span
+              data-testid="find-lines-first-version"
+              title="A first version: it will sometimes get a line wrong. Every place it was unsure is listed under Places to check, and Cut, Join and Move put a line right."
+              style={{ fontSize: theme.font.size.small, border: `1px solid ${theme.color.border.regular}`, borderRadius: 10, padding: '0 7px' }}
+            >
+              first version
+            </span>
+          </div>
+          {findLines.busy && <span data-testid="find-lines-busy">{findLines.busy}</span>}
+          {findLines.summary && <span data-testid="find-lines-summary">{findLines.summary}</span>}
+          {findLines.kind === 'contours' && findLines.onFillLevels && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: theme.font.size.small }}>
+                Set the levels you can see (type them, or use what a label reads), then fill in the rest - in equal steps between the lines you set.
+              </span>
+              <button type="button" data-testid="find-lines-fill-levels" onClick={findLines.onFillLevels} style={{ alignSelf: 'flex-start' }}>
+                Fill in the other levels
+              </button>
+              {findLines.fillNotice && <span data-testid="find-lines-fill-notice">{findLines.fillNotice}</span>}
+            </div>
+          )}
+        </div>
+      )}
 
       {mode === 'segment-fill' && (
         <div data-testid="segment-fill-controls" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
@@ -217,30 +312,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
               </>
             )}
           </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span>Colour:</span>
-            <span
-              data-testid="color-trace-swatch"
-              style={{ width: 22, height: 22, borderRadius: 4, border: `1px solid ${theme.color.border.regular}`, background: colorTraceColor, flex: '0 0 auto' }}
-            />
-            <input
-              type="text"
-              data-testid="color-trace-color"
-              value={colorTraceColor}
-              onChange={(e) => onColorTraceColorChange(e.target.value)}
-              spellCheck={false}
-              style={{ width: 84 }}
-            />
-            <button
-              type="button"
-              data-testid="color-trace-eyedropper"
-              onClick={() => onArmEyedropper('trace')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-            >
-              <EyedropperIcon />
-              Pick from image
-            </button>
-          </div>
+          {colourRow}
           {/* No shape to choose on a spider or a bar: the rays decide where a
               spider reads, and a bar's shape is always its bounding box -- neither
               has a curve-vs-scatter choice to make. */}

@@ -12,7 +12,7 @@ Konva.dragButtons = [0];
 // macOS reserves Ctrl+click for its own context menu, so Ctrl+Left must not pan
 // there (see onStageMouseDown). Platform detection lives in ./platform.
 import { IS_MAC } from './platform.js';
-import { fitToContainer, zoomAt, zoomByFactor, panBy, screenToImage, imageToScreen, isClick, type ViewState } from '../../engine/canvasView.js';
+import { fitToContainer, zoomAt, zoomByFactor, panBy, screenToImage, imageToScreen, isClick, DEFAULT_VIEW_LIMITS, type ViewState } from '../../engine/canvasView.js';
 import type { BoxPlotGlyphSegment } from '../../engine/boxPlotGlyph.js';
 import type { CandlestickGlyph } from '../../engine/candlestickGlyph.js';
 import type { GlyphSegment } from '../../engine/histogramGlyph.js';
@@ -608,6 +608,9 @@ export interface ImageCanvasHandle {
   zoomFit: () => void;
   zoom100: () => void;
   zoomTo: (scale: number) => void;
+  /** Bring image point (x, y) to the middle of the view, zooming in to at least
+   * `minScale` - how Places to check takes the user to a place (v2.6, K1). */
+  centreOn: (x: number, y: number, minScale?: number) => void;
   /** A PNG snapshot of the canvas exactly as shown -- the base image with the
    * overlay (calibration handles, placed points, glyphs, measurements) drawn
    * over it -- as a `data:image/png;base64,...` URL. Null if no image is
@@ -1070,6 +1073,16 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     setView((prev) => zoomByFactor(prev, container.clientWidth / 2, container.clientHeight / 2, scale / prev.scale));
   }, [image, gestureInProgress]);
 
+  const centreOn = useCallback((x: number, y: number, minScale = 2) => {
+    const container = containerRef.current;
+    if (!container || !image || gestureInProgress()) return;
+    userAdjustedRef.current = true;
+    setView((prev) => {
+      const scale = Math.min(DEFAULT_VIEW_LIMITS.maxScale, Math.max(prev.scale, minScale));
+      return { scale, offsetX: container.clientWidth / 2 - x * scale, offsetY: container.clientHeight / 2 - y * scale };
+    });
+  }, [image, gestureInProgress]);
+
   // Checkpoint 93: a WYSIWYG PNG of the two on-screen layers composited. The
   // base canvas is at CSS resolution; the Konva overlay's native canvas may be
   // devicePixelRatio-scaled (larger), so draw it into an offscreen sized to the
@@ -1139,10 +1152,11 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       zoomFit,
       zoom100,
       zoomTo,
+      centreOn,
       getCompositePngDataURL,
       getViewImageRect,
     }),
-    [loadImageFromSrc, clearImage, imageFileName, applyImageTransform, openImage, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, getCompositePngDataURL, getViewImageRect]
+    [loadImageFromSrc, clearImage, imageFileName, applyImageTransform, openImage, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, centreOn, getCompositePngDataURL, getViewImageRect]
   );
 
   // Notify Workspace of scale / image-loaded changes (checkpoint 42) so the

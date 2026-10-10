@@ -40,17 +40,18 @@ function exportRows(s: CalibrationSession<CalibratedAxes>) {
 }
 
 describe('Find lines into series', () => {
-  it('F1 each found line becomes its own series, in the colour it was found in', () => {
+  it('F1 each found line becomes its own series, each in a colour of its own so the lines can be told apart', () => {
     const s = calibrated();
-    const idx = s.addFoundLines([OPEN, RING], [10, 20, 30]);
+    const idx = s.addFoundLines([OPEN, RING]);
     expect(idx).toEqual([0, 1]);
     expect(s.getDatasetInfos().map((i) => i.pointCount)).toEqual([5, 7]);
-    expect(s.getDatasetInfos().every((i) => i.color.join() === '10,20,30')).toBe(true);
+    const [c0, c1] = s.getDatasetInfos().map((i) => i.color.join());
+    expect(c0).not.toBe(c1);
   });
 
   it('S2+ a bridged or shared point says so in the export\'s Point column', () => {
     const s = calibrated();
-    s.addFoundLines([[...OPEN.slice(0, 2), { x: 150, y: 200, role: 'bridged' }, ...OPEN.slice(2)], line([[120, 230], [200, 230]], 'shared')], [0, 0, 0]);
+    s.addFoundLines([[...OPEN.slice(0, 2), { x: 150, y: 200, role: 'bridged' }, ...OPEN.slice(2)], line([[120, 230], [200, 230]], 'shared')]);
     const block = exportRows(s);
     const col = block.header!.indexOf('Point');
     expect(col).toBeGreaterThan(0);
@@ -59,7 +60,7 @@ describe('Find lines into series', () => {
 
   it('S3 a level used from the label exports as "label" in Level from', () => {
     const s = calibrated();
-    s.addFoundLines([OPEN], [0, 0, 0]);
+    s.addFoundLines([OPEN]);
     s.setContourLevel(0, 0.4, 'label');
     const block = exportRows(s);
     const col = block.header!.indexOf('Level from');
@@ -68,7 +69,7 @@ describe('Find lines into series', () => {
 
   it('S5 what the label said is kept with the line, through saving and reopening, and is not a data point', () => {
     const s = calibrated();
-    s.addFoundLines([OPEN], [0, 0, 0]);
+    s.addFoundLines([OPEN]);
     s.setLabelRead(0, { text: '0.4', value: 0.4, refused: null, at: [160, 200] });
     const file = serializeProject(s, PNG_DATA_URL);
     if ('error' in file) throw new Error(file.error);
@@ -84,7 +85,7 @@ describe('Find lines into series', () => {
 describe('correcting a line', () => {
   it('K2 Cut: an open line cut at a point becomes two lines there, both keeping the cut point', () => {
     const s = calibrated();
-    s.addFoundLines([OPEN], [0, 0, 0]);
+    s.addFoundLines([OPEN]);
     s.setContourLevel(0, 2, 'typed');
     expect(s.cutLineAt(0, 2)).toBeNull();
     expect(s.getLinePoints(0)!.map((p) => p.x)).toEqual([120, 140, 160]);
@@ -95,7 +96,7 @@ describe('correcting a line', () => {
 
   it('K2 Cut: a closed line is OPENED at the cut, not split in two', () => {
     const s = calibrated();
-    s.addFoundLines([RING], [0, 0, 0]);
+    s.addFoundLines([RING]);
     expect(s.cutLineAt(0, 3)).toBeNull();
     expect(s.getDatasetInfos().length).toBe(1);
     const p = s.getLinePoints(0)!;
@@ -106,13 +107,13 @@ describe('correcting a line', () => {
 
   it('K2 Cut at the very end of a line is refused, and says why', () => {
     const s = calibrated();
-    s.addFoundLines([OPEN], [0, 0, 0]);
+    s.addFoundLines([OPEN]);
     expect(s.cutLineAt(0, 4)).toMatch(/end of the line/);
   });
 
   it('K3 Join: two pieces become one line, the gap between their nearest ends filled with bridged points', () => {
     const s = calibrated();
-    s.addFoundLines([line([[120, 200], [140, 200], [160, 200]]), line([[220, 200], [200, 200], [190, 200]])], [0, 0, 0]);
+    s.addFoundLines([line([[120, 200], [140, 200], [160, 200]]), line([[220, 200], [200, 200], [190, 200]])]);
     expect(s.joinLines(0, 1)).toBeNull();
     expect(s.getDatasetInfos().length).toBe(1);
     const p = s.getLinePoints(0)!;
@@ -125,7 +126,7 @@ describe('correcting a line', () => {
 
   it('K3 Join refuses two lines with different levels', () => {
     const s = calibrated();
-    s.addFoundLines([OPEN, RING], [0, 0, 0]);
+    s.addFoundLines([OPEN, RING]);
     s.setContourLevel(0, 1, 'typed');
     s.setContourLevel(1, 2, 'typed');
     expect(s.joinLines(0, 1)).toMatch(/different levels/);
@@ -134,7 +135,7 @@ describe('correcting a line', () => {
 
   it('K4 Move: selected points move to another line, slotted in drawn order', () => {
     const s = calibrated();
-    s.addFoundLines([line([[120, 200], [140, 200], [150, 230], [160, 200]]), line([[120, 230], [140, 230], [160, 230]])], [0, 0, 0]);
+    s.addFoundLines([line([[120, 200], [140, 200], [150, 230], [160, 200]]), line([[120, 230], [140, 230], [160, 230]])]);
     expect(s.movePointsToLine(0, [2], 1)).toBe(1);
     expect(s.getLinePoints(0)!.map((p) => p.x)).toEqual([120, 140, 160]);
     expect(s.getLinePoints(1)!.map((p) => p.x)).toEqual([120, 140, 150, 160]);
@@ -145,7 +146,7 @@ describe('correcting a line', () => {
     // A runs left-to-right along y=200 but swaps onto B's path after x=200; B the reverse
     const A = line([[120, 200], [160, 200], [200, 215], [240, 230], [280, 230]]);
     const B = line([[120, 230], [160, 230], [200, 215], [240, 200], [280, 200]]);
-    s.addFoundLines([A, B], [0, 0, 0]);
+    s.addFoundLines([A, B]);
     expect(s.cutLineAt(0, 2)).toBeNull(); // A -> A1 (0), A2 (2)
     expect(s.cutLineAt(1, 2)).toBeNull(); // B -> B1 (1), B2 (3)
     expect(s.joinLines(0, 3)).toBeNull(); // A1 + B2: stays on y=200

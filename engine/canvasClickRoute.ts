@@ -43,6 +43,8 @@ export type CanvasClickRoute =
    * gets one.
    */
   | { kind: 'select-cell' }
+  /** Cut the line nearest the click there (v2.6, K2). */
+  | { kind: 'cut' }
   | { kind: 'add-point' };
 
 export interface CanvasClickInput {
@@ -94,6 +96,9 @@ export function routeCanvasClick({
   // (v0.8) - the bug that named this whole guard family. The eyedropper path
   // above already returned, so this only guards a bare click.
   if (mode === 'color-trace') return { kind: 'ignore' };
+  // Find lines runs from its button, like By colour: a bare click must not add.
+  if (mode === 'find-lines') return { kind: 'ignore' };
+  if (mode === 'cut') return { kind: 'cut' };
   // Select (David 2026-07-21): NEVER adds. In practice a select-mode press is
   // intercepted by the marquee drag in ImageCanvas, so this rarely fires; when
   // it does, we clear rather than place. The user-facing clear paths are Esc and

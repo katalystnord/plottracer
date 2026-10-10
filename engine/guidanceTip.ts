@@ -555,6 +555,9 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       return 'Interpolate - click to add a guide point (Q/W to step between anchors); the fill redraws as you go.';
     }
     if (mode === 'eraser') return 'Eraser - click a data point to remove it.';
+    if (mode === 'cut') return 'Cut - click a line where it should be cut: it becomes two lines there. A closed line opens at the cut.';
+    if (mode === 'find-lines')
+      return 'Find lines - pick the lines’ colour (or take it from the image with the pipette), then press Find lines: every line of that colour becomes its own line. A plain click does nothing.';
     // ⚑ Error bars had NO branch here, so a calibrated chart in this mode fell
     // through to the uncalibrated fallback below and told the user to "calibrate
     // the axes to begin" -- while the calibration card beside it said Calibrated ✓
@@ -660,6 +663,8 @@ export function noPointsHint({
   }
   if (mode === 'color-trace')
     return 'No points yet - pick the series’ colour, then press Trace. A plain click on the image does nothing here.';
+  if (mode === 'find-lines')
+    return 'No lines yet - pick the lines’ colour, then press Find lines. A plain click on the image does nothing here.';
   if (mode === 'segment-fill') return 'No points yet - click the curve on the image to flood-fill it.';
   if (mode === 'interpolate') return 'No points yet - click a few guide points along one curve.';
   // ⚑⚑ A CATEGORICAL LINE HAS NO BARS. It is `axesKind: 'bar'` because it shares

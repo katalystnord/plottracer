@@ -190,3 +190,20 @@ export async function readBandAtAngle(
   }
   return { proposals: readings, angleRadians: angle };
 }
+
+/**
+ * Read one contour label (v2.6, Find lines), already turned upright and
+ * prepared by `algorithms/findLines/labels.ts`'s `slotCrop`. Returns the raw
+ * text and the reader's confidence as 0..1; the reading RULES (one format per
+ * figure, a lost decimal point, an unsure read) are applied by the caller, to
+ * every label of the figure at once.
+ */
+export async function readLabelCrop(crop: { data: Uint8ClampedArray; width: number; height: number }): Promise<{ text: string; confidence: number | null } | OcrFailure> {
+  const api = window.electronAPI;
+  if (!api) return { error: NO_BRIDGE };
+  const enc = encodeCrop(crop);
+  if (!enc) return { error: 'Could not prepare that label to be read.' };
+  const answer = await api.readText(enc.base64);
+  if (answer.error !== undefined) return { error: answer.error };
+  return { text: answer.text ?? '', confidence: typeof answer.confidence === 'number' ? answer.confidence / 100 : null };
+}

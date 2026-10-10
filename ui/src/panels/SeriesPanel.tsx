@@ -49,8 +49,26 @@ export interface SeriesPanelProps {
   level?: {
     text: string;
     interpolated: boolean;
+    /** The level was used from the line's own label (S3). */
+    fromLabel?: boolean;
     notice: string | null;
     onCommit: (text: string) => void;
+    /**
+     * What the line's inline label READS, offered beside the field (v2.6). A
+     * read is evidence, not a level: the reader the app ships gets enough of
+     * them wrong that one is only written into the field when the user says so.
+     */
+    labelRead?: { text: string; value: number | null; refused: string | null };
+    onUseLabel?: () => void;
+  };
+  /**
+   * v2.6, K3: join the active line with another, their nearest ends bridged.
+   * Present when there is another plain line to join with.
+   */
+  join?: {
+    others: readonly { index: number; name: string }[];
+    onJoin: (other: number) => void;
+    notice: string | null;
   };
 }
 
@@ -78,6 +96,7 @@ export function SeriesPanel(props: SeriesPanelProps) {
     onCommitRename,
     onSetColor,
     canAddSeries,
+    join,
     canvasHasImage,
     onCommitPendingEdit,
     onArmEyedropper,
@@ -282,7 +301,57 @@ export function SeriesPanel(props: SeriesPanelProps) {
               interpolated
             </span>
           )}
+          {level.fromLabel && (
+            <span data-testid="series-level-from-label" style={{ fontSize: theme.font.size.small, color: theme.color.text.legend }}>
+              from label
+            </span>
+          )}
         </div>
+      )}
+      {level?.labelRead && activeInfo && (
+        <div data-testid="series-label-read" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, fontSize: theme.font.size.small, color: theme.color.text.legend, flexWrap: 'wrap' }}>
+          {level.labelRead.value !== null ? (
+            <>
+              <span>The label reads <strong>{level.labelRead.text}</strong></span>
+              {level.onUseLabel && !(level.fromLabel && level.text === String(level.labelRead.value)) && (
+                <button type="button" data-testid="series-use-label" onClick={level.onUseLabel} title="Use what the label reads as this line's level - check it against the figure">
+                  Use
+                </button>
+              )}
+            </>
+          ) : (
+            <span>
+              The label {level.labelRead.text ? <>read as &ldquo;{level.labelRead.text}&rdquo;</> : 'could not be read'}
+              {level.labelRead.refused ? ` - not used: ${level.labelRead.refused}` : ''}
+            </span>
+          )}
+        </div>
+      )}
+      {join && activeInfo && join.others.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+          <label htmlFor="series-join" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+            Join with
+          </label>
+          <select
+            id="series-join"
+            data-testid="series-join"
+            value=""
+            title="Join this line with another into one line: their nearest ends are joined and the gap between them is bridged"
+            onChange={(e) => {
+              if (e.target.value !== '') join.onJoin(Number(e.target.value));
+            }}
+          >
+            <option value="">choose a line…</option>
+            {join.others.map((o) => (
+              <option key={o.index} value={o.index}>{o.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {join?.notice && (
+        <p data-testid="series-join-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
+          {join.notice}
+        </p>
       )}
       {level?.notice && (
         <p data-testid="series-level-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
