@@ -345,6 +345,27 @@ function axisStampFrom(raw: unknown): SerializedAxisStamp | null {
  * anywhere - and on a heatmap a wrong boundary has no visible symptom, because
  * the colour IS the value.
  */
+/** A rectangle the user marked as not data, image pixels. */
+export interface NotDataRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Not-data regions off a file: each one kept only if it is a real rectangle. */
+function notDataRegionsFrom(raw: unknown): NotDataRegion[] {
+  if (!Array.isArray(raw)) return [];
+  const out: NotDataRegion[] = [];
+  for (const r of raw) {
+    if (typeof r !== 'object' || r === null) continue;
+    const { x, y, width, height } = r as Record<string, unknown>;
+    const ns = [x, y, width, height].map(Number);
+    if (ns.every((n) => Number.isFinite(n)) && ns[2]! > 0 && ns[3]! > 0) out.push({ x: ns[0]!, y: ns[1]!, width: ns[2]!, height: ns[3]! });
+  }
+  return out;
+}
+
 function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const src = raw as SerializedHeatmapLayer;
@@ -401,6 +422,9 @@ export interface SerializedPlotData {
   /** v2.2, additive -- see SerializedHeatmapLayer. Absent for every type that is
    * not a heatmap, and for a heatmap whose grid has not been read yet. */
   heatmapLayer?: SerializedHeatmapLayer;
+  /** Regions the user marked as NOT DATA (v2.6) - a legend, say - in image
+   * pixels. Find lines leaves them out and may bridge a line across one. */
+  notDataRegions?: NotDataRegion[];
   misc?: unknown;
 }
 
@@ -424,6 +448,7 @@ export class PlotData {
   private _categoryAxisColl: CategoryAxis[] = [];
   private _datasetCategoryAxisMap = new Map<Dataset, CategoryAxis | null>();
   private _heatmapLayer: SerializedHeatmapLayer | null = null;
+  private _notDataRegions: NotDataRegion[] = [];
 
   reset(): void {
     this._axesColl = [];
@@ -435,6 +460,16 @@ export class PlotData {
     this._categoryAxisColl = [];
     this._datasetCategoryAxisMap = new Map();
     this._heatmapLayer = null;
+    this._notDataRegions = [];
+  }
+
+  /** Regions marked as not data (v2.6), a layer on the figure like the heatmap's record. */
+  setNotDataRegions(regions: readonly NotDataRegion[]): void {
+    this._notDataRegions = regions.map((r) => ({ ...r }));
+  }
+
+  getNotDataRegions(): NotDataRegion[] {
+    return this._notDataRegions.map((r) => ({ ...r }));
   }
 
   /** The heatmap's record. Null for every other type - and for a heatmap that
@@ -818,6 +853,7 @@ export class PlotData {
     // here. A malformed layer is DROPPED whole rather than half-read, because a
     // half-read grid would place boundaries the user never put anywhere.
     this._heatmapLayer = heatmapLayerFrom(data.heatmapLayer);
+    this._notDataRegions = notDataRegionsFrom(data.notDataRegions);
 
     // v2.0 groundwork, additive -- see SerializedCategoryAxisData. Read BEFORE
     // the dataset loop below, which looks these up by name to rebind.
@@ -1179,6 +1215,8 @@ export class PlotData {
     if (this._heatmapLayer !== null) {
       data.heatmapLayer = this._heatmapLayer;
     }
+    // v2.6, additive - written only when the user marked a region.
+    if (this._notDataRegions.length) data.notDataRegions = this.getNotDataRegions();
 
     // v2.0 groundwork, additive (see SerializedCategoryAxisData) -- only
     // written when at least one exists, so a project with none round-trips

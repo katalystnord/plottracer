@@ -447,6 +447,12 @@ interface ImageCanvasProps {
    * A different colour, because it means something else.
    */
   heldBackRects?: readonly { x: number; y: number; width: number; height: number }[] | null;
+  /**
+   * Regions the user marked as NOT DATA (v2.6, Find lines): drawn greyed and
+   * HATCHED, so a box that leaves something out never looks like the plain
+   * amber box that restricts a trace TO something - two meanings, two looks.
+   */
+  notDataRects?: readonly { x: number; y: number; width: number; height: number }[] | null;
   /** Bar capture (v2.0): when true, a background drag draws a rectangle
    * reported (image-pixel space) via onBoxRect -- the SAME shared gesture as
    * crop/region/select-marquee (one drag mechanism, four destinations), but
@@ -629,7 +635,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, notDataRects, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2882,6 +2888,21 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                     <Group key={`held-back-${i}`}>
                       <Rect {...common} stroke="rgba(255,255,255,0.95)" strokeWidth={3.5} />
                       <Rect {...common} stroke="#111827" strokeWidth={1.5} dash={[4, 3]} />
+                    </Group>
+                  );
+                })}
+                {notDataRects?.map((r, i) => {
+                  const a = imageToScreen(view, r.x, r.y);
+                  const b = imageToScreen(view, r.x + r.width, r.y + r.height);
+                  const w = b.x - a.x, h = b.y - a.y;
+                  const hatch: number[][] = [];
+                  for (let d = -h; d < w; d += 9) hatch.push([d, h, d + h, 0]);
+                  return (
+                    <Group key={`not-data-${i}`} x={a.x} y={a.y} listening={false} clipX={0} clipY={0} clipWidth={w} clipHeight={h}>
+                      <Rect x={0} y={0} width={w} height={h} fill="rgba(90, 90, 100, 0.28)" stroke="#4b5563" strokeWidth={1.5} />
+                      {hatch.map((pts, k) => (
+                        <Line key={k} points={pts} stroke="rgba(55, 65, 81, 0.55)" strokeWidth={1} />
+                      ))}
                     </Group>
                   );
                 })}

@@ -50,7 +50,10 @@ export interface FoundLine {
 
 /** A place the first version was unsure about, for the user to check (K1). */
 export interface Place {
-  kind: 'bridge' | 'split' | 'unresolved';
+  /** bridge: lines met and were joined; split: pieces left apart where unsure;
+   * end: a line stops inside the plot, where it may well carry on; unresolved:
+   * merged ink not recorded as a line. */
+  kind: 'bridge' | 'split' | 'end' | 'unresolved';
   at: Pt;
   /** Indices into `lines` this place touches. */
   lines: number[];
@@ -817,6 +820,29 @@ export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: nu
   };
   const placesOut: Place[] = places.map((pl) => ({ kind: pl.kind, at: pl.at, lines: nearestLines(pl.at, 3 * lw + 6) }));
   for (const u of unresolved) placesOut.push({ kind: 'unresolved', at: centroid(u), lines: nearestLines(centroid(u), 3 * lw + 6) });
+  // A line that STOPS inside the plot is a place to check: a contour cannot end
+  // there, and a curve rarely does - most often it is a dash gap or a crossing
+  // the first version did not bridge. Ends near each other are one place.
+  const ends: { at: Pt; line: number }[] = [];
+  out.forEach((L, li) => {
+    if (L.closed || L.points.length < 2) return;
+    for (const p of [L.points[0]!, L.points[L.points.length - 1]!]) if (!onFrame(p)) ends.push({ at: p, line: li });
+  });
+  const grouped = new Set<number>();
+  ends.forEach((e, i) => {
+    if (grouped.has(i)) return;
+    const group = [i];
+    grouped.add(i);
+    ends.forEach((f, j) => {
+      if (!grouped.has(j) && norm(sub(e.at, f.at)) < 25) {
+        group.push(j);
+        grouped.add(j);
+      }
+    });
+    if (placesOut.some((pl) => norm(sub(pl.at, e.at)) < 25)) return;
+    const lines = [...new Set(group.map((g) => ends[g]!.line))];
+    placesOut.push({ kind: lines.length > 1 ? 'split' : 'end', at: centroid(group.map((g) => ends[g]!.at)), lines });
+  });
   return { lines: out, labelInk, unresolved, places: placesOut, lineWidth: lw };
 }
 

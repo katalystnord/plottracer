@@ -11880,6 +11880,67 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
   }
   const seriesCount = () => page.getByTestId('series-select').locator('option').count();
 
+  it('N4 a legend marked with "Leave out a region" is left out of the lines found', async () => {
+    const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
+      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+      series: { points: { x: number; y: number }[] }[];
+    };
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-dashed').waitFor({ state: 'visible' });
+    await page.getByTestId('example-dashed').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = t.calibration.anchors;
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    const toPx = (p: { x: number; y: number }) => [
+      a.x1.px + (p.x - a.x1.value) * ((a.x2.px - a.x1.px) / (a.x2.value - a.x1.value)),
+      a.y1.py + (p.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value)),
+    ] as const;
+
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+    const [cx, cy] = toPx(t.series[0]!.points[Math.floor(t.series[0]!.points.length / 3)]!);
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(cx, cy);
+    const found = async () => Number(((await textOf('find-lines-summary').catch(() => '')).match(/^(\d+) lines? found/) ?? [])[1] ?? NaN);
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(found, { timeout: 60000 }).toBeGreaterThan(0);
+    const without = await found();
+
+    // The card names the gesture, and says what the box does, before it is drawn.
+    await page.getByTestId('find-lines-leave-out').click();
+    expect(await textOf('find-lines-leave-out-prompt')).toMatch(/Drag a box over a legend/);
+    // the legend, measured from an identical re-render of the example (plottracer-ref)
+    const p0 = await imageToLocal(716, 538);
+    const p1 = await imageToLocal(872, 634);
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + p0.lx, canvasBox.y + p0.ly);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + (p0.lx + p1.lx) / 2, canvasBox.y + (p0.ly + p1.ly) / 2, { steps: 4 });
+    await page.mouse.move(canvasBox.x + p1.lx, canvasBox.y + p1.ly, { steps: 4 });
+    await page.mouse.up();
+    await expect.poll(() => page.getByTestId('find-lines-mask-remove-0').count(), { timeout: 5000 }).toBe(1);
+    expect(await page.getByTestId('find-lines-leave-out-prompt').count(), 'one box per press').toBe(0);
+
+    // a second press says it replaces the first press's lines - and does
+    expect(await textOf('find-lines-run')).toBe('Find lines again');
+    await page.getByTestId('find-lines-run').click();
+    await page.waitForTimeout(300);
+    await expect.poll(found, { timeout: 60000 }).toBeGreaterThan(0);
+    expect(await found(), 'the legend\'s sample lines are no longer found').toBeLessThan(without);
+    expect(await page.getByTestId('series-select').locator('option').count(), 'replaced, not stacked').toBe(await found());
+  });
+
   it('F1/F9/K1-K3 one press finds every contour line, says what it did, and a found line can be cut and joined again', async () => {
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('example-contour').waitFor({ state: 'visible' });

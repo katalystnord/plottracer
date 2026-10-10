@@ -182,3 +182,31 @@ describe('Find lines on same-colour curves', () => {
     expect(b.roles.includes('shared')).toBe(true);
   });
 });
+
+describe('Find lines with a region marked as not data (N4)', () => {
+  // The bundled dashed-release example: four black curves and a legend whose
+  // sample lines are the same ink. Legend box measured from an identical
+  // re-render (plottracer-ref research/v2.6-separation/ref.py).
+  const LEGEND = { x0: 720.3, y0: 541.8, x1: 868.3, y1: 629.8 };
+  const BOX = { x0: 77.53, y0: 39.33, x1: 875.25, y1: 636.72 };
+  const inLegend = (p: Pt): boolean => p[0] >= LEGEND.x0 && p[0] <= LEGEND.x1 && p[1] >= LEGEND.y0 && p[1] <= LEGEND.y1;
+  const img = () => readPng(join(ROOT, 'samples', 'xy-dashed-release.png'));
+
+  it('N4 without the mask the legend\'s own sample lines come out as lines', () => {
+    const im = img();
+    const res = findLines(im.data, im.width, im.height, [0x11, 0x11, 0x11], BOX, { contour: false });
+    expect(res.lines.some((L) => L.points.filter(inLegend).length > L.points.length / 2)).toBe(true);
+  });
+
+  it('N4 with the legend masked, nothing inside it becomes part of a line', () => {
+    const im = img();
+    const m = { x0: LEGEND.x0 - 4, y0: LEGEND.y0 - 4, x1: LEGEND.x1 + 4, y1: LEGEND.y1 + 4 };
+    const res = findLines(im.data, im.width, im.height, [0x11, 0x11, 0x11], BOX, { contour: false, masks: [m] });
+    expect(res.lines.length).toBeGreaterThan(0);
+    for (const L of res.lines) {
+      L.points.forEach((p, i) => {
+        if (inLegend(p)) expect(L.roles[i], 'only a bridge may cross the masked legend').toBe('bridged');
+      });
+    }
+  });
+});

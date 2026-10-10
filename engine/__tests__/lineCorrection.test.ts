@@ -156,3 +156,41 @@ describe('correcting a line', () => {
     expect(straight200).toBeTruthy();
   });
 });
+
+describe('regions marked as not data (N4) are part of the figure', () => {
+  it('N4 they survive saving and reopening the project', () => {
+    const s = calibrated();
+    s.setNotDataRegions([{ x: 300, y: 120, width: 60, height: 30 }]);
+    const file = serializeProject(s, PNG_DATA_URL);
+    if ('error' in file) throw new Error(file.error);
+    const opened = deserializeProject(JSON.parse(JSON.stringify(file)));
+    if ('error' in opened) throw new Error(opened.error);
+    expect(opened.notDataRegions).toEqual([{ x: 300, y: 120, width: 60, height: 30 }]);
+    const s2 = new CalibrationSession<CalibratedAxes>(CONTOUR_AXES_CONFIG as never);
+    s2.loadCalibrated(opened.axes as never, opened.datasets, opened.categoryAxis, opened.heatmapLayer, opened.notDataRegions);
+    expect(s2.getNotDataRegions()).toEqual([{ x: 300, y: 120, width: 60, height: 30 }]);
+  });
+
+  it('N4 marking one is undone like any other change', () => {
+    const s = calibrated();
+    const before = s.captureState();
+    s.setNotDataRegions([{ x: 300, y: 120, width: 60, height: 30 }]);
+    const after = s.captureState();
+    s.restoreState(before);
+    expect(s.getNotDataRegions()).toEqual([]);
+    s.restoreState(after);
+    expect(s.getNotDataRegions().length).toBe(1);
+  });
+
+  it('N4 a file with a malformed region drops just that region', () => {
+    const s = calibrated();
+    s.setNotDataRegions([{ x: 300, y: 120, width: 60, height: 30 }]);
+    const file = serializeProject(s, PNG_DATA_URL);
+    if ('error' in file) throw new Error(file.error);
+    const raw = JSON.parse(JSON.stringify(file));
+    raw.plotData.notDataRegions.push({ x: 'a', y: 1, width: 2, height: 3 }, { x: 1, y: 1, width: -5, height: 3 });
+    const opened = deserializeProject(raw);
+    if ('error' in opened) throw new Error(opened.error);
+    expect(opened.notDataRegions).toEqual([{ x: 300, y: 120, width: 60, height: 30 }]);
+  });
+});

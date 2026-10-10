@@ -77,9 +77,18 @@ export interface AutoExtractCardProps {
     /** What the last press did (F9: the press has an ending), or null. */
     summary: string | null;
     onFind: () => void;
+    /** How many lines the last press found that are still there - a new press replaces them. */
+    replaces: number;
     /** Contours: fill unset levels from the ones set (C4). */
     onFillLevels?: () => void;
     fillNotice: string | null;
+    /** Regions marked as not data (a legend), and the gesture that adds one. */
+    masks: {
+      count: number;
+      armed: boolean;
+      onArm: () => void;
+      onRemove: (index: number) => void;
+    };
   };
 }
 
@@ -223,12 +232,41 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
             {' '}Where it is unsure it leaves the pieces apart and lists the place under Places to check.
           </span>
           {colourRow}
+          <div data-testid="find-lines-masks" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              data-testid="find-lines-leave-out"
+              aria-pressed={findLines.masks.armed}
+              onClick={findLines.masks.onArm}
+              title="Mark a legend, a key or anything else that is not data, so Find lines leaves it out"
+            >
+              {findLines.masks.armed ? 'Drag the box now…' : 'Leave out a region…'}
+            </button>
+            {[...Array(findLines.masks.count).keys()].map((i) => (
+              <button
+                key={i}
+                type="button"
+                data-testid={`find-lines-mask-remove-${i}`}
+                onClick={() => findLines.masks.onRemove(i)}
+                title="Stop leaving this region out"
+                style={{ fontSize: theme.font.size.small }}
+              >
+                Left out {i + 1} ✕
+              </button>
+            ))}
+          </div>
+          {findLines.masks.armed && (
+            <span data-testid="find-lines-leave-out-prompt" style={{ fontWeight: 600, color: theme.color.text.primary }}>
+              Drag a box over a legend or anything that is not data. Find lines ignores it, and a line passing behind it is bridged across.
+            </span>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
               data-testid="find-lines-run"
               onClick={findLines.onFind}
               disabled={findLines.busy !== null}
+              title={findLines.replaces ? `Find the lines again - replaces the ${findLines.replaces} found last time (a line you renamed is kept)` : 'Find every line of this colour'}
               style={{
                 background: theme.color.primary.main,
                 color: '#fff',
@@ -239,7 +277,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
                 cursor: findLines.busy !== null ? 'default' : 'pointer',
               }}
             >
-              Find lines
+              {findLines.replaces ? 'Find lines again' : 'Find lines'}
             </button>
             <span
               data-testid="find-lines-first-version"

@@ -19,6 +19,7 @@ import { inferLevels } from '../../algorithms/findLines/levels.js';
 import { thinFoundLine } from '../../engine/lineEdits.js';
 import type { LabelRead } from '../../engine/contourLabel.js';
 import { PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
+import type { NotDataRegion } from '../../core/plotData.js';
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
 import {
@@ -1387,6 +1388,20 @@ export function Workspace() {
   // drag is live whenever By-colour is active (bar the eyedropper), unifying it
   // with the Select tool's box gesture. Cleared via the ✕ button.
   const [colorTraceRegion, setColorTraceRegion] = useState<FilterRegion | null>(null);
+  // Find lines (v2.6) - declared here, beside the trace region, because the
+  // figure-switch resets below clear them too.
+  const [findLinesBusy, setFindLinesBusy] = useState<string | null>(null);
+  const [findLinesSummary, setFindLinesSummary] = useState<string | null>(null);
+  const [fillLevelsNotice, setFillLevelsNotice] = useState<string | null>(null);
+  const [linePlaces, setLinePlaces] = useState<readonly LinePlace[]>([]);
+  const [joinNotice, setJoinNotice] = useState<string | null>(null);
+  /** Names of the series the last Find lines press made, so a second press
+   * (after marking a legend, or repicking the colour) REPLACES them rather than
+   * stacking a second set on top. A line the user renamed is no longer in this
+   * list by name, so it is kept. */
+  const [lastFound, setLastFound] = useState<readonly string[]>([]);
+  /** The "Leave out a region" drag is armed (one box per press). */
+  const [leavingOut, setLeavingOut] = useState(false);
   // Live colour-match PREVIEW (checkpoint 121): while the Auto-trace panel is
   // open, an overlay on the canvas shows exactly which pixels the current colour +
   // tolerance would capture, so the user sees a grid/axis grab BEFORE tracing --
@@ -1918,6 +1933,8 @@ export function Workspace() {
       // region (in the OLD pixels, and not even axis-aligned after a rotate) is
       // stale -- clear it so the next trace re-derives it (2026-07-22 audit C).
       setColorTraceRegion(null);
+      // Places to check are image pixels too (v2.6)
+      setLinePlaces([]);
       // captureDoc reads the just-baked src via getImageDataURL's synchronous
       // mirror (applyImageTransform set it above), so the new snapshot records the
       // EDITED image while the prior present still holds the pre-edit one.
@@ -3173,6 +3190,8 @@ export function Workspace() {
       setActivePointIndex(null);
       setSelectedPointIndices([]);
       setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
+      setLastFound([]);
+      setLinePlaces([]);
       // ⚑ ...and so are shapes the OUTGOING figure's trace held back. They are
       // image pixels of a picture that is no longer on screen, and the offer
       // that takes them back would file them into this figure's record.
@@ -3580,6 +3599,9 @@ export function Workspace() {
       // it here so every session-swap path is covered, not just resetDocument
       // (2026-07-22 audit A1).
       setColorTraceRegion(null);
+      // ...and so is Find lines' memory of what it found, and where to check (v2.6)
+      setLastFound([]);
+      setLinePlaces([]);
       // ⚑ The import notice describes the project that was OPENED. A new session
       // means that figure is gone, and a true sentence about the wrong subject is
       // worse than none -- it read as though the CURRENT figure had lost content.
@@ -5119,6 +5141,8 @@ export function Workspace() {
       categoryAxis?: CategoryAxis;
       /** The heatmap's record, when the file carried one. */
       heatmapLayer?: SerializedHeatmapLayer | null;
+      /** Regions marked as not data (v2.6). */
+      notDataRegions?: NotDataRegion[];
       imageDataURL: string;
       imageFileName?: string;
       measurements?: RecordedMeasurement[];
@@ -5133,7 +5157,7 @@ export function Workspace() {
       clearFiguresToSingle(); // a single-figure project / foreign import is one figure
       const newSession = new CalibrationSession(nextConfig);
       newSession.setImageHeight(imageHeightRef.current);
-      newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis, fig.heatmapLayer);
+      newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis, fig.heatmapLayer, fig.notDataRegions);
       sessionRef.current = newSession;
       // ⚑ The same reset a figure switch does, from the same list. A saved
       // heatmap reopens with the grid it was saved with, the category fold-out
@@ -5418,7 +5442,7 @@ export function Workspace() {
       const config = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
       const s = new CalibrationSession(config);
       s.setImageHeight(imageHeightRef.current); // best-effort; corrected when the active figure's image loads
-      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis, f.heatmapLayer);
+      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis, f.heatmapLayer, f.notDataRegions);
       return {
         id: ++figureIdRef.current,
         name: f.name,
@@ -5630,6 +5654,8 @@ export function Workspace() {
       // One object literal short, under a session comment promising that save,
       // load and undo are one mechanism.
       heatmapLayer: result.heatmapLayer,
+      // ⚑ The same door the heatmap layer was once missing from - see above.
+      notDataRegions: result.notDataRegions,
       imageDataURL: result.imageDataURL,
       imageFileName: result.imageFileName,
       // Our own file carries measurements (checkpoint 56); no value/note --
@@ -6307,11 +6333,6 @@ export function Workspace() {
   // place it was unsure listed for the user to check (docs/v2.6-curves-cases.md
   // F1-F12, K1). The colour is By colour's own pick: the same question asked
   // by a different reader.
-  const [findLinesBusy, setFindLinesBusy] = useState<string | null>(null);
-  const [findLinesSummary, setFindLinesSummary] = useState<string | null>(null);
-  const [fillLevelsNotice, setFillLevelsNotice] = useState<string | null>(null);
-  const [linePlaces, setLinePlaces] = useState<readonly LinePlace[]>([]);
-  const [joinNotice, setJoinNotice] = useState<string | null>(null);
 
   const handleFindLines = useCallback(async () => {
     const kind = findLinesKind(session.getConfig().id);
@@ -6331,20 +6352,34 @@ export function Workspace() {
     setFindLinesBusy('Finding lines…');
     // let the card show that it is working before the search holds the thread
     await new Promise((r) => setTimeout(r, 30));
+    // the user's not-data regions, with a 4 px margin as the research measured them
+    const masks = session.getNotDataRegions().map((r) => ({ x0: r.x - 4, y0: r.y - 4, x1: r.x + r.width + 4, y1: r.y + r.height + 4 }));
     const res = findLines(imageData.data, imageData.width, imageData.height, target,
-      { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height }, { contour: kind === 'contours' });
+      { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height }, { contour: kind === 'contours', masks });
     if (!res.lines.length) {
       setFindLinesBusy(null);
       setFindLinesSummary('No line of that colour was found inside the plot box. Repick the colour from a line.');
       return;
     }
+    // a second press REPLACES what the first one found (see `lastFound`); the
+    // figure always keeps one series, so the last one is emptied, not removed
+    const stale = session.getDatasetInfos().filter((i) => lastFound.includes(i.name)).map((i) => i.index).sort((x, y) => y - x);
+    for (const i of stale) {
+      if (session.getDatasetInfos().length > 1) session.removeDataset(i);
+      else {
+        session.setActiveDataset(i);
+        session.clearPoints();
+      }
+    }
     const created = session.addFoundLines(res.lines.map((L) => thinFoundLine(L.points, L.roles)));
+    setLastFound(created.map((i) => session.getDatasetInfos()[i]!.name));
     const nameOf = (k: number): string => session.getDatasetInfos()[created[k]!]?.name ?? `line ${k + 1}`;
     const places: LinePlace[] = [];
     const placeText = (pl: (typeof res.places)[number]): string => {
       const names = pl.lines.map(nameOf).join(', ');
       if (pl.kind === 'bridge') return `Lines meet here and were joined across it${names ? ` (${names})` : ''} - check each carries on the right way.`;
       if (pl.kind === 'split') return `Unsure how the lines carry on here, so the pieces were left apart${names ? ` (${names})` : ''} - Join them if they are one line.`;
+      if (pl.kind === 'end') return `${names || 'A line'} stops here, inside the plot - if it carries on, Join it with the next piece.`;
       return 'Lines run together closer than the pixels can separate - this stretch is not recorded as a line.';
     };
     for (const pl of res.places) places.push({ id: places.length, kind: pl.kind, at: pl.at, text: placeText(pl) });
@@ -6386,7 +6421,7 @@ export function Workspace() {
     );
     setFindLinesBusy(null);
     commit();
-  }, [session, colorTraceColor, commit, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice]);
+  }, [session, colorTraceColor, commit, lastFound, setLastFound, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice]);
 
   /** C4: unset contour levels filled in from the ones the user has set, in equal
    * steps between them - refused, and saying why, where the levels are uneven. */
@@ -9420,8 +9455,18 @@ export function Workspace() {
                       busy: findLinesBusy,
                       summary: findLinesSummary,
                       onFind: () => void handleFindLines(),
+                      replaces: datasetInfos.filter((i) => lastFound.includes(i.name) && i.pointCount > 0).length,
                       ...(findLinesKind(config.id) === 'contours' ? { onFillLevels: handleFillLevels } : {}),
                       fillNotice: fillLevelsNotice,
+                      masks: {
+                        count: session.getNotDataRegions().length,
+                        armed: leavingOut,
+                        onArm: () => setLeavingOut((v) => !v),
+                        onRemove: (i: number) => {
+                          session.setNotDataRegions(session.getNotDataRegions().filter((_, k) => k !== i));
+                          commit();
+                        },
+                      },
                     },
                   }
                 : {})}
@@ -9555,11 +9600,21 @@ export function Workspace() {
           // active, EXCEPT while the eyedropper is armed (that click samples a
           // colour). A bare click in this mode is already a no-op (see
           // handleImageClick), so an always-live drag clobbers nothing.
-          regionMode={mode === 'color-trace' && eyedropper === null}
+          regionMode={(mode === 'color-trace' || (mode === 'find-lines' && leavingOut)) && eyedropper === null}
           // v2.0 pre-launch audit: the click-vs-drag guard (a zero-area region
           // would match nothing) is now ImageCanvas.tsx's own job, consolidated
           // with crop/select's identical guard -- see its endDrag comment.
-          onRegionRect={(r) => setColorTraceRegion(r)}
+          onRegionRect={(r) => {
+            if (mode === 'find-lines') {
+              // a box drawn after "Leave out a region": not data, saved with the figure
+              session.setNotDataRegions([...session.getNotDataRegions(), r]);
+              setLeavingOut(false);
+              commit();
+              return;
+            }
+            setColorTraceRegion(r);
+          }}
+          notDataRects={mode === 'find-lines' ? session.getNotDataRegions() : null}
           regionRect={mode === 'color-trace' ? colorTraceRegion : null}
           // ⚑ Only while the tool that produced them is open. The offer lives in
           // the Auto-extract card, so outlines drawn with that card shut would

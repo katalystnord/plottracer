@@ -206,7 +206,7 @@ import { BarAxes } from '../core/axes/bar.js';
 
 import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
-import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes } from '../core/plotData.js';
+import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes, type NotDataRegion } from '../core/plotData.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
 import { tickCountFor } from '../core/bandedAxis.js';
 import { detectAxisTicks } from '../algorithms/axisTicks.js';
@@ -715,6 +715,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private reusedStepKeys = new Set<string>();
 
   private heatmapLayer: SerializedHeatmapLayer | null = null;
+  /** Regions the user marked as not data (v2.6) - a layer on the figure, saved,
+   * loaded and undone beside the heatmap's record, through the same doors. */
+  private notDataRegions: NotDataRegion[] = [];
 
   /** How many times `config.repeatingStep` is currently unrolled - the spoke count
    * of the spider being calibrated. Meaningless (and left at 0) for every
@@ -2932,6 +2935,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.heatmapLayer = layer;
   }
 
+  getNotDataRegions(): NotDataRegion[] {
+    return this.notDataRegions.map((r) => ({ ...r }));
+  }
+
+  setNotDataRegions(regions: readonly NotDataRegion[]): void {
+    this.notDataRegions = regions.filter((r) => r.width > 0 && r.height > 0).map((r) => ({ ...r }));
+  }
+
   /** Switches which dataset new points/slot actions apply to.
    * No-op for an out-of-range index. */
   /**
@@ -3136,9 +3147,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
     axes: A,
     datasets: Dataset[],
     categoryAxis?: CategoryAxis,
-    heatmapLayer?: SerializedHeatmapLayer | null
+    heatmapLayer?: SerializedHeatmapLayer | null,
+    notDataRegions?: readonly NotDataRegion[]
   ): void {
     this.categoryAxis = categoryAxis ?? new CategoryAxis();
+    this.notDataRegions = (notDataRegions ?? []).map((r) => ({ ...r }));
     // ⚑ Explicit, not defaulted-to-keep: this is a LOAD, so a layer the caller
     // did not supply means the file had none - and leaving the previous
     // figure's grid in place is exactly the stale-state defect the clears
@@ -3648,9 +3661,20 @@ export class CalibrationSession<A extends CalibratedAxes> {
   addFoundLines(lines: readonly (readonly LinePoint[])[]): number[] {
     if (!this.axes) return [];
     const created: number[] = [];
+    // Named "Line N" - a found line is a line, and a second press would
+    // otherwise carry on the series counter ("Series 32"). An empty active
+    // series still wearing its default name is renamed the same way.
+    let n = 1;
+    const nextLineName = (): string => {
+      const taken = new Set(this.datasetEntries.map((e) => e.dataset.name.trim()));
+      while (taken.has(`Line ${n}`)) n++;
+      return `Line ${n}`;
+    };
     lines.forEach((pts, k) => {
       const active = this.activeEntry.dataset;
-      const idx = k === 0 && active.getCount() === 0 && !active.hasSlots() ? this.activeDatasetIndex : this.addDataset();
+      const reuse = k === 0 && active.getCount() === 0 && !active.hasSlots();
+      const idx = reuse ? this.activeDatasetIndex : this.addDataset(nextLineName());
+      if (reuse && /^Series \d+$/.test(active.name.trim())) active.name = nextLineName();
       this.writeLinePoints(idx, pts);
       this.setDatasetColor(idx, SERIES_COLOR_PALETTE[idx % SERIES_COLOR_PALETTE.length]!);
       created.push(idx);
@@ -7614,6 +7638,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // grid, names and hand-read cells describe the figure that just went away.
     // "Discard every series and point" does not promise to keep them.
     this.heatmapLayer = null;
+    this.notDataRegions = [];
   }
 
   /** Capture the whole mutable state for the undo stack (checkpoint 38, see
@@ -7638,6 +7663,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // a third one the undo snapshot must not miss; the heatmap's record is the
     // next, and it rides the same door so SAVE, LOAD and UNDO are one mechanism.
     plotData.setHeatmapLayer(this.heatmapLayer);
+    plotData.setNotDataRegions(this.notDataRegions);
     for (const entry of this.datasetEntries) {
       plotData.addDataset(entry.dataset);
       if (axes) plotData.setAxesForDataset(entry.dataset, axes);
@@ -7677,6 +7703,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // captureState always adds one; defensive rather than assumed).
     this.categoryAxis = plotData.getCategoryAxisColl()[0] ?? new CategoryAxis();
     this.heatmapLayer = plotData.getHeatmapLayer();
+    this.notDataRegions = plotData.getNotDataRegions();
     // ⚑ THE SPOKE COUNT IS DOCUMENT STATE (v1.4's variable-length calibration).
     // Restored BEFORE `placed` and `stepIndex` below, since both are read against
     // the step list this count decides. The other two entrances already handle it -

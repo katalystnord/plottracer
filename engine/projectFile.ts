@@ -42,7 +42,7 @@
  * second axes entry, or measurements -- still out of scope here).
  */
 
-import { PlotData, type SerializedPlotData, type AnyAxes, type SerializedHeatmapLayer } from '../core/plotData.js';
+import { PlotData, type SerializedPlotData, type AnyAxes, type SerializedHeatmapLayer, type NotDataRegion } from '../core/plotData.js';
 import { CategoryAxis } from '../core/categoryAxis.js';
 import { RECORDED_MEASURE_TOOLS } from '../core/measurementValues.js';
 import type { Dataset } from '../core/dataset.js';
@@ -208,6 +208,8 @@ export interface DeserializedProject {
    * type that is not a heatmap and for a heatmap whose grid was never read;
    * it is a LAYER on the calibration, never part of it. */
   heatmapLayer: SerializedHeatmapLayer | null;
+  /** Regions marked as not data (v2.6); empty when none. Pass to `loadCalibrated`. */
+  notDataRegions: NotDataRegion[];
   imageDataURL: string;
   imageFileName?: string;
   /** Measure results + scale (checkpoint 56); empty/null when the file predates
@@ -307,6 +309,7 @@ export function serializeProject<A extends CalibratedAxes>(
   // and it follows the same omit-when-empty discipline: null for every type
   // that is not a heatmap, so no other project's file changes at all.
   plotData.setHeatmapLayer(session.getHeatmapLayer());
+  plotData.setNotDataRegions(session.getNotDataRegions());
   for (const dataset of session.getDatasets()) {
     plotData.addDataset(dataset);
     plotData.setAxesForDataset(dataset, anyAxes);
@@ -636,6 +639,7 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // Null for a file that carries none - which is every project that is not a
     // heatmap, and every heatmap whose grid was never read.
     heatmapLayer: plotData.getHeatmapLayer(),
+    notDataRegions: plotData.getNotDataRegions(),
     imageDataURL: data.image.dataURL,
     // Absent rather than explicitly undefined, matching readStamp below and
     // the writer at `image:` above -- a file with no remembered name has no
