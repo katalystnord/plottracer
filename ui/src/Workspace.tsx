@@ -16,6 +16,7 @@ import { AUTO_EXTRACT_MODES, autoExtractModesFor, findLinesKind, type ToolMode }
 import { findLines } from '../../algorithms/findLines/lines.js';
 import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
 import { inferLevels } from '../../algorithms/findLines/levels.js';
+import { inkClosesLoop } from '../../algorithms/findLines/closure.js';
 import { thinFoundLine } from '../../engine/lineEdits.js';
 import type { LabelRead } from '../../engine/contourLabel.js';
 import { PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
@@ -4088,6 +4089,22 @@ export function Workspace() {
           // Cleared explicitly rather than left alone: with points deleted, the new
           // index can coincide with a previously picked one.
           setPickedPointIndex(null);
+          // C3 (v2.6): a contour line clicked all the way round CLOSES when the
+          // gap back to its first point is the line's own ink - never by how
+          // close the ends are. It then ends on its first point, as R and
+          // matplotlib store a closed contour.
+          if (session.getConfig().id === 'contour') {
+            const ai = session.getActiveDatasetIndex();
+            const pts = session.getLinePoints(ai);
+            const imageData = imageCanvasRef.current?.getImageData();
+            if (pts && imageData && pts.length >= 6) {
+              const ink = sampleInkRgb(imageData, pts[0]!.x, pts[0]!.y);
+              if (inkClosesLoop(imageData.data, imageData.width, imageData.height, pts.map((p) => [p.x, p.y] as [number, number]), ink)) {
+                session.closeLine(ai);
+                setActivePointIndex(null);
+              }
+            }
+          }
           commit();
           return;
         }

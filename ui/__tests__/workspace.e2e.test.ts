@@ -11881,6 +11881,38 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
   }
   const seriesCount = () => page.getByTestId('series-select').locator('option').count();
 
+  it('C3 a contour line clicked all the way round by hand closes on its own ink', async () => {
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-contour').waitFor({ state: 'visible' });
+    await page.getByTestId('example-contour').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = truth.calibration.anchors;
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    const loop = (truth.series as { closed?: boolean; points: { x: number; y: number }[] }[]).find((s) => s.closed)!;
+    const sx = (a.x2.px - a.x1.px) / (a.x2.value - a.x1.value);
+    const sy = (a.y2.py - a.y1.py) / (a.y2.value - a.y1.value);
+    await page.getByTestId('mode-place-point').click();
+    let clicks = 0;
+    for (let i = 0; i < loop.points.length - 6; i += 12) {
+      const p = loop.points[i]!;
+      await clickImagePixel(a.x1.px + (p.x - a.x1.value) * sx, a.y1.py + (p.y - a.y1.value) * sy);
+      clicks++;
+    }
+    // closed: one more point than clicks - the line ends on its first point
+    await expect.poll(async () => Number(((await page.getByTestId('series-select').locator('option').first().textContent()) ?? '').match(/\((\d+)\)\s*$/)?.[1]), { timeout: 5000 }).toBe(clicks + 1);
+  }, 120000);
+
   it('N4 a legend marked with "Leave out a region" is left out of the lines found', async () => {
     const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
       calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };

@@ -3705,6 +3705,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
     for (const p of pts) ds.addPixel(p.x, p.y, p.role ? { role: p.role } : undefined);
   }
 
+  /** Close a line: it ends on its first point (S4 / C3), which is the only way
+   * the record says "closed". A no-op on a line already closed. */
+  closeLine(index: number): void {
+    const pts = this.getLinePoints(index);
+    if (!pts || pts.length < 3 || isClosedLine(pts)) return;
+    this.writeLinePoints(index, [...pts, { ...pts[0]! }]);
+  }
+
   /** The name for a piece split off a line: a found line ("Line 3") gives the
    * next free "Line N", so the series list never shows "Line 3 (2)" - which
    * reads as a point count; any other name is kept and disambiguated. */

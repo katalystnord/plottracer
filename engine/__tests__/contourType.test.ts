@@ -146,7 +146,20 @@ describe('v2.6 contour - the record', () => {
   // single traced dash can have its ends 3.6 px apart - so no distance rule can
   // tell closed from open (plottracer-ref research/v2.6-today/, 2026-10-07). How a line becomes
   // closed is David's to decide; until then this case is named, not passed.
-  it.todo('C3 a closed contour is exported ending on its first point, as R and matplotlib store it');
+  // RESOLVED 2026-10-10 (David agreed): a line is closed by the INK - Find lines
+  // measures it, and a hand-captured line is checked the same way
+  // (algorithms/findLines/closure.ts, findLinesClosure.test.ts). Once closed,
+  // the record ends on the first point.
+  it('C3 a closed contour is exported ending on its first point, as R and matplotlib store it', () => {
+    const s = calibratedContour();
+    trace(s, LOOP.slice(0, -1));
+    s.closeLine(0);
+    const rows = exportOf(s).rows;
+    expect(rows[rows.length - 1]!.slice(2, 4)).toEqual(rows[0]!.slice(2, 4));
+    expect(rows.length).toBe(LOOP.length);
+    s.closeLine(0); // closing a closed line changes nothing
+    expect(exportOf(s).rows.length).toBe(LOOP.length);
+  });
 
 
   it('C4 a line with no level exports a blank level, never 0', () => {
