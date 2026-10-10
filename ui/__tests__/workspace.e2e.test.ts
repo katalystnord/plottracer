@@ -12097,5 +12097,19 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const lastOption = await join.locator('option').last().getAttribute('value');
     await join.selectOption(lastOption!);
     await expect.poll(seriesCount, { timeout: 5000 }).toBe(7);
+
+    // C2: two lines given the same level sit together under ONE "Level 5"
+    // header in the data table.
+    for (const i of ['2', '3']) {
+      await page.getByTestId('series-select').selectOption(i);
+      await page.waitForTimeout(100);
+      await page.getByTestId('series-level').fill('5');
+      await page.getByTestId('series-level').press('Enter');
+      await page.waitForTimeout(100);
+    }
+    const group = page.getByTestId('series-groups').locator('th', { hasText: 'Level 5' });
+    await expect.poll(() => group.count(), { timeout: 5000 }).toBe(1);
+    expect(await group.getAttribute('colspan')).toBe('4');
+    expect(await page.getByTestId('series-groups').locator('th').last().textContent()).toBe('Level not set');
   }, 180000);
 });

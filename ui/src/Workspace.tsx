@@ -7274,6 +7274,29 @@ export function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allDatasetsData, datasetInfos, session, version]
   );
+  /**
+   * C2 (v2.6): on a contour figure the sheet groups lines UNDER THEIR LEVEL -
+   * ordered by level, unset last, with a "Level 0.4" header over each group.
+   * Order only: a line keeps its own index, so selecting and editing a cell
+   * still reach the right line.
+   */
+  const contourSheet = useMemo(() => {
+    if (session.getExportShape() !== 'contour') return null;
+    const lv = (i: number): number | null => session.getContourLevel(i)?.value ?? null;
+    const series = [...spreadsheetSeries].sort((a, b) => {
+      const la = lv(a.index), lb = lv(b.index);
+      if (la === null && lb === null) return a.index - b.index;
+      if (la === null) return 1;
+      if (lb === null) return -1;
+      return la - lb || a.index - b.index;
+    });
+    const label = (sr: { index: number }): string => {
+      const v = lv(sr.index);
+      return v === null ? 'Level not set' : `Level ${v}`;
+    };
+    return { series, label };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spreadsheetSeries, session, version]);
   // Value-column headers from the axes itself (checkpoint 92), so the table's
   // column names match the exported file's -- was config.valueLabels, which had
   // diverged (CCR t/value vs Time/Magnitude; Ternary A/B/C vs a/b/c). Falls back
@@ -10568,7 +10591,8 @@ export function Workspace() {
             />
           ) : (
             <SpreadsheetTable
-              series={spreadsheetSeries}
+              series={contourSheet ? contourSheet.series : spreadsheetSeries}
+              {...(contourSheet ? { groupLabel: contourSheet.label } : {})}
               maxRows={spreadsheetMaxRows}
               dataDim={config.dataDim}
               axesKind={config.axesKind}

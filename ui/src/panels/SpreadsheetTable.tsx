@@ -69,6 +69,13 @@ export interface SpreadsheetTableProps {
    */
   renderCategoryName: (pointIndex: number, name: string, testId: string) => ReactNode;
   noPointsHint: string;
+  /**
+   * Contour (v2.6, C2): the GROUP a series sits under - its level - drawn as a
+   * header row spanning consecutive series in the same group. Several lines can
+   * share one level; the sheet shows them together under it. The caller orders
+   * `series` so a group is consecutive.
+   */
+  groupLabel?: (s: SpreadsheetSeries) => string;
 }
 
 /**
@@ -129,11 +136,25 @@ export function SpreadsheetTable({
   renderValue,
   renderCategoryName,
   noPointsHint,
+  groupLabel,
 }: SpreadsheetTableProps) {
   // The series a row's selection, nudging and editing act on. Every one of
   // those takes a pixel index of the ACTIVE series, so the row needs it by name
   // rather than by position.
   const activeSeries = series.find((s) => s.active);
+  const spanOf = (s: SpreadsheetSeries): number =>
+    (s.deltas.length > 0 ? 1 : dataDim) + (showCategoryColumn ? 1 : 0) + s.errorColumns.length;
+  // consecutive series with one label become one header cell above their names
+  const groups: { label: string; span: number; key: number }[] = [];
+  if (groupLabel) {
+    for (const s of series) {
+      const label = groupLabel(s);
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) last.span += spanOf(s);
+      else groups.push({ label, span: spanOf(s), key: s.index });
+    }
+  }
+  const off = groupLabel ? 22 : 0;
   return (
     <div
       data-testid="data-spreadsheet"
@@ -141,10 +162,25 @@ export function SpreadsheetTable({
     >
       <table data-testid="points-table" style={{ borderCollapse: 'collapse', fontSize: 12.5, whiteSpace: 'nowrap' }}>
         <thead>
+          {groupLabel && (
+            <tr data-testid="series-groups">
+              <th style={{ position: 'sticky', left: 0, top: 0, zIndex: 3, background: theme.color.background.panel }} />
+              {groups.map((g) => (
+                <th
+                  key={g.key}
+                  colSpan={g.span}
+                  data-testid={`series-group-${g.key}`}
+                  style={{ position: 'sticky', top: 0, zIndex: 1, background: theme.color.background.panel, textAlign: 'left', padding: '2px 8px', borderLeft: `1px solid ${theme.color.border.regular}`, color: theme.color.text.secondary, fontWeight: 600 }}
+                >
+                  {g.label}
+                </th>
+              ))}
+            </tr>
+          )}
           <tr>
             <th
               rowSpan={2}
-              style={{ position: 'sticky', left: 0, top: 0, zIndex: 3, background: theme.color.background.panel, textAlign: 'right', padding: '3px 8px', color: theme.color.text.legend }}
+              style={{ position: 'sticky', left: 0, top: off, zIndex: 3, background: theme.color.background.panel, textAlign: 'right', padding: '3px 8px', color: theme.color.text.legend }}
             >
               #
             </th>
@@ -167,7 +203,7 @@ export function SpreadsheetTable({
                 data-testid={`series-col-${s.index}`}
                 style={{
                   position: 'sticky',
-                  top: 0,
+                  top: off,
                   zIndex: 1,
                   background: theme.color.background.panel,
                   textAlign: 'left',
@@ -189,7 +225,7 @@ export function SpreadsheetTable({
                   key={key}
                   style={{
                     position: 'sticky',
-                    top: 24,
+                    top: 24 + off,
                     zIndex: 1,
                     background: theme.color.background.panel,
                     textAlign: 'left',
