@@ -145,7 +145,22 @@ Several ways, depending on the figure - all on the left rail:
 
 - **Add points** (`3`) - click along the curve. A zoom loupe follows the cursor
   for precision. This is the reliable default and works on anything.
-- **Auto-extract** (`4`) - the wand tool, three mechanisms:
+- **Auto-extract** (`4`) - the wand tool. On XY and Contour figures it offers four
+  mechanisms, the first being **Find lines**:
+  - **Find lines** (*first version*) - pick the lines' colour and press **Find
+    lines**: every line of that colour becomes its **own** line, even where
+    same-colour lines cross, touch, run together or are cut by their own labels.
+    Each found line gets its own colour on screen so you can see which is which.
+    A gap the figure drew no ink in (a label, a dash, a crossing) is filled by a
+    fair interpolation between the line's ends and those points are marked
+    **bridged**; a stretch two curves share is recorded in **both**, marked
+    **shared**. On a **Contour** figure it also reads each line's label: the read
+    is shown beside the line's **Level** as *"The label reads 0.4"*, and **Use**
+    makes it the level (exported as `Level from: label`). It is offered, not
+    written in, because the reader gets some labels wrong. **Fill in the other
+    levels** then fills unset lines in equal steps from the ones you set, and says
+    so if the levels are uneven. Where Find lines is unsure it does **not** guess:
+    it leaves the pieces apart and lists the place under **Places to check**.
   - **Flood-fill** - click one point on a solid curve; it traces the connected line.
   - **By colour** - pick the series' colour (type a hex value, or take it from the
     figure with the pipette); it extracts every matching pixel in one pass (good for
@@ -241,6 +256,20 @@ capture cursor lands on them, so what the trace refused is what you are asked fo
 next. A reading you placed by hand is never overwritten.
 
 ## 5. Correct
+
+**After Find lines** (a first version - it will sometimes get a line wrong):
+- **Places to check** (right panel) lists every place it was unsure - lines
+  meeting, pieces left apart, merged ink it could not separate, labels not used.
+  Click one to go there; tick it once it is right.
+- **Cut** (rail, beside the eraser) - click a line where it should become two.
+  A closed line opens at the cut instead.
+- **Join with** (series panel) - joins the active line to another at their
+  nearest ends; the gap is bridged and marked as bridged. Two lines with
+  different levels are refused.
+- **Move N selected to** (Data points header) - moves the points you selected
+  with **Select** onto another line, in order along it.
+- Two curves swapped at a crossing: **Cut** both there, then **Join** the right
+  pairs. One **Undo** reverses any of these, or the whole Find lines result.
 
 - **Select** (`5`) - click a point to select it, or drag a box to select a range.
   `Del` removes the selection; the arrow keys nudge selected points (Shift = coarse);
