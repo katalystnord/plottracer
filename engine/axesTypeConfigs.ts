@@ -1530,6 +1530,35 @@ export const CONTOUR_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   supportsCurveFit: false,
   supportsGeometry: false,
   exportShape: 'contour',
+  // L1 (v2.6): the level is a coordinate on a THIRD axis, and that axis has a
+  // scale - offered exactly as an XY axis offers Log X.
+  options: [
+    ...(XY_AXES_CONFIG.options ?? []),
+    { key: 'isLogLevel', label: 'Log level', kind: 'checkbox', default: false },
+  ],
+  // ⚑⚑ WITHOUT THE STAMP A SAVED CONTOUR PROJECT REOPENED AS AN XY CHART - it
+  // shares `XYAxes` and, unlike every other such type, never said which it was.
+  // Found 2026-10-10 adding the level scale, which needs the same metadata to
+  // survive; the existing reopen test had built a Contour session by hand
+  // instead of asking the file. The level scale rides with it: it is not part
+  // of `XYAxes`, so the axes metadata is its one home in the file.
+  buildAxes(cal, ctx) {
+    const result = XY_AXES_CONFIG.buildAxes(cal, ctx);
+    if ('error' in result) return result;
+    result.axes.setMetadata({
+      ...result.axes.getMetadata(),
+      [GRAPH_TYPE_METADATA_KEY]: 'contour',
+      contourLogLevel: String(optionBool(ctx.options, 'isLogLevel')),
+    });
+    return result;
+  },
+  extractOptions(axes) {
+    const meta = axes.getMetadata() as Record<string, unknown>;
+    return {
+      ...XY_AXES_CONFIG.extractOptions!(axes),
+      isLogLevel: String(meta['contourLogLevel'] === 'true'),
+    };
+  },
 };
 
 /** Group names for a Histogram bin's two captured top corners. Order is the

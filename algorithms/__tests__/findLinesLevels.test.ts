@@ -87,3 +87,31 @@ describe('levels as a field', () => {
     expect(f.levels[2]!.refused?.why).toMatch(/30|disagrees/);
   });
 });
+
+describe('levels in the level axis\'s own scale (L2)', () => {
+  it('L2 on a log level axis one unlabelled line between 10 and 1000 is 100, not 505', async () => {
+    const { inferLevelsInScale } = await import('../findLines/levels.js');
+    const L = rings(5);
+    const reads = [1, 10, null, 1000, 10000];
+    const f = inferLevelsInScale(L.map((points, k) => ({ points, read: reads[k]! })), 400, 400, true);
+    if ('error' in f) throw new Error(f.error);
+    expect(f.levels[2]).toEqual({ value: 100, source: 'interpolated', refused: null });
+    expect(f.levels[0]!.value).toBe(1);
+  });
+
+  it('L2 the same lines on a linear axis get NO interpolated level - 1, 10, 1000, 10000 are not equal steps, and a line between 10 and 1000 is not "beyond" 1 and 10', async () => {
+    const { inferLevelsInScale } = await import('../findLines/levels.js');
+    const L = rings(5);
+    const reads = [1, 10, null, 1000, 10000];
+    const f = inferLevelsInScale(L.map((points, k) => ({ points, read: reads[k]! })), 400, 400, false);
+    if ('error' in f) throw new Error(f.error);
+    expect(f.levels[2]!.value).toBeNull();
+  });
+
+  it('L2 a level of 0 or below is refused on a log level axis, and says why', async () => {
+    const { inferLevelsInScale } = await import('../findLines/levels.js');
+    const L = rings(3);
+    const f = inferLevelsInScale(L.map((points, k) => ({ points, read: [0, 10, null][k]! })), 400, 400, true);
+    expect('error' in f && f.error).toMatch(/above 0/);
+  });
+});

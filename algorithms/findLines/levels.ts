@@ -214,7 +214,14 @@ export function inferLevels(lines: readonly LevelInput[], w: number, h: number, 
         ests.push(r9(la + ((lb - la) * a[0]) / (a[0] + b[0])));
       }
       if (!ests.length) {
-        for (const sides of tr[k]!) for (const seq of sides) {
+        // ⚑ BEYOND means beyond: only where the OTHER side of the line has no
+        // labelled line at all. A line between 10 and 1000 whose spacing refused
+        // interpolation above is not "past" 1 and 10 - carrying their step on
+        // gave it 19 (found by L2's own test).
+        for (const sides of tr[k]!) for (let si = 0; si < sides.length; si++) {
+          const seq = sides[si]!;
+          const other = sides[1 - si] ?? [];
+          if (other.some((j) => lev.has(j))) continue;
           const lab = seq.map((j, d) => [d + 1, j] as const).filter(([, j]) => lev.has(j));
           if (lab.length < 2) continue;
           const [d1, j1] = lab[0]!, [d2, j2] = lab[1]!;
@@ -231,4 +238,28 @@ export function inferLevels(lines: readonly LevelInput[], w: number, h: number, 
     });
   }
   return { levels: out, step, uneven };
+}
+
+/**
+ * L2 (v2.6): interpolation in the LEVEL AXIS'S OWN SCALE. On a log level axis
+ * equal steps are equal in log10, so one unlabelled line between 1 and 100 is
+ * 10, not 50.5. Levels of 0 or below cannot sit on a log axis and are refused
+ * before anything is inferred.
+ */
+export function inferLevelsInScale(lines: readonly LevelInput[], w: number, h: number, log: boolean, minTransects = 3): LevelField | { error: string } {
+  if (!log) return inferLevels(lines, w, h, minTransects);
+  const bad = lines.map((l) => l.read).filter((v): v is number => v !== null && v <= 0);
+  if (bad.length) return { error: `a log level axis cannot hold ${bad[0]} - only levels above 0` };
+  const f = inferLevels(lines.map((l) => ({ points: l.points, read: l.read === null ? null : Math.log10(l.read) })), w, h, minTransects);
+  // back to the axis's own values, rounded so 10^2 reads 100 and not 99.99999999999997
+  const back = (v: number): number => Number(Math.pow(10, v).toPrecision(12));
+  return {
+    step: f.step === null ? null : f.step,
+    uneven: f.uneven,
+    levels: f.levels.map((o, k) => ({
+      value: o.value === null ? null : o.source === 'label' ? lines[k]!.read : back(o.value),
+      source: o.source,
+      refused: o.refused ? { read: lines[k]!.read ?? back(o.refused.read), why: o.refused.why } : null,
+    })),
+  };
 }

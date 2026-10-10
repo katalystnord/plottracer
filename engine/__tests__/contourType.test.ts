@@ -83,6 +83,34 @@ describe('v2.6 contour - the record', () => {
     expect(back.getContourLevel(0)).toEqual({ value: 0.8, source: 'typed' });
   });
 
+  it('C1 a saved contour project reopens AS A CONTOUR, not as the XY chart it shares axes with', () => {
+    const s = calibratedContour();
+    trace(s, LOOP);
+    const file = serializeProject(s, PNG_DATA_URL);
+    if ('error' in file) throw new Error(file.error);
+    const opened = deserializeProject(JSON.parse(JSON.stringify(file)));
+    if ('error' in opened) throw new Error(opened.error);
+    expect(opened.configId).toBe('contour');
+  });
+
+  it('L1 the level axis has a scale, Log level, and it survives saving and reopening', () => {
+    const s = new CalibrationSession<CalibratedAxes>(CONTOUR_AXES_CONFIG as never);
+    s.setOption('isLogLevel', 'true');
+    for (const [px, py, v] of [[100, 250, '0'], [400, 250, '10'], [100, 250, '0'], [100, 100, '10']] as const) {
+      s.handleCalibrationClick(px, py);
+      s.confirmCalibrationValues([v]);
+    }
+    expect(s.runCalibration()).toBe(true);
+    trace(s, LOOP);
+    const file = serializeProject(s, PNG_DATA_URL);
+    if ('error' in file) throw new Error(file.error);
+    const opened = deserializeProject(JSON.parse(JSON.stringify(file)));
+    if ('error' in opened) throw new Error(opened.error);
+    const back = new CalibrationSession<CalibratedAxes>(CONTOUR_AXES_CONFIG as never);
+    back.loadCalibrated(opened.axes as never, opened.datasets);
+    expect(back.getOptions()['isLogLevel']).toBe('true');
+  });
+
   it('C2 several lines can share one level and stay separate lines', () => {
     const s = calibratedContour();
     trace(s, LOOP);

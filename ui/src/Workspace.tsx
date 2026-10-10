@@ -15,7 +15,7 @@ import { describeCaptureProgress } from '../../engine/captureProgress.js';
 import { AUTO_EXTRACT_MODES, autoExtractModesFor, findLinesKind, type ToolMode } from '../../engine/toolMode.js';
 import { findLines } from '../../algorithms/findLines/lines.js';
 import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
-import { inferLevels } from '../../algorithms/findLines/levels.js';
+import { inferLevelsInScale } from '../../algorithms/findLines/levels.js';
 import { inkClosesLoop } from '../../algorithms/findLines/closure.js';
 import { thinFoundLine } from '../../engine/lineEdits.js';
 import type { LabelRead } from '../../engine/contourLabel.js';
@@ -6504,7 +6504,12 @@ export function Workspace() {
       setFillLevelsNotice('Set at least two levels first - on neighbouring lines - so the step between lines is known.');
       return;
     }
-    const field = inferLevels(inputs, imageData.width, imageData.height);
+    // L2: in the level axis's own scale - equal steps on a log axis are equal in log10
+    const field = inferLevelsInScale(inputs, imageData.width, imageData.height, session.getOptions()['isLogLevel'] === 'true');
+    if ('error' in field) {
+      setFillLevelsNotice(`Nothing filled in: ${field.error}. Change that level, or untick Log level.`);
+      return;
+    }
     if (field.uneven) {
       setFillLevelsNotice(`Nothing filled in: ${field.uneven}, so the levels are values rather than equal steps. Type the rest.`);
       return;
