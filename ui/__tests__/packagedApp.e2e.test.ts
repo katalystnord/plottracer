@@ -151,6 +151,51 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     expect(answer.text?.trim()).toBe('Flax');
   }, 120000);
 
+  it('finds lines, with the Find lines worker inlined into the packaged page', async () => {
+    // ⚑ v2.6 audit B7 moved Find lines into a web worker, inlined as a blob so
+    // the package needs no file of its own - this is the only place that proves
+    // the BUILT app can start it. The observable is the card's own summary.
+    const t = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'samples/contour-potential-energy.truth.json'), 'utf8'));
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-contour').click();
+    await page.waitForTimeout(1500);
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(300);
+    const box = (await page.locator('canvas').first().boundingBox())!;
+    const status = await page.getByTestId('view-state').textContent();
+    const m = /scale: ([0-9.]+), offset: \(([-0-9.]+), ([-0-9.]+)\)/.exec(status ?? '');
+    if (!m) throw new Error(`no view in status line: ${status}`);
+    const [scale, ox, oy] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const clickAt = async (px: number, py: number) => {
+      await page.mouse.click(box.x + px * scale + ox, box.y + py * scale + oy);
+      await page.waitForTimeout(140);
+    };
+    const confirm = async (v: string) => {
+      await page.mouse.move(5, 5);
+      await page.waitForTimeout(150);
+      await page.locator('[data-testid="data-value-input"]').fill(v, { timeout: 8000, force: true });
+      await page.locator('[data-testid="confirm-data-value"]').click({ timeout: 8000, force: true });
+      await page.waitForTimeout(160);
+    };
+    const a = t.calibration.anchors;
+    await clickAt(a.x1.px, a.x1.py);
+    await confirm(String(a.x1.value));
+    await clickAt(a.x2.px, a.x2.py);
+    await confirm(String(a.x2.value));
+    await confirm(String(a.y1.value));
+    await clickAt(a.y2.px, a.y2.py);
+    await confirm(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(600);
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+    await page.getByTestId('color-trace-color').fill('#222222');
+    await page.getByTestId('find-lines-run').click();
+    await expect
+      .poll(() => page.getByTestId('find-lines-summary').textContent().catch(() => ''), { timeout: 120000 })
+      .toMatch(/7 lines found/);
+  }, 180000);
+
   it('leaves no language data in the install directory', async () => {
     // ⚠️ The default writes `eng.traineddata` to the working directory, which for
     // an installed app is root-owned. Asserted HERE as well as in the unit test,
