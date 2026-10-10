@@ -341,6 +341,27 @@ export type PointRole = 'anchor' | 'interpolated' | 'bridged' | 'shared';
  * ends; a shared point lies on a stretch two lines run along together, and is
  * recorded in both. Unlike `interpolated`, neither is regenerated from anything,
  * so both stay editable like any point. */
+/** Series metadata marking a line Find lines traced (v2.6). Pieces split off
+ * it carry it too - they are still traced lines. */
+const FOUND_LINE_KEY = 'foundLine';
+
+const GUIDE_LINE_REFUSAL =
+  'This line was captured with guide points - its guide points are its record and the line between them is drawn from them, so it is edited through its guide points (Auto-extract ▸ Guide points), not cut, joined or moved.';
+
+/**
+ * What a piece split off a line inherits: what is true of every part of the
+ * line (its level, that Find lines traced it) - not what was true of the WHOLE
+ * line only (a curve fit to all of it, which error series it is, where its
+ * label sat). Audit D1.
+ */
+function pieceMetadata(meta: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const { curveFit: _cf, errorRelation: _er, contourLabelRead: _lr, ...rest } = meta as Record<string, unknown>;
+  void _cf;
+  void _er;
+  void _lr;
+  return { ...rest };
+}
+
 function pointRoleOf(r: unknown): PointRole | null {
   return r === 'anchor' || r === 'interpolated' || r === 'bridged' || r === 'shared' ? r : null;
 }
@@ -3675,6 +3696,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const reuse = k === 0 && active.getCount() === 0 && !active.hasSlots();
       const idx = reuse ? this.activeDatasetIndex : this.addDataset(nextLineName());
       if (reuse && /^Series \d+$/.test(active.name.trim())) active.name = nextLineName();
+      const ds = this.datasetEntries[idx]!.dataset;
+      ds.setMetadata({ ...ds.getMetadata(), [FOUND_LINE_KEY]: true });
       this.writeLinePoints(idx, pts);
       this.setDatasetColor(idx, SERIES_COLOR_PALETTE[idx % SERIES_COLOR_PALETTE.length]!);
       created.push(idx);
@@ -3690,8 +3713,31 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!entry || entry.dataset.hasSlots()) return null;
     return entry.dataset.getAllPixels().map((p) => {
       const r = p.metadata?.['role'];
-      return { x: p.x, y: p.y, role: r === 'bridged' || r === 'shared' ? r : null };
+      return {
+        x: p.x,
+        y: p.y,
+        role: r === 'bridged' || r === 'shared' ? r : null,
+        ...(p.metadata ? { meta: { ...p.metadata } } : {}),
+      };
     });
+  }
+
+  /**
+   * A line captured with GUIDE POINTS (its pixels carry anchor / interpolated
+   * roles). Its record is the guide points; the points between them are
+   * REGENERATED from those, so the line tools - Cut, Join, Move, closing, the
+   * Eraser box and a selection across lines - leave it alone (v2.6 audit A1).
+   * It is edited through its guide points, as it always was.
+   */
+  isGuidePointLine(index: number): boolean {
+    const entry = this.datasetEntries[index];
+    if (!entry) return false;
+    return entry.dataset.getAllPixels().some((p) => p.metadata?.['role'] === 'anchor' || p.metadata?.['role'] === 'interpolated');
+  }
+
+  /** Was this series made by Find lines (or split off one that was)? */
+  private isFoundLine(index: number): boolean {
+    return this.datasetEntries[index]?.dataset.getMetadata()[FOUND_LINE_KEY] === true;
   }
 
   private writeLinePoints(index: number, pts: readonly LinePoint[]): void {
@@ -3702,14 +3748,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const meta = ds.getMetadata();
     ds.clearAll();
     ds.setMetadata(meta);
-    for (const p of pts) ds.addPixel(p.x, p.y, p.role ? { role: p.role } : undefined);
+    // ⚑ Each point's OWN metadata goes back exactly as it was; a role the edit
+    // set (a new bridge) is written on top of it.
+    for (const p of pts) {
+      const m = { ...(p.meta ?? {}), ...(p.role ? { role: p.role } : {}) };
+      ds.addPixel(p.x, p.y, Object.keys(m).length ? m : undefined);
+    }
   }
 
   /** Close a line: it ends on its first point (S4 / C3), which is the only way
    * the record says "closed". A no-op on a line already closed. */
   closeLine(index: number): void {
     const pts = this.getLinePoints(index);
-    if (!pts || pts.length < 3 || isClosedLine(pts)) return;
+    if (!pts || pts.length < 3 || isClosedLine(pts) || this.isGuidePointLine(index)) return;
     this.writeLinePoints(index, [...pts, { ...pts[0]! }]);
   }
 
@@ -3732,6 +3783,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
   cutLineAt(index: number, pointIndex: number): string | null {
     const pts = this.getLinePoints(index);
     if (!pts) return 'Only a line can be cut.';
+    if (this.isGuidePointLine(index)) return GUIDE_LINE_REFUSAL;
     const closed = isClosedLine(pts);
     const parts = cutLine(pts, pointIndex);
     if (parts.length === 1 && !closed) return 'That is the end of the line - click where the line should be cut.';
@@ -3743,7 +3795,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const nd = this.datasetEntries[ni]!.dataset;
       const [r, g, b] = src.colorRGB.getRGB();
       nd.colorRGB = new Color(r, g, b);
-      nd.setMetadata({ ...src.getMetadata() });
+      nd.setMetadata(pieceMetadata(src.getMetadata()));
       this.writeLinePoints(ni, parts[1]!);
       this.switchActiveDataset(keepActive);
     }
@@ -3760,6 +3812,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (index === other) return 'Pick a different line to join with.';
     const a = this.getLinePoints(index), b = this.getLinePoints(other);
     if (!a || !b) return 'Only lines can be joined.';
+    if (this.isGuidePointLine(index) || this.isGuidePointLine(other)) return GUIDE_LINE_REFUSAL;
     const la = this.getContourLevel(index), lb = this.getContourLevel(other);
     if (la && lb && la.value !== lb.value) {
       return `These lines have different levels (${la.value} and ${lb.value}), so they cannot be one line. Change one of the levels first if one is wrong.`;
@@ -3782,6 +3835,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (from === to) return 0;
     const src = this.getLinePoints(from), dst = this.getLinePoints(to);
     if (!src || !dst) return 0;
+    if (this.isGuidePointLine(from) || this.isGuidePointLine(to)) return 0;
     const pick = new Set(pointIndices.filter((i) => i >= 0 && i < src.length));
     if (!pick.size) return 0;
     const moving = src.filter((_, i) => pick.has(i));
@@ -3823,34 +3877,54 @@ export class CalibrationSession<A extends CalibratedAxes> {
     for (const entry of [...this.datasetEntries]) {
       const index = this.datasetEntries.indexOf(entry);
       const orig = origIndex.get(entry)!;
+      if (this.isGuidePointLine(index)) continue; // edited through its guide points (A1)
       const pts = this.getLinePoints(index);
-      if (!pts || !pts.some((p, k) => remove(orig, k, p))) continue;
+      if (!pts) continue;
+      const hit = pts.map((p, k) => remove(orig, k, p));
+      const n = hit.filter(Boolean).length;
+      if (!n) continue;
+      removed += n;
+      // ⚑⚑ EXACTLY WHAT WAS CHOSEN GOES, and nothing else (audit A2). A series
+      // the user placed is never split and never loses a point they did not
+      // select. Only a line FIND LINES traced - pixel-dense - is split where a
+      // stretch is cut out of it, so no straight segment is drawn across the
+      // hole; a closed one OPENS at the hole rather than breaking in two.
+      if (!this.isFoundLine(index)) {
+        this.writeLinePoints(index, pts.filter((_, k) => !hit[k]));
+        if (!pts.some((_, k) => !hit[k]) && this.datasetEntries.length > 1) this.removeDataset(index);
+        continue;
+      }
+      let seq = pts.map((p, k) => ({ p, gone: hit[k]! }));
+      if (isClosedLine(pts)) {
+        // a ring: drop the closing repeat and start just after the first hole
+        seq = seq.slice(0, -1);
+        const firstGone = seq.findIndex((q) => q.gone);
+        let start = firstGone;
+        while (start < seq.length && seq[start]!.gone) start++;
+        seq = [...seq.slice(start), ...seq.slice(0, start)];
+      }
       const runs: LinePoint[][] = [];
       let run: LinePoint[] = [];
-      for (let k = 0; k < pts.length; k++) {
-        const p = pts[k]!;
-        if (remove(orig, k, p)) {
-          removed++;
+      for (const q of seq) {
+        if (q.gone) {
           if (run.length) runs.push(run);
           run = [];
-        } else run.push(p);
+        } else run.push(q.p);
       }
       if (run.length) runs.push(run);
-      const kept = runs.filter((r) => r.length >= 2);
-      removed += runs.filter((r) => r.length < 2).reduce((n, r) => n + r.length, 0);
-      if (!kept.length) {
+      if (!runs.length) {
         if (this.datasetEntries.length > 1) this.removeDataset(index);
         else this.writeLinePoints(index, []);
         continue;
       }
-      this.writeLinePoints(index, kept[0]!);
-      for (const part of kept.slice(1)) {
+      this.writeLinePoints(index, runs[0]!);
+      for (const part of runs.slice(1)) {
         const src = entry.dataset;
         const ni = this.addDataset(this.pieceName(src.name));
         const nd = this.datasetEntries[ni]!.dataset;
         const [r, g, b] = src.colorRGB.getRGB();
         nd.colorRGB = new Color(r, g, b);
-        nd.setMetadata({ ...src.getMetadata() });
+        nd.setMetadata(pieceMetadata(src.getMetadata()));
         this.writeLinePoints(ni, part);
       }
     }
@@ -3880,6 +3954,47 @@ export class CalibrationSession<A extends CalibratedAxes> {
       }
     });
     return best;
+  }
+
+  /**
+   * MOVE a selection that spans several lines (audit C4): every selected point
+   * goes to line `to` - each slotted in where it sits along it - the same set
+   * the screen rings, not only the active line's share. Points already on `to`
+   * stay. Returns how many moved.
+   */
+  moveSelectionToLine(selection: readonly { index: number; point: number }[], to: number): number {
+    const target = this.datasetEntries[to]?.dataset;
+    if (!target || !this.getLinePoints(to) || this.isGuidePointLine(to)) return 0;
+    const moving: LinePoint[] = [];
+    const from = selection.filter((s) => s.index !== to && !this.isGuidePointLine(s.index));
+    for (const s of from) {
+      const p = this.getLinePoints(s.index)?.[s.point];
+      if (p) moving.push(p);
+    }
+    if (!moving.length) return 0;
+    this.removeLinePoints(from);
+    const ti = this.datasetEntries.findIndex((e) => e.dataset === target);
+    const next = [...(this.getLinePoints(ti) ?? [])];
+    for (const p of moving) next.splice(insertionIndex(next, p), 0, { ...p });
+    this.writeLinePoints(ti, next);
+    return moving.length;
+  }
+
+  /**
+   * The found lines a second Find lines press REPLACES (audit C1): traced by
+   * Find lines (pieces split off one included), still under their own "Line N"
+   * name, and with no level the user gave them - a typed level, or a label read
+   * they chose to use. A line the user has worked on is theirs and stays.
+   */
+  replaceableFoundLines(): number[] {
+    return this.datasetEntries
+      .map((_, i) => i)
+      .filter((i) => {
+        if (!this.isFoundLine(i)) return false;
+        if (!/^Line \d+$/.test(this.datasetEntries[i]!.dataset.name.trim())) return false;
+        const lv = this.getContourLevel(i);
+        return !(lv && (lv.source === 'typed' || lv.source === 'label'));
+      });
   }
 
   /** What a contour line's label said, kept with the line as the evidence for
@@ -7660,6 +7775,14 @@ export class CalibrationSession<A extends CalibratedAxes> {
         this.categoryAxis.restoreTickParams(ticks, adjusted);
       }
     }
+    // v2.6 (audit B3): a masked area is pixels too - it moves with the image,
+    // or Find lines would bridge across a part of the figure nobody masked
+    this.notDataRegions = this.notDataRegions.map((r) => {
+      const cs = [map(r.x, r.y), map(r.x + r.width, r.y), map(r.x, r.y + r.height), map(r.x + r.width, r.y + r.height)];
+      const xs = cs.map((c) => c.x), ys = cs.map((c) => c.y);
+      const x0 = Math.min(...xs), y0 = Math.min(...ys);
+      return { x: x0, y: y0, width: Math.max(...xs) - x0, height: Math.max(...ys) - y0 };
+    });
     for (const entry of this.datasetEntries) {
       entry.dataset.getAllPixels().forEach((pt, i) => {
         const m = map(pt.x, pt.y);

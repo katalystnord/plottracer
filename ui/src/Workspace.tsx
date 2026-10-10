@@ -1400,17 +1400,13 @@ export function Workspace() {
   // with the Select tool's box gesture. Cleared via the ✕ button.
   const [colorTraceRegion, setColorTraceRegion] = useState<FilterRegion | null>(null);
   // Find lines (v2.6) - declared here, beside the trace region, because the
-  // figure-switch resets below clear them too.
+  // figure-switch reset (resetPerFigureUI) and the undo sync (syncAfterRestore)
+  // below clear the places and the notices.
   const [findLinesBusy, setFindLinesBusy] = useState<string | null>(null);
   const [findLinesSummary, setFindLinesSummary] = useState<string | null>(null);
   const [fillLevelsNotice, setFillLevelsNotice] = useState<string | null>(null);
   const [linePlaces, setLinePlaces] = useState<readonly LinePlace[]>([]);
   const [joinNotice, setJoinNotice] = useState<string | null>(null);
-  /** Names of the series the last Find lines press made, so a second press
-   * (after marking a legend, or repicking the colour) REPLACES them rather than
-   * stacking a second set on top. A line the user renamed is no longer in this
-   * list by name, so it is kept. */
-  const [lastFound, setLastFound] = useState<readonly string[]>([]);
   // Live colour-match PREVIEW (checkpoint 121): while the Auto-trace panel is
   // open, an overlay on the canvas shows exactly which pixels the current colour +
   // tolerance would capture, so the user sees a grid/axis grab BEFORE tracing --
@@ -3104,6 +3100,12 @@ export function Workspace() {
     // into a session that no longer holds the bars it was measured against -
     // through the ordinary capture path, so nothing downstream would look wrong.
     setHeldBackBars([]);
+    // ⚑ ...and Find lines' list of places and its notices (audit C2): they
+    // describe a result the restore may have rolled away
+    setLinePlaces([]);
+    setFindLinesSummary(null);
+    setFillLevelsNotice(null);
+    setJoinNotice(null);
     const cf = getCurveFitState(s.getDataset());
     setCurveFitDegree(cf ? cf.degree : 1);
     setCurveFitModel(cf?.model ?? 'polynomial');
@@ -3127,6 +3129,8 @@ export function Workspace() {
     // "any bar-family type": Bar itself now offers color-trace (bounding-box
     // detection), so it alone must NOT be kicked out of that one mechanism.
     setMode((m) => (AUTO_EXTRACT_MODES.includes(m) && !autoExtractModesFor(s.getConfig().autoExtractKind, s.getConfig().id).includes(m) ? 'place-point' : m));
+    // Cut exists only where lines are the record (audit D7)
+    setMode((m) => (m === 'cut' && !findLinesKind(s.getConfig().id) ? 'place-point' : m));
   }, []);
 
   // --- Import another digitizer's project ---------------------------------
@@ -3208,8 +3212,10 @@ export function Workspace() {
       setActivePointIndex(null);
       setSelectedPointIndices([]); setLineSelection([]);
       setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
-      setLastFound([]);
       setLinePlaces([]);
+      setFindLinesSummary(null);
+      setFillLevelsNotice(null);
+      setJoinNotice(null);
       // ⚑ ...and so are shapes the OUTGOING figure's trace held back. They are
       // image pixels of a picture that is no longer on screen, and the offer
       // that takes them back would file them into this figure's record.
@@ -3351,11 +3357,17 @@ export function Workspace() {
     },
     [applyMeasurements, applyMeasureScale, applyProvenance, restoreHeatmapGrid, setPending, setColorTraceRegion, syncAfterRestore, bump]
   );
+  // ⚑ Undo/redo wait while Find lines is reading labels (audit B2): its result
+  // is applied in one step when the reads are in, and an undo underneath it
+  // would roll back a step the user did not mean to.
+  const findLinesBusyRef = useRef(false);
   const undo = useCallback(() => {
+    if (findLinesBusyRef.current) return;
     const snapshot = history.undo();
     if (snapshot) restoreDoc(snapshot);
   }, [history, restoreDoc]);
   const redo = useCallback(() => {
+    if (findLinesBusyRef.current) return;
     const snapshot = history.redo();
     if (snapshot) restoreDoc(snapshot);
   }, [history, restoreDoc]);
@@ -3620,7 +3632,6 @@ export function Workspace() {
       // (2026-07-22 audit A1).
       setColorTraceRegion(null);
       // ...and so is Find lines' memory of what it found, and where to check (v2.6)
-      setLastFound([]);
       setLinePlaces([]);
       // ⚑ The import notice describes the project that was OPENED. A new session
       // means that figure is gone, and a true sentence about the wrong subject is
@@ -4235,13 +4246,18 @@ export function Workspace() {
   const selectAcrossLines = useCallback(
     (inside: (p: { x: number; y: number }) => boolean): boolean => {
       if (!findLinesKind(session.getConfig().id)) return false;
+      const active = session.getActiveDatasetIndex();
+      // ⚑ The active series decides (audit B1): one with error bars, or one
+      // captured with guide points, is not a plain line - Select works on it
+      // exactly as it always did, through the ordinary path.
+      if (!session.getLinePoints(active) || session.isGuidePointLine(active)) return false;
       const sel: { index: number; point: number }[] = [];
       for (const info of session.getDatasetInfos()) {
+        if (session.isGuidePointLine(info.index)) continue;
         (session.getLinePoints(info.index) ?? []).forEach((p, k) => {
           if (inside(p)) sel.push({ index: info.index, point: k });
         });
       }
-      const active = session.getActiveDatasetIndex();
       setLineSelection(sel);
       setSelectedPointIndices(sel.filter((x) => x.index === active).map((x) => x.point));
       setActivePointIndex(null);
@@ -6475,10 +6491,34 @@ export function Workspace() {
       setFindLinesSummary('No line of that colour was found inside the plot box. Repick the colour from a line.');
       return;
     }
-    // a second press REPLACES what the first one found (see `lastFound`); the
-    // figure always keeps one series, so the last one is emptied, not removed
-    const stale = session.getDatasetInfos().filter((i) => lastFound.includes(i.name)).map((i) => i.index).sort((x, y) => y - x);
-    for (const i of stale) {
+    // ⚑⚑ READ EVERY LABEL BEFORE CHANGING ANYTHING (audit B2). The reads are
+    // slow; the result is applied in ONE step once they are in, so nothing the
+    // user does meanwhile can be overwritten or recorded half-done. If the
+    // figure changed under it, the result is dropped, not written elsewhere.
+    const hasKey = kind === 'contours' && session.getOptions()['hasColourKey'] === 'true';
+    const slots = kind === 'contours' && !hasKey ? labelSlots(res.lines, res.labelInk, res.lineWidth) : [];
+    const raw: { text: string; confidence: number | null }[] = [];
+    findLinesBusyRef.current = true;
+    try {
+      for (let i = 0; i < slots.length; i++) {
+        setFindLinesBusy(`Reading labels ${i + 1} of ${slots.length}…`);
+        const r = await readLabelCrop(slotCrop(imageData.data, imageData.width, imageData.height, slots[i]!));
+        raw.push(isOcrFailure(r) ? { text: '', confidence: null } : r);
+        if (sessionRef.current !== session) break;
+      }
+    } finally {
+      findLinesBusyRef.current = false;
+    }
+    if (sessionRef.current !== session) {
+      setFindLinesBusy(null);
+      setFindLinesSummary(null);
+      return;
+    }
+    const reads = readSlots(raw);
+    // a second press REPLACES what the last one found (audit C1: by what the
+    // lines ARE, not by remembered names); the figure always keeps one series,
+    // so the last one is emptied, not removed
+    for (const i of [...session.replaceableFoundLines()].sort((x, y) => y - x)) {
       if (session.getDatasetInfos().length > 1) session.removeDataset(i);
       else {
         session.setActiveDataset(i);
@@ -6486,7 +6526,6 @@ export function Workspace() {
       }
     }
     const created = session.addFoundLines(res.lines.map((L) => thinFoundLine(L.points, L.roles)));
-    setLastFound(created.map((i) => session.getDatasetInfos()[i]!.name));
     const fromKey = readLevelsFromKey();
     const nameOf = (k: number): string => session.getDatasetInfos()[created[k]!]?.name ?? `line ${k + 1}`;
     const places: LinePlace[] = [];
@@ -6499,35 +6538,26 @@ export function Workspace() {
     };
     for (const pl of res.places) places.push({ id: places.length, kind: pl.kind, at: pl.at, text: placeText(pl) });
     let read = 0, notRead = 0;
-    if (kind === 'contours') {
-      const slots = labelSlots(res.lines, res.labelInk, res.lineWidth);
-      const raw: { text: string; confidence: number | null }[] = [];
-      for (let i = 0; i < slots.length; i++) {
-        setFindLinesBusy(`Reading labels ${i + 1} of ${slots.length}…`);
-        const r = await readLabelCrop(slotCrop(imageData.data, imageData.width, imageData.height, slots[i]!));
-        raw.push(isOcrFailure(r) ? { text: '', confidence: null } : r);
+    res.lines.forEach((_, k) => {
+      const mine = slots.map((sl, i) => ({ sl, r: reads[i]! })).filter((x) => x.sl.line === k);
+      if (!mine.length) return;
+      const at = (sl: (typeof slots)[number]): [number, number] => [(sl.p0[0] + sl.p1[0]) / 2, (sl.p0[1] + sl.p1[1]) / 2];
+      const ok = mine.filter((x) => x.r.value !== null);
+      const vals = [...new Set(ok.map((x) => x.r.value!))];
+      let lr: LabelRead;
+      if (vals.length === 1) lr = { text: ok[0]!.r.text, value: vals[0]!, refused: null, at: at(ok[0]!.sl) };
+      else if (vals.length > 1) lr = { text: ok.map((x) => x.r.text).join(' / '), value: null, refused: `its labels read ${vals.join(' and ')}`, at: at(ok[0]!.sl) };
+      else lr = { text: mine[0]!.r.text, value: null, refused: mine[0]!.r.refused, at: at(mine[0]!.sl) };
+      session.setLabelRead(created[k]!, lr);
+      if (lr.value !== null) read++;
+      else {
+        notRead++;
+        places.push({ id: places.length, kind: 'label', at: lr.at, text: `${nameOf(k)}: the label ${lr.text ? `read as “${lr.text}”` : 'could not be read'} was not used${lr.refused ? ` - ${lr.refused}` : ''}. Type its level.` });
       }
-      const reads = readSlots(raw);
-      res.lines.forEach((_, k) => {
-        const mine = slots.map((sl, i) => ({ sl, r: reads[i]! })).filter((x) => x.sl.line === k);
-        if (!mine.length) return;
-        const at = (sl: (typeof slots)[number]): [number, number] => [(sl.p0[0] + sl.p1[0]) / 2, (sl.p0[1] + sl.p1[1]) / 2];
-        const ok = mine.filter((x) => x.r.value !== null);
-        const vals = [...new Set(ok.map((x) => x.r.value!))];
-        let lr: LabelRead;
-        if (vals.length === 1) lr = { text: ok[0]!.r.text, value: vals[0]!, refused: null, at: at(ok[0]!.sl) };
-        else if (vals.length > 1) lr = { text: ok.map((x) => x.r.text).join(' / '), value: null, refused: `its labels read ${vals.join(' and ')}`, at: at(ok[0]!.sl) };
-        else lr = { text: mine[0]!.r.text, value: null, refused: mine[0]!.r.refused, at: at(mine[0]!.sl) };
-        session.setLabelRead(created[k]!, lr);
-        if (lr.value !== null) read++;
-        else {
-          notRead++;
-          places.push({ id: places.length, kind: 'label', at: lr.at, text: `${nameOf(k)}: the label ${lr.text ? `read as “${lr.text}”` : 'could not be read'} was not used${lr.refused ? ` - ${lr.refused}` : ''}. Type its level.` });
-        }
-      });
-    }
+    });
     const gaps = res.lines.reduce((n, L) => n + L.gaps.length, 0);
     setLinePlaces(places);
+    setSelectedPointIndices([]); setLineSelection([]);
     setFindLinesSummary(
       `${res.lines.length} line${res.lines.length === 1 ? '' : 's'} found, ${gaps} gap${gaps === 1 ? '' : 's'} bridged` +
         (fromKey ? `; levels read off the colour key on ${fromKey.set} line${fromKey.set === 1 ? '' : 's'}${fromKey.offKey ? `, ${fromKey.offKey} not on the key` : ''}` : '') +
@@ -6537,7 +6567,7 @@ export function Workspace() {
     );
     setFindLinesBusy(null);
     commit();
-  }, [session, colorTraceColor, commit, readLevelsFromKey, lastFound, setLastFound, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice]);
+  }, [session, colorTraceColor, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices]);
 
   /** C4: unset contour levels filled in from the ones the user has set, in equal
    * steps between them - refused, and saying why, where the levels are uneven. */
@@ -6597,7 +6627,7 @@ export function Workspace() {
       }
       const hit = best as { ds: number; i: number; d: number } | null;
       if (!hit || hit.d > 12) {
-        setProjectError('Click ON a line to cut it there.');
+        setProjectError('Click ON a line to cut it there. (A series with error bars has no line to cut.)');
         return;
       }
       const refusal = session.cutLineAt(hit.ds, hit.i);
@@ -6623,6 +6653,9 @@ export function Workspace() {
         bump();
         return;
       }
+      // a removed series shifts every index after it (audit C3)
+      setSelectedPointIndices([]); setLineSelection([]);
+      setActivePointIndex(null);
       commit();
     },
     [session, commit, bump]
@@ -6631,12 +6664,15 @@ export function Workspace() {
   /** K4: move the selected points of the active line to another line. */
   const handleMovePoints = useCallback(
     (to: number) => {
-      const moved = session.movePointsToLine(session.getActiveDatasetIndex(), selectedPointIndices, to);
+      // the whole selection the screen rings - every line's share (audit C4)
+      const moved = lineSelection.length
+        ? session.moveSelectionToLine(lineSelection, to)
+        : session.movePointsToLine(session.getActiveDatasetIndex(), selectedPointIndices, to);
       if (!moved) return;
-      setSelectedPointIndices([]); setLineSelection([]);
+      setSelectedPointIndices([]); setLineSelection([]); setLineSelection([]);
       commit();
     },
-    [session, selectedPointIndices, commit]
+    [session, selectedPointIndices, lineSelection, commit]
   );
 
   /** K1: take the view to a place to check, and make the line there active. */
@@ -6652,6 +6688,9 @@ export function Workspace() {
       }
       const hit = best as { ds: number; d: number } | null;
       if (hit) session.setActiveDataset(hit.ds);
+      // indices of the previous line mean nothing on this one (audit C3)
+      setSelectedPointIndices([]); setLineSelection([]);
+      setActivePointIndex(null);
       bump();
     },
     [session, bump]
@@ -6717,7 +6756,7 @@ export function Workspace() {
       // new active index still rides along in the next real action's snapshot.
       session.setActiveDataset(index);
       setActivePointIndex(null); // selection is per-series; clear on switch
-      setSelectedPointIndices([]); setLineSelection([]); // the marquee set indexes the OLD series -- clear it, or Del would act on the new one
+      setSelectedPointIndices([]); setLineSelection([]); // the marquee set indexes the OLD series - clear it, or Del would act on the new one
       setNameDraft(null); // a half-typed name belongs to the series it was typed on
       setNameNotice(null);
       // The Closed-curve toggle is per-series: reload it from the new series'
@@ -9471,7 +9510,8 @@ export function Workspace() {
             icon={<EraseIcon />}
             label={findLinesKind(config.id) ? 'Erase - click a point, or drag a box over wrong bits to remove them from every line' : 'Erase a point - click a point to remove it'}
             pressed={mode === 'eraser'}
-            disabled={toolDisabled('eraser', dataPoints.length === 0)}
+            // its box erases on EVERY line, so any points anywhere enable it (audit D7)
+            disabled={toolDisabled('eraser', dataPoints.length === 0 && !datasetInfos.some((d) => d.pointCount > 0))}
             disabledReason={toolReason('eraser', 'Add data points first')}
             onClick={() => setMode('eraser')}
           />
@@ -9603,7 +9643,7 @@ export function Workspace() {
                       busy: findLinesBusy,
                       summary: findLinesSummary,
                       onFind: () => void handleFindLines(),
-                      replaces: datasetInfos.filter((i) => lastFound.includes(i.name) && i.pointCount > 0).length,
+                      replaces: session.replaceableFoundLines().length,
                       ...(findLinesKind(config.id) === 'contours' ? { onFillLevels: handleFillLevels } : {}),
                       ...(config.id === 'contour' && session.getOptions()['hasColourKey'] === 'true'
                         ? {
@@ -10445,7 +10485,7 @@ export function Workspace() {
                 {/* Move (v2.6, K4): the selected points to another line. Shown
                     while points are selected on a line type - the selection the
                     Select tool already makes. */}
-                {findLinesKind(config.id) && selectedPointIndices.length > 0 && session.getLinePoints(activeDatasetIndex) && datasetInfos.length > 1 && (
+                {findLinesKind(config.id) && (selectedPointIndices.length > 0 || lineSelection.length > 0) && session.getLinePoints(activeDatasetIndex) && datasetInfos.length > 1 && (
                   <select
                     data-testid="move-points-to"
                     value=""
@@ -10455,7 +10495,7 @@ export function Workspace() {
                     }}
                     style={{ fontSize: theme.font.size.small }}
                   >
-                    <option value="">Move {selectedPointIndices.length} selected to…</option>
+                    <option value="">Move {Math.max(selectedPointIndices.length, lineSelection.length)} selected to…</option>
                     {datasetInfos.filter((i) => i.index !== activeDatasetIndex && session.getLinePoints(i.index) !== null).map((i) => (
                       <option key={i.index} value={i.index}>{i.name}</option>
                     ))}

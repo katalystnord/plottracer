@@ -22,6 +22,11 @@ export interface LinePoint {
   x: number;
   y: number;
   role: LinePointRole;
+  /** The point's whole per-pixel metadata as the series holds it, carried
+   * through every edit so nothing a point says about itself is lost (v2.6
+   * audit A1: a rewrite from `role` alone stripped a Guide-points line's
+   * anchor / interpolated roles, so spline points exported as measured). */
+  meta?: Record<string, unknown>;
 }
 
 /** True when the line ends on its first point. */

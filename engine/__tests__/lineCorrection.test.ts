@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, type CalibratedAxes } from '../calibrationSession.js';
-import { CONTOUR_AXES_CONFIG } from '../axesTypeConfigs.js';
+import { CONTOUR_AXES_CONFIG, XY_AXES_CONFIG } from '../axesTypeConfigs.js';
 import { buildExportSections, type ExportAssemblyInput } from '../exportAssembly.js';
 import { serializeProject, deserializeProject } from '../projectFile.js';
 import type { LinePoint } from '../lineEdits.js';
@@ -231,13 +231,76 @@ describe('erasing wrong bits with a box (David, 2026-10-10)', () => {
 });
 
 describe('a selection across several lines (David, 2026-10-10: "if there is more than one ... it also refuses")', () => {
-  it('points selected on several lines are removed from all of them at once, each line split where needed', () => {
+  it('points selected on several lines are removed from all of them at once - exactly those points', () => {
     const s = calibrated();
     s.addFoundLines([line([[120, 200], [140, 200], [160, 200], [180, 200]]), line([[120, 230], [140, 230], [160, 230]])]);
-    expect(s.removeLinePoints([{ index: 0, point: 1 }, { index: 1, point: 2 }])).toBe(3);
-    // line 0 lost its 2nd point: [120] alone is dropped, [160,180] remains; line 1 lost its last
+    expect(s.removeLinePoints([{ index: 0, point: 1 }, { index: 1, point: 2 }])).toBe(2);
+    // line 0 (found) is split at the hole, its one-point leftover KEPT; line 1 lost its last point
     const lines = s.getDatasetInfos().map((i) => s.getLinePoints(i.index)!.map((p) => p.x));
+    expect(lines).toContainEqual([120]);
     expect(lines).toContainEqual([160, 180]);
     expect(lines).toContainEqual([120, 140]);
+  });
+});
+
+describe('v2.6 audit A1/A2: a line edit keeps what each point is, and removes exactly what was chosen', () => {
+  function xy(): CalibrationSession<CalibratedAxes> {
+    const s = new CalibrationSession<CalibratedAxes>(XY_AXES_CONFIG as never);
+    for (const [px, py, v] of [[100, 250, '0'], [400, 250, '10'], [100, 250, '0'], [100, 100, '10']] as const) {
+      s.handleCalibrationClick(px, py);
+      s.confirmCalibrationValues([v]);
+    }
+    expect(s.runCalibration()).toBe(true);
+    return s;
+  }
+  const roles = (s: CalibrationSession<CalibratedAxes>, i: number) => s.getDataPointRolesFor(i);
+
+  it('A1 a Guide-points line is left alone by the Eraser box - its anchor and interpolated points keep their roles', () => {
+    const s = xy();
+    for (const [x, y] of [[120, 200], [200, 150], [300, 180], [380, 220]] as const) s.addAnchorPoint(x, y);
+    const before = roles(s, 0);
+    expect(before.filter((r) => r === 'interpolated').length).toBeGreaterThan(10);
+    s.eraseLinesInRect({ x: 190, y: 140, width: 30, height: 30 });
+    expect(roles(s, 0)).toEqual(before);
+  });
+
+  it('A1 Cut, Join and closing refuse a Guide-points line, and say why', () => {
+    const s = xy();
+    for (const [x, y] of [[120, 200], [200, 150], [300, 180], [380, 220]] as const) s.addAnchorPoint(x, y);
+    expect(s.cutLineAt(0, 10)).toMatch(/guide points/i);
+    s.addDataset();
+    for (const [x, y] of [[120, 230], [160, 230]] as const) s.addDataPoint(x, y);
+    expect(s.joinLines(1, 0)).toMatch(/guide points/i);
+    const before = roles(s, 0);
+    s.closeLine(0);
+    expect(roles(s, 0)).toEqual(before);
+  });
+
+  it('A2 deleting the middle of three hand-placed points leaves the other two, in one series', () => {
+    const s = xy();
+    for (const [x, y] of [[120, 200], [200, 150], [300, 180]] as const) s.addDataPoint(x, y);
+    expect(s.removeLinePoints([{ index: 0, point: 1 }])).toBe(1);
+    expect(s.getDatasetInfos().length).toBe(1);
+    expect(s.getLinePoints(0)!.map((p) => p.x)).toEqual([120, 300]);
+  });
+
+  it('A2 a found line is split at the hole, and a one-point leftover is kept, not dropped', () => {
+    const s = xy();
+    s.addFoundLines([line([[120, 200], [140, 200], [160, 200], [180, 200], [200, 200]])]);
+    expect(s.removeLinePoints([{ index: 0, point: 1 }])).toBe(1);
+    const parts = s.getDatasetInfos().map((i) => s.getLinePoints(i.index)!.map((p) => p.x));
+    expect(parts).toContainEqual([120]);
+    expect(parts).toContainEqual([160, 180, 200]);
+  });
+
+  it('A2 erasing part of a closed found line OPENS it - one line, not two', () => {
+    const s = calibrated();
+    s.addFoundLines([RING]);
+    s.eraseLinesInRect({ x: 275, y: 170, width: 10, height: 10 }); // the point at (280,175)
+    expect(s.getDatasetInfos().length).toBe(1);
+    const p = s.getLinePoints(0)!;
+    expect(p.length).toBe(5);
+    expect(p[0]).toEqual({ x: 280, y: 205, role: null });
+    expect(p[p.length - 1]).toEqual({ x: 250, y: 160, role: null });
   });
 });
