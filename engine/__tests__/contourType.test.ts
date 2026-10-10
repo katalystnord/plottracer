@@ -144,7 +144,7 @@ describe('v2.6 contour - the record', () => {
   // that: a click on the start point again is slotted in beside it by the
   // insertion rule, and a traced loop's two ends land 9-14 px apart while a
   // single traced dash can have its ends 3.6 px apart - so no distance rule can
-  // tell closed from open (research/v2.6-today/, 2026-10-07). How a line becomes
+  // tell closed from open (plottracer-ref research/v2.6-today/, 2026-10-07). How a line becomes
   // closed is David's to decide; until then this case is named, not passed.
   it.todo('C3 a closed contour is exported ending on its first point, as R and matplotlib store it');
 

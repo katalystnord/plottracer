@@ -1518,7 +1518,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
  *
  * ⚑ EVERYTHING ELSE IS XY'S, by spread rather than by copy, so the calibration,
  * its guards and the capture tools cannot drift apart. Measured 2026-10-07
- * (research/v2.6-today/): today's Flood-fill, By colour and Guide points
+ * (plottracer-ref research/v2.6-today/): today's Flood-fill, By colour and Guide points
  * already capture each contour line; what was missing was the level.
  * Curve fit and geometry are off: a contour line is not a function to fit, and
  * its area is the reader's business, not the record's.
