@@ -42,7 +42,7 @@ import { colourMeasureReading } from '../../engine/colourMeasure.js';
 import type { MeasurementCsvRow } from '../../engine/csvExport.js';
 import { resolveKeyDown, isNudgeRelease } from '../../engine/keyboardActions.js';
 import { routeCanvasClick, indexOfPlacedPoint } from '../../engine/canvasClickRoute.js';
-import { samplePixelRgb } from '../../algorithms/samplePixel.js';
+import { samplePixelRgb, sampleInkRgb } from '../../algorithms/samplePixel.js';
 import { exportBaseName as baseNameForExport, EXPORT_FILTER_NAMES } from '../../engine/exportNaming.js';
 import {
   colorTraceRefusal,
@@ -3915,7 +3915,9 @@ export function Workspace() {
             // ⚑ One sampler, three callers (v2.3, theme G): this, the Colour
             // measurement, and whatever comes next. The CLAMP is the part that
             // must not be forgotten, and it was written out by hand each time.
-            const rgb = samplePixelRgb(imageData, px, py);
+            // Find lines needs the line's INK, and the pixel under a pipette on a
+            // thin line is usually a pale edge - see sampleInkRgb.
+            const rgb = route.target === 'trace' && mode === 'find-lines' ? sampleInkRgb(imageData, px, py) : samplePixelRgb(imageData, px, py);
             if (route.target === 'grid') {
               setGridRemovalColor(rgbToHex(rgb));
             } else if (route.target === 'trace') {
@@ -10090,13 +10092,6 @@ export function Workspace() {
           : {})}
       />
 
-      <PlacesToCheck
-        places={linePlaces}
-        onGo={goToPlace}
-        onDone={(id) => setLinePlaces((ps) => ps.filter((p) => p.id !== id))}
-        onClear={() => setLinePlaces([])}
-      />
-
 
 
       {/* Segment-fill controls (threshold/error) moved into the Auto-extract
@@ -10551,6 +10546,17 @@ export function Workspace() {
           </SidebarSection>
         </>
       )}
+
+      {/* Places to check (v2.6, K1) sits BELOW the data it is about: the data is
+          what the user came for, the places are a checklist on it (David,
+          2026-10-10, on the built app: "should the warnings not sit below the
+          data out?"). */}
+      <PlacesToCheck
+        places={linePlaces}
+        onGo={goToPlace}
+        onDone={(id) => setLinePlaces((ps) => ps.filter((p) => p.id !== id))}
+        onClear={() => setLinePlaces([])}
+      />
 
       {/* Measurements OUTPUT (v1.1 step 2): the recorded measurements moved here
           from the Measure fold-out -- a tool fold-out holds inputs only, results

@@ -11910,10 +11910,24 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('auto-extract-find').click();
     expect(await textOf('tips-bar')).toMatch(/pick the lines’ colour/);
     expect(await textOf('find-lines-first-version')).toBe('first version');
-    await page.getByTestId('color-trace-color').fill('#222222');
+    // Pick the colour the way the card says - with the pipette, on a line. The
+    // click lands a pixel off the line's centre, where an anti-aliased line is
+    // a pale grey edge (David picked #b3b3b3 that way on the built app); the
+    // pick must still be the line's ink.
+    const a0 = truth.calibration.anchors;
+    const p0 = truth.series[0]!.points[5]!;
+    const px0 = a0.x1.px + (p0.x - a0.x1.value) * ((a0.x2.px - a0.x1.px) / (a0.x2.value - a0.x1.value));
+    const py0 = a0.y1.py + (p0.y - a0.y1.value) * ((a0.y2.py - a0.y1.py) / (a0.y2.value - a0.y1.value));
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(px0 + 1, py0 + 1);
+    await expect.poll(() => page.getByTestId('color-trace-color').inputValue(), { timeout: 5000 }).toMatch(/^#[0-3][0-9a-f][0-3][0-9a-f][0-3][0-9a-f]$/i);
     await page.getByTestId('find-lines-run').click();
     await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 120000 }).toMatch(/7 lines found/);
     expect(await seriesCount()).toBe(7);
+    // Places to check sits BELOW the data it is about (David, 2026-10-10)
+    const dataBox = await page.getByTestId('data-points-panel').boundingBox();
+    const placesCount = await page.getByTestId('places-to-check').count();
+    if (placesCount) expect((await page.getByTestId('places-to-check').boundingBox())!.y).toBeGreaterThan(dataBox!.y);
     expect(await textOf('find-lines-summary')).toMatch(/Undo removes the whole result/);
 
     // A read label is OFFERED beside the Level field, and one press uses it.
