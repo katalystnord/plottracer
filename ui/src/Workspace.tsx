@@ -1411,8 +1411,6 @@ export function Workspace() {
    * stacking a second set on top. A line the user renamed is no longer in this
    * list by name, so it is kept. */
   const [lastFound, setLastFound] = useState<readonly string[]>([]);
-  /** The "Leave out a region" drag is armed (one box per press). */
-  const [leavingOut, setLeavingOut] = useState(false);
   // Live colour-match PREVIEW (checkpoint 121): while the Auto-trace panel is
   // open, an overlay on the canvas shows exactly which pixels the current colour +
   // tolerance would capture, so the user sees a grid/axis grab BEFORE tracing --
@@ -2002,7 +2000,16 @@ export function Workspace() {
       const masked = maskRegion(img.data, img.width, img.height, cropRect);
       setCropMode(false);
       setCropRect(null);
-      if (masked) applyPixelTransform(masked, false);
+      if (masked) {
+        // ⚑ AND IT REMEMBERS WHERE (v2.6). Painting the area out is what every
+        // reader needs; Find lines also needs to know WHERE it was, so a line
+        // passing behind a masked legend can be bridged across it (N4) rather
+        // than stopping at its edge. Recorded before the transform so the
+        // undoable snapshot it captures carries it.
+        const c = clampCropRect(cropRect, img.width, img.height);
+        if (c) sessionRef.current.setNotDataRegions([...sessionRef.current.getNotDataRegions(), c]);
+        applyPixelTransform(masked, false);
+      }
       return;
     }
     const clamped = clampCropRect(cropRect, img.width, img.height);
@@ -9612,15 +9619,6 @@ export function Workspace() {
                           }
                         : {}),
                       fillNotice: fillLevelsNotice,
-                      masks: {
-                        count: session.getNotDataRegions().length,
-                        armed: leavingOut,
-                        onArm: () => setLeavingOut((v) => !v),
-                        onRemove: (i: number) => {
-                          session.setNotDataRegions(session.getNotDataRegions().filter((_, k) => k !== i));
-                          commit();
-                        },
-                      },
                     },
                   }
                 : {})}
@@ -9754,7 +9752,7 @@ export function Workspace() {
           // active, EXCEPT while the eyedropper is armed (that click samples a
           // colour). A bare click in this mode is already a no-op (see
           // handleImageClick), so an always-live drag clobbers nothing.
-          regionMode={(mode === 'color-trace' || (mode === 'find-lines' && leavingOut) || (mode === 'eraser' && !!findLinesKind(config.id))) && eyedropper === null}
+          regionMode={(mode === 'color-trace' || (mode === 'eraser' && !!findLinesKind(config.id))) && eyedropper === null}
           // v2.0 pre-launch audit: the click-vs-drag guard (a zero-area region
           // would match nothing) is now ImageCanvas.tsx's own job, consolidated
           // with crop/select's identical guard -- see its endDrag comment.
@@ -9765,16 +9763,8 @@ export function Workspace() {
               else bump();
               return;
             }
-            if (mode === 'find-lines') {
-              // a box drawn after "Leave out a region": not data, saved with the figure
-              session.setNotDataRegions([...session.getNotDataRegions(), r]);
-              setLeavingOut(false);
-              commit();
-              return;
-            }
             setColorTraceRegion(r);
           }}
-          notDataRects={mode === 'find-lines' ? session.getNotDataRegions() : null}
           // a selection across lines: the points selected on lines other than the
           // active one, ringed exactly as a selected point of the active line is
           extraSelected={

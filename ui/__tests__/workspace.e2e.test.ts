@@ -11971,7 +11971,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(async () => Number(((await page.getByTestId('series-select').locator('option').first().textContent()) ?? '').match(/\((\d+)\)\s*$/)?.[1]), { timeout: 5000 }).toBe(clicks + 1);
   }, 120000);
 
-  it('N4 a legend marked with "Leave out a region" is left out of the lines found', async () => {
+  it('N4 a legend masked with Image ▸ Mask an area is left out of the lines found', async () => {
     const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
       calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
       series: { points: { x: number; y: number }[] }[];
@@ -12008,9 +12008,11 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(found, { timeout: 60000 }).toBeGreaterThan(0);
     const without = await found();
 
-    // The card names the gesture, and says what the box does, before it is drawn.
-    await page.getByTestId('find-lines-leave-out').click();
-    expect(await textOf('find-lines-leave-out-prompt')).toMatch(/Drag a box over a legend/);
+    // The card points at the mask the app already has (v2.5's Image ▸ Mask an
+    // area) - one gesture for every reader, and Find lines remembers where it is.
+    expect(await textOf('find-lines-mask-hint')).toMatch(/Image ▸ Mask an area/);
+    await page.getByTestId('mode-image-edit').click();
+    await page.getByTestId('image-edit-mask').click();
     // the legend, measured from an identical re-render of the example (plottracer-ref)
     const p0 = await imageToLocal(716, 538);
     const p1 = await imageToLocal(872, 634);
@@ -12020,8 +12022,10 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.mouse.move(canvasBox.x + (p0.lx + p1.lx) / 2, canvasBox.y + (p0.ly + p1.ly) / 2, { steps: 4 });
     await page.mouse.move(canvasBox.x + p1.lx, canvasBox.y + p1.ly, { steps: 4 });
     await page.mouse.up();
-    await expect.poll(() => page.getByTestId('find-lines-mask-remove-0').count(), { timeout: 5000 }).toBe(1);
-    expect(await page.getByTestId('find-lines-leave-out-prompt').count(), 'one box per press').toBe(0);
+    await page.getByTestId('crop-apply').click();
+    await page.waitForTimeout(200);
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
 
     // a second press says it replaces the first press's lines - and does
     expect(await textOf('find-lines-run')).toBe('Find lines again');

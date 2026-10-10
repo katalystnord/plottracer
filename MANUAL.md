@@ -159,10 +159,9 @@ Several ways, depending on the figure - all on the left rail:
     makes it the level (exported as `Level from: label`). It is offered, not
     written in, because the reader gets some labels wrong. **Fill in the other
     levels** then fills unset lines in equal steps from the ones you set, and says
-    so if the levels are uneven. **Leave out a region…** marks a legend (or
-    anything that is not data): drag a box over it and it is drawn hatched, left
-    out of every search, and saved with the figure; a line passing behind it may
-    be bridged across. Pressing **Find lines again** replaces the lines the last
+    so if the levels are uneven. A legend inside the plot: mask it first with
+    **Image ▸ Mask an area** - every reader then leaves it out, and Find lines
+    also bridges a line that passes behind it. Pressing **Find lines again** replaces the lines the last
     press found (a line you renamed is kept). Where Find lines is unsure it does **not** guess:
     it leaves the pieces apart and lists the place under **Places to check**.
   - **Flood-fill** - click one point on a solid curve; it traces the connected line.

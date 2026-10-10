@@ -84,13 +84,6 @@ export interface AutoExtractCardProps {
     /** Contours with a calibrated colour key: read every line's level off it (L3). */
     onReadKey?: () => void;
     fillNotice: string | null;
-    /** Regions marked as not data (a legend), and the gesture that adds one. */
-    masks: {
-      count: number;
-      armed: boolean;
-      onArm: () => void;
-      onRemove: (index: number) => void;
-    };
   };
 }
 
@@ -234,34 +227,9 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
             {' '}Where it is unsure it leaves the pieces apart and lists the place under Places to check.
           </span>
           {colourRow}
-          <div data-testid="find-lines-masks" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              data-testid="find-lines-leave-out"
-              aria-pressed={findLines.masks.armed}
-              onClick={findLines.masks.onArm}
-              title="Mark a legend, a key or anything else that is not data, so Find lines leaves it out"
-            >
-              {findLines.masks.armed ? 'Drag the box now…' : 'Leave out a region…'}
-            </button>
-            {[...Array(findLines.masks.count).keys()].map((i) => (
-              <button
-                key={i}
-                type="button"
-                data-testid={`find-lines-mask-remove-${i}`}
-                onClick={() => findLines.masks.onRemove(i)}
-                title="Stop leaving this region out"
-                style={{ fontSize: theme.font.size.small }}
-              >
-                Left out {i + 1} ✕
-              </button>
-            ))}
-          </div>
-          {findLines.masks.armed && (
-            <span data-testid="find-lines-leave-out-prompt" style={{ fontWeight: 600, color: theme.color.text.primary }}>
-              Drag a box over a legend or anything that is not data. Find lines ignores it, and a line passing behind it is bridged across.
-            </span>
-          )}
+          <span data-testid="find-lines-mask-hint" style={{ fontSize: theme.font.size.small }}>
+            A legend inside the plot? Mask it first with Image ▸ Mask an area - Find lines then leaves it out, and bridges a line that passes behind it.
+          </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
