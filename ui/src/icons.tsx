@@ -84,6 +84,8 @@ import gridRemovalSvg from '../../icons/custom/grid-removal.svg?raw';
 import curveFitSvg from '../../icons/custom/curve-fit.svg?raw';
 import geometrySvg from '../../icons/custom/geometry.svg?raw';
 import helpSvg from '../../icons/custom/help.svg?raw';
+// Settings (v2.7): the Ketcher set's own gear, which nothing used until now.
+import settingsSvg from '../../icons/settings.svg?raw';
 import measureSvg from '../../icons/custom/measure.svg?raw';
 import imageEditSvg from '../../icons/custom/image-edit.svg?raw';
 // "Error Bars" (checkpoint 79) is another new original, icons/custom/error-bars.svg
@@ -208,6 +210,7 @@ export const GridRemovalIcon = () => <Icon svg={gridRemovalSvg} />;
 export const CurveFitIcon = () => <Icon svg={curveFitSvg} />;
 export const GeometryIcon = () => <Icon svg={geometrySvg} />;
 export const HelpIcon = () => <Icon svg={helpSvg} />;
+export const SettingsIcon = () => <Icon svg={settingsSvg} />;
 export const MeasureIcon = () => <Icon svg={measureSvg} />;
 export const ImageEditIcon = () => <Icon svg={imageEditSvg} />;
 export const CameraIcon = () => <Icon svg={cameraSvg} />;

@@ -12192,3 +12192,212 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await page.getByTestId('series-groups').locator('th').last().textContent()).toBe('Level not set');
   }, 180000);
 });
+
+describe('Workspace: Settings (v2.7)', () => {
+  // docs/v2.7-settings-cases.md. Gate 4: the gear is the only route in, and
+  // every value is set the way the card shows it - typed into the field its
+  // row names. The profile is shared by the whole run, so every test leaves the
+  // file as it found it: absent.
+  const SETTINGS_PATH = path.join(E2E_USER_DATA, 'settings.json');
+  const storedSettings = (): Record<string, unknown> =>
+    fs.existsSync(SETTINGS_PATH) ? (JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')) as Record<string, unknown>) : {};
+  afterEach(() => {
+    fs.rmSync(SETTINGS_PATH, { force: true });
+  });
+
+  async function openSettings() {
+    if (await page.getByTestId('settings-panel').isVisible().catch(() => false)) return;
+    await page.getByTestId('settings-trigger').click();
+    await page.getByTestId('settings-panel').waitFor({ state: 'visible' });
+  }
+  async function closeSettings() {
+    // the way a user leaves a card: a click outside it
+    await page.mouse.click(10, 990);
+    await page.getByTestId('settings-panel').waitFor({ state: 'detached' });
+  }
+  async function typeSetting(key: string, value: string) {
+    await openSettings();
+    await page.getByTestId(`setting-${key}`).fill(value);
+    await page.getByTestId(`setting-${key}`).blur();
+  }
+  async function relaunch() {
+    await app.close();
+    app = await electron.launch({
+      args: [...ozoneArgs(), `--user-data-dir=${E2E_USER_DATA}`, path.join(REPO_ROOT, 'ui/electron-dev.cjs'), '--built'],
+      cwd: REPO_ROOT,
+      timeout: 30000,
+      env: { ...process.env, WPD_E2E: '1' },
+    });
+    page = await app.firstWindow();
+    page.on('dialog', (dialog) => void dialog.accept());
+    await app.evaluate(async ({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1780, 1000);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+    await app.evaluate(({ dialog }, samplePath) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [samplePath] });
+    }, SAMPLE_IMAGE);
+  }
+
+  it('S1/S2/S4/S5/S6 the gear lists every setting; a starting value applies at once, survives a restart, and Restore defaults puts it back', async () => {
+    await openSettings();
+    for (const key of ['colourTolerance', 'floodFillThreshold', 'gridRemovalTolerance', 'pointsPerTrace', 'readContourLabels', 'labelConfidence', 'exportFullPrecision', 'decimalComma']) {
+      expect(await page.getByTestId(`setting-row-${key}`).isVisible(), key).toBe(true);
+    }
+    expect(await page.getByTestId('settings-restore-defaults').isDisabled()).toBe(true);
+    await typeSetting('colourTolerance', '30');
+    await typeSetting('floodFillThreshold', '25');
+    await typeSetting('gridRemovalTolerance', '35');
+    expect(await textOf('setting-row-colourTolerance')).toMatch(/default 60/);
+    await closeSettings();
+
+    // S5/S6: the tools show the new starting values now
+    await resetWorkspace('xy');
+    await page.getByTestId('grid-removal-trigger').click();
+    expect(await page.getByTestId('grid-removal-tolerance').inputValue()).toBe('35');
+    await page.mouse.click(10, 990);
+    await page.getByTestId('grid-removal-panel').waitFor({ state: 'detached' });
+    await calibrateXYStandard();
+    await selectAutoExtract('colour');
+    expect(await page.getByTestId('color-trace-tolerance').inputValue()).toBe('30');
+    // changed on the card: this session only
+    await page.getByTestId('color-trace-tolerance').fill('90');
+    await selectAutoExtract('flood');
+    expect(await page.getByTestId('segment-fill-threshold').inputValue()).toBe('25');
+
+    // S2: still set after the app is closed and opened again
+    await relaunch();
+    expect(storedSettings()).toMatchObject({ colourTolerance: 30, floodFillThreshold: 25, gridRemovalTolerance: 35 });
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await selectAutoExtract('colour');
+    expect(await page.getByTestId('color-trace-tolerance').inputValue()).toBe('30');
+
+    // S4: Restore defaults, on screen and in the file
+    await openSettings();
+    await page.getByTestId('settings-restore-defaults').click();
+    expect(await page.getByTestId('setting-colourTolerance').inputValue()).toBe('60');
+    expect(await page.getByTestId('setting-gridRemovalTolerance').inputValue()).toBe('40');
+    await expect.poll(() => storedSettings().colourTolerance, { timeout: 3000 }).toBe(60);
+    expect(await page.getByTestId('settings-restore-defaults').isDisabled()).toBe(true);
+    await closeSettings();
+    expect(await page.getByTestId('color-trace-tolerance').inputValue()).toBe('60');
+  }, 90000);
+
+  it('S3 a value out of range in the file starts at its default while the others keep theirs', async () => {
+    fs.writeFileSync(SETTINGS_PATH, JSON.stringify({ colourTolerance: 9999, floodFillThreshold: 25 }));
+    await relaunch();
+    await openSettings();
+    expect(await page.getByTestId('setting-colourTolerance').inputValue()).toBe('60');
+    expect(await page.getByTestId('setting-floodFillThreshold').inputValue()).toBe('25');
+  }, 60000);
+
+  it('S7 Points per traced curve caps a By colour trace', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    const traced = async (): Promise<number> => {
+      await selectAutoExtract('colour');
+      await page.getByTestId('color-trace-color').fill('#1f4e79');
+      await page.getByTestId('color-trace-tolerance').fill('160');
+      await page.getByTestId('color-trace-run').click();
+      await page.waitForTimeout(200);
+      return Number(/Traced (\d+) points/.exec(await textOf('color-trace-info'))![1]);
+    };
+    const before = await traced();
+    expect(before, 'the default trace records more than the cap tested below').toBeGreaterThan(100);
+    await page.getByTestId('undo').click();
+    await typeSetting('pointsPerTrace', '100');
+    await closeSettings();
+    const after = await traced();
+    expect(after).toBeGreaterThan(0);
+    expect(after).toBeLessThanOrEqual(100);
+  }, 60000);
+
+  it('S10/S11/S12 Full precision and Decimal comma decide the export, say so in the Export menu, and never enter the project file', async () => {
+    await openSettings();
+    await page.getByTestId('setting-exportFullPrecision').check();
+    await page.getByTestId('setting-decimalComma').check();
+    await closeSettings();
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+    await page.getByTestId('export-csv').click();
+    expect(await page.getByTestId('export-full-precision').locator('input').isChecked()).toBe(true);
+    expect(await textOf('export-decimal-comma')).toMatch(/decimal comma/);
+    await page.getByTestId('export-copy-csv').click();
+    await page.waitForTimeout(200);
+    const lines = (await app.evaluate(({ clipboard }) => clipboard.readText())).split('\n');
+    expect(lines[0]).toBe('x_px;y_px;X;Y');
+    expect(lines[1]).toMatch(/^[\d,]+;[\d,]+;[\d,]+;[\d,]+$/);
+    expect(lines[1]).not.toContain('.');
+    // unticked for one export: the setting stays
+    await page.getByTestId('export-full-precision').locator('input').uncheck();
+    expect(storedSettings().exportFullPrecision).toBe(true);
+    await page.keyboard.press('Escape');
+
+    // S12: no setting is written into the project
+    const savePath = path.join(os.tmpdir(), `plottracer-e2e-settings-${Date.now()}.zip`);
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, savePath);
+    await page.getByTestId('save-project').click();
+    await page.waitForTimeout(300);
+    const written = JSON.stringify(readSavedProjectJson(savePath));
+    for (const key of ['decimalComma', 'exportFullPrecision', 'colourTolerance', 'pointsPerTrace', 'labelConfidence', 'readContourLabels']) {
+      expect(written, key).not.toContain(key);
+    }
+    fs.rmSync(savePath, { force: true });
+  }, 60000);
+
+  it('S8 with Read contour labels off, Find lines reads and offers no label, and its card says so', async () => {
+    await openSettings();
+    await page.getByTestId('setting-readContourLabels').uncheck();
+    await closeSettings();
+    const truth = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'contour-potential-energy.truth.json'), 'utf8')) as {
+      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+      series: { points: { x: number; y: number }[] }[];
+    };
+    const toLocal = async (x: number, y: number) => {
+      const m = /scale: ([\d.]+), offset: \(([-\d.]+), ([-\d.]+)\)/.exec((await page.getByTestId('view-state').textContent()) ?? '')!;
+      await clickAt(Number(m[2]) + x * Number(m[1]), Number(m[3]) + y * Number(m[1]));
+    };
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-contour').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = truth.calibration.anchors;
+    await toLocal(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await toLocal(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await toLocal(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+    expect(await textOf('find-lines-labels-off')).toBe('Label reading is off (Settings).');
+    expect(await textOf('find-lines-controls')).not.toMatch(/reads each line/);
+    const p0 = truth.series[0]!.points[5]!;
+    await page.getByTestId('color-trace-eyedropper').click();
+    await toLocal(
+      a.x1.px + (p0.x - a.x1.value) * ((a.x2.px - a.x1.px) / (a.x2.value - a.x1.value)),
+      a.y1.py + (p0.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value))
+    );
+    let sawReading = false;
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(async () => {
+      if (/Reading labels/.test(await textOf('find-lines-busy').catch(() => ''))) sawReading = true;
+      return textOf('find-lines-summary').catch(() => '');
+    }, { timeout: 120000 }).toMatch(/7 lines found/);
+    expect(sawReading).toBe(false);
+    for (let i = 0; i < 7; i++) {
+      await page.getByTestId('series-select').selectOption(String(i));
+      await page.waitForTimeout(80);
+      expect(await page.getByTestId('series-use-label').count(), `line ${i}`).toBe(0);
+    }
+  }, 150000);
+});

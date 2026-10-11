@@ -133,6 +133,10 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
   // file exists: main and dev cannot drift apart if they share the registration.
   // ⚠️ It matters in the e2e harness too - a live worker thread is a test run
   // that hangs on teardown rather than a feature that misbehaves on screen.
+  // Settings (v2.7): the main process owns the file - see electron-settings.cjs.
+  const { registerSettingsHandlers } = require('./electron-settings.cjs')
+  registerSettingsHandlers(ipcMain, () => require('electron').app.getPath('userData'))
+
   require('electron').app.on('will-quit', () => {
     const { shutdownOcr } = require('./electron-ocr.cjs')
     void shutdownOcr()

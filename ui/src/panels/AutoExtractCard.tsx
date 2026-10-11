@@ -84,6 +84,8 @@ export interface AutoExtractCardProps {
     /** Contours with a calibrated colour key: read every line's level off it (L3). */
     onReadKey?: () => void;
     fillNotice: string | null;
+    /** Settings ▸ Read contour labels (S8) - when off, the card says so instead of promising to read them. */
+    readsLabels: boolean;
   };
 }
 
@@ -223,9 +225,16 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
         <div data-testid="find-lines-controls" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
           <span>
             Finds every line of one colour, each as its own line - also where same-colour lines
-            {findLines.kind === 'contours' ? ' run together or are cut by their labels, and reads each line\u2019s label.' : ' cross, touch or run together.'}
+            {findLines.kind === 'contours'
+              ? ` run together or are cut by their labels${findLines.readsLabels ? ', and reads each line\u2019s label' : ''}.`
+              : ' cross, touch or run together.'}
             {' '}Where it is unsure it leaves the pieces apart and lists the place under Places to check.
           </span>
+          {findLines.kind === 'contours' && !findLines.readsLabels && (
+            <span data-testid="find-lines-labels-off" style={{ fontSize: theme.font.size.small }}>
+              Label reading is off (Settings).
+            </span>
+          )}
           {colourRow}
           <span data-testid="find-lines-mask-hint" style={{ fontSize: theme.font.size.small }}>
             A legend inside the plot? Mask it first with Image ▸ Mask an area - Find lines then leaves it out, and bridges a line that passes behind it.

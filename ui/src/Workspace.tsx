@@ -116,6 +116,8 @@ import { GridRemovalPanel } from './panels/GridRemovalPanel.js';
 import { GeometryFlyout } from './panels/GeometryFlyout.js';
 import { CurveFitFlyout } from './panels/CurveFitFlyout.js';
 import { HelpMenu } from './panels/HelpMenu.js';
+import { SettingsMenu } from './panels/SettingsMenu.js';
+import { loadSettings, saveSettings, type Settings } from './settings.js';
 import { ExportMenu } from './panels/ExportMenu.js';
 import { EditableValue, EditableName } from './panels/EditableCell.js';
 import { valueText, valueTitle, suppliedBySource, SuppliedLegend } from './panels/ValueMark.js';
@@ -630,6 +632,13 @@ type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 
 
 export function Workspace() {
+  // ⚑ Settings (v2.7, docs/v2.7-settings-cases.md): read ONCE, before every
+  // state below that starts from one of them. The ref is what the long-lived
+  // click and trace callbacks read, so a change reaches them without
+  // re-creating each one.
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const [axesTypeId, setAxesTypeId] = useState(XY_AXES_CONFIG.id);
   const sessionRef = useRef<CalibrationSession<CalibratedAxes>>(new CalibrationSession(XY_AXES_CONFIG));
   /** Last image height reported by the canvas -- see handleCanvasStatus. Every
@@ -1020,7 +1029,7 @@ export function Workspace() {
   // (~half a pixel in data units, core/exportPrecision.ts); 'full' emits every
   // computed digit for a user who wants to judge precision themselves. Default
   // auto -- the honest, lossless-for-small-magnitudes rule.
-  const [exportFullPrecision, setExportFullPrecision] = useState(false);
+  const [exportFullPrecision, setExportFullPrecision] = useState(settings.exportFullPrecision);
   // The Export format dropdown's anchor (checkpoint 61) -- null when closed.
   const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
   // Which format was just copied to the clipboard, for a transient "Copied"
@@ -1281,7 +1290,7 @@ export function Workspace() {
    * one. A foreign project that quietly loses half its content is the failure
    * this codebase has killed more than once, so these are shown, not logged. */
   const [projectNotice, setProjectNotice] = useState<string | null>(null);
-  const [segmentFillThreshold, setSegmentFillThreshold] = useState(40);
+  const [segmentFillThreshold, setSegmentFillThreshold] = useState(settings.floodFillThreshold);
   const [segmentFillError, setSegmentFillError] = useState<string | null>(null);
   const [curveFitDegree, setCurveFitDegree] = useState(1);
   const [curveFitModel, setCurveFitModel] = useState<CurveFitModelId>('polynomial');
@@ -1363,7 +1372,7 @@ export function Workspace() {
   // old #c8c8c8/30 default missed typical grids entirely). The eyedropper below
   // is the real answer for arbitrary images.
   const [gridRemovalColor, setGridRemovalColor] = useState('#e6e6e6');
-  const [gridRemovalTolerance, setGridRemovalTolerance] = useState(40);
+  const [gridRemovalTolerance, setGridRemovalTolerance] = useState(settings.gridRemovalTolerance);
   const [gridRemovalError, setGridRemovalError] = useState<string | null>(null);
   // Auto-trace by colour (checkpoint 118, v0.6): pick the curve's colour (the
   // eyedropper's 'trace' target), a tolerance, and trace EVERY matching pixel --
@@ -1371,8 +1380,23 @@ export function Workspace() {
   // Fill's connectivity structurally cannot. Default black: technical figures are
   // often B&W. `colorTraceInfo` carries the match count (or an error) as feedback.
   const [colorTraceColor, setColorTraceColor] = useState('#000000');
-  const [colorTraceTolerance, setColorTraceTolerance] = useState(60);
+  const [colorTraceTolerance, setColorTraceTolerance] = useState(settings.colourTolerance);
   const [colorTraceInfo, setColorTraceInfo] = useState<string | null>(null);
+  /**
+   * Change one or more Settings (S2): applied at once, written back, and - for
+   * a STARTING value - pushed into the tool it starts, so the card the user is
+   * looking at shows the new number now rather than on the next launch (S5).
+   */
+  const updateSettings = useCallback((patch: Partial<Settings>) => {
+    const next = { ...settingsRef.current, ...patch };
+    settingsRef.current = next;
+    setSettings(next);
+    saveSettings(next);
+    if (patch.colourTolerance !== undefined) setColorTraceTolerance(patch.colourTolerance);
+    if (patch.floodFillThreshold !== undefined) setSegmentFillThreshold(patch.floodFillThreshold);
+    if (patch.gridRemovalTolerance !== undefined) setGridRemovalTolerance(patch.gridRemovalTolerance);
+    if (patch.exportFullPrecision !== undefined) setExportFullPrecision(patch.exportFullPrecision);
+  }, []);
   /**
    * Shapes the last bar trace found and did NOT file - see
    * `partitionSwatchSuspects`.
@@ -4047,7 +4071,7 @@ export function Workspace() {
             setSegmentFillError('No image loaded.');
             return;
           }
-          const result = runSegmentFill(imageData.data, imageData.width, imageData.height, px, py, segmentFillThreshold);
+          const result = runSegmentFill(imageData.data, imageData.width, imageData.height, px, py, segmentFillThreshold, settingsRef.current.pointsPerTrace);
           if ('error' in result) {
             setSegmentFillError(result.error);
             return;
@@ -5948,7 +5972,7 @@ export function Workspace() {
           return;
         }
         ext = TABLE_FORMAT_EXTENSION[format];
-        content = renderTable(sections, format);
+        content = renderTable(sections, format, { decimalComma: settingsRef.current.decimalComma });
       }
 
       // Clipboard (v1.1 #4): hand the same rendered text to the OS clipboard
@@ -6376,7 +6400,7 @@ export function Workspace() {
       commit();
       return;
     }
-    const result = runColorTrace(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined);
+    const result = runColorTrace(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, settingsRef.current.pointsPerTrace);
     if ('error' in result) {
       setColorTraceInfo(result.error);
       return;
@@ -6505,7 +6529,7 @@ export function Workspace() {
     // user does meanwhile can be overwritten or recorded half-done. If the
     // figure changed under it, the result is dropped, not written elsewhere.
     const hasKey = kind === 'contours' && session.getOptions()['hasColourKey'] === 'true';
-    const slots = kind === 'contours' && !hasKey ? labelSlots(res.lines, res.labelInk, res.lineWidth) : [];
+    const slots = kind === 'contours' && !hasKey && settingsRef.current.readContourLabels ? labelSlots(res.lines, res.labelInk, res.lineWidth) : [];
     const raw: { text: string; confidence: number | null }[] = [];
     findLinesBusyRef.current = true;
     try {
@@ -6523,7 +6547,7 @@ export function Workspace() {
       setFindLinesSummary(null);
       return;
     }
-    const reads = readSlots(raw);
+    const reads = readSlots(raw, settingsRef.current.labelConfidence);
     // a second press REPLACES what the last one found (audit C1: by what the
     // lines ARE, not by remembered names); the figure always keeps one series,
     // so the last one is emptied, not removed
@@ -8354,6 +8378,7 @@ export function Workspace() {
             onCopiedFmtChange={setCopiedFmt}
             fullPrecision={exportFullPrecision}
             onFullPrecisionChange={setExportFullPrecision}
+            decimalComma={settings.decimalComma}
             content={exportContent}
             // ⚑ audit F6b: both write files through the same IPC that F6 showed
             // can reject, and both dropped it.
@@ -8453,6 +8478,7 @@ export function Workspace() {
             onStartChallenge={game.start}
             appVersion={__APP_VERSION__}
           />
+          <SettingsMenu settings={settings} onChange={updateSettings} />
         </TopBarGroup>
       </TopBar>
 
@@ -9668,6 +9694,7 @@ export function Workspace() {
                           }
                         : {}),
                       fillNotice: fillLevelsNotice,
+                      readsLabels: settings.readContourLabels,
                     },
                   }
                 : {})}

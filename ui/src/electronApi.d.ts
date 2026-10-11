@@ -71,6 +71,11 @@ declare global {
         }[];
         error?: string;
       }>;
+      /** The stored Settings as a plain object (v2.7) - unvalidated; every read
+       * goes through ui/src/settings.ts `parseSettings`. */
+      getSettings?: () => unknown;
+      /** Write the Settings back; resolves false when the file could not be written. */
+      setSettings?: (value: Record<string, unknown>) => Promise<boolean>;
     };
   }
 }

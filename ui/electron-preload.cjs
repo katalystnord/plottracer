@@ -38,4 +38,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // renderer has already taken and turned; the answer is `{ text, confidence }`
   // or `{ error }`. See ui/electron-ocr.cjs.
   readText: (pngBase64) => ipcRenderer.invoke('ocr:readText', pngBase64),
+
+  // Settings (v2.7). Read synchronously once, for the first render; written back
+  // on every change. See ui/electron-settings.cjs and ui/src/settings.ts.
+  getSettings: () => ipcRenderer.sendSync('settings:get'),
+  setSettings: (value) => ipcRenderer.invoke('settings:set', value),
 })

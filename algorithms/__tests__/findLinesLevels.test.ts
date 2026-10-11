@@ -115,3 +115,13 @@ describe('levels in the level axis\'s own scale (L2)', () => {
     expect('error' in f && f.error).toMatch(/above 0/);
   });
 });
+
+describe('label confidence from Settings (v2.7, S9)', () => {
+  it('S9: with the floor at 0.95 a read at 90% is refused for the same reason a read below 0.8 is today', async () => {
+    const { readSlots } = await import('../findLines/labels.js');
+    const [r] = readSlots([{ text: '0.4', confidence: 0.9 }], 0.95);
+    expect(r!.value).toBeNull();
+    expect(r!.refused).toBe('the reader was unsure (90%)');
+    expect(readSlots([{ text: '0.4', confidence: 0.9 }])[0]!.value).toBe(0.4);
+  });
+});

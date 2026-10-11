@@ -76,8 +76,10 @@ function neutralizeFormula(s: string): string {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
 
-function escapeDelimited(value: Cell, delimiter: string): string {
-  const raw = String(value);
+function escapeDelimited(value: Cell, delimiter: string, decimalComma: boolean): string {
+  // Only a NUMBER takes the comma; text such as "v1.2" is the user's and stays
+  // as written (Settings, S11).
+  const raw = isNumeric(value) && decimalComma ? String(value).replace('.', ',') : String(value);
   const s = isNumeric(value) ? raw : neutralizeFormula(raw);
   if (s.includes(delimiter) || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return `"${s.replace(/"/g, '""')}"`;
@@ -85,7 +87,7 @@ function escapeDelimited(value: Cell, delimiter: string): string {
   return s;
 }
 
-function sectionToDelimited(section: TableSection, delimiter: string): string {
+function sectionToDelimited(section: TableSection, delimiter: string, decimalComma = false): string {
   const lines: string[] = [];
   // ⚑ The title is user-controlled and was the ONE unescaped string here --
   // every other renderer routes it through `commentSafe` (latex/matlab/python/
@@ -115,7 +117,7 @@ function sectionToDelimited(section: TableSection, delimiter: string): string {
   // So the formula guard is added and the quoting decision is left standing.
   if (section.title) lines.push(neutralizeFormula(commentSafe(section.title)));
   for (const row of [section.header, ...section.rows]) {
-    lines.push(row.map((c) => escapeDelimited(c, delimiter)).join(delimiter));
+    lines.push(row.map((c) => escapeDelimited(c, delimiter, decimalComma)).join(delimiter));
   }
   return lines.join('\n');
 }
@@ -313,13 +315,25 @@ function sectionToR(section: TableSection, index: number): string {
 
 // --- Public entry ----------------------------------------------------------
 
+export interface RenderOptions {
+  /**
+   * Write numbers with a decimal COMMA in CSV and TSV (v2.7 Settings, S11) - what
+   * a spreadsheet in a comma-decimal locale reads as numbers. CSV then separates
+   * fields with `;`, the convention those locales use, because a comma can no
+   * longer be both. The code formats ignore it: `1,5` is not a number in LaTeX,
+   * MATLAB, Python or R.
+   */
+  decimalComma?: boolean;
+}
+
 /** Render a document (list of sections) to the chosen text format. */
-export function renderTable(sections: readonly TableSection[], format: TableFormat): string {
+export function renderTable(sections: readonly TableSection[], format: TableFormat, opts: RenderOptions = {}): string {
+  const comma = opts.decimalComma === true;
   switch (format) {
     case 'csv':
-      return sections.map((s) => sectionToDelimited(s, ',')).join('\n\n');
+      return sections.map((s) => sectionToDelimited(s, comma ? ';' : ',', comma)).join('\n\n');
     case 'tsv':
-      return sections.map((s) => sectionToDelimited(s, '\t')).join('\n\n');
+      return sections.map((s) => sectionToDelimited(s, '\t', comma)).join('\n\n');
     case 'latex':
       return sections.map(sectionToLatex).join('\n\n');
     case 'matlab':

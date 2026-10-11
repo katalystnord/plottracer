@@ -56,6 +56,8 @@ export interface ExportMenuProps {
   onCopiedFmtChange: (fmt: ExportMenuFormat | null) => void;
   fullPrecision: boolean;
   onFullPrecisionChange: (on: boolean) => void;
+  /** Settings ▸ Decimal comma (S11): stated here, where it takes effect. */
+  decimalComma: boolean;
   /** What this project actually holds, for the omission note. */
   content: ExportContent;
   onExport: (fmt: ExportMenuFormat, target?: 'file' | 'clipboard') => void;
@@ -71,6 +73,7 @@ export function ExportMenu({
   onCopiedFmtChange,
   fullPrecision,
   onFullPrecisionChange,
+  decimalComma,
   content,
   onExport,
   onSaveImage,
@@ -122,6 +125,14 @@ export function ExportMenu({
             />
             Full precision
           </label>
+          {decimalComma && (
+            <span
+              data-testid="export-decimal-comma"
+              style={{ padding: '0 6px 4px', fontSize: theme.font.size.small, color: theme.color.text.secondary, maxWidth: 260 }}
+            >
+              CSV and TSV: decimal comma, and ; between CSV fields (Settings).
+            </span>
+          )}
           <div style={{ height: 1, background: theme.color.border.regular, margin: '2px 0' }} />
           {/* Each text format saves to a file on the label; the trailing
               copy button (v1.1 #4) puts the SAME rendered text on the

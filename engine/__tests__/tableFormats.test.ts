@@ -177,3 +177,24 @@ describe('TABLE_FORMAT_EXTENSION', () => {
     expect(TABLE_FORMAT_EXTENSION).toEqual({ csv: 'csv', tsv: 'tsv', latex: 'tex', matlab: 'm', python: 'py', r: 'R' });
   });
 });
+
+describe('renderTable - decimal comma (v2.7 Settings, S11)', () => {
+  const opts = { decimalComma: true };
+  it('S11: a CSV writes 1,5 and separates fields with a semicolon', () => {
+    expect(renderTable([numeric], 'csv', opts)).toBe('x;y\n0;0\n1;2,5');
+  });
+  it('S11: a TSV writes 1,5 and keeps its tabs', () => {
+    expect(renderTable([numeric], 'tsv', opts)).toBe('x\ty\n0\t0\n1\t2,5');
+  });
+  it('S11: a text cell that holds a semicolon is quoted, as a comma is in a plain CSV', () => {
+    expect(renderTable([{ header: ['name', 'v'], rows: [['a;b', 1.25]] }], 'csv', opts)).toBe('name;v\n"a;b";1,25');
+  });
+  it('S11: text is never changed - only numbers take the comma', () => {
+    expect(renderTable([{ header: ['name', 'v'], rows: [['v1.2', 3]] }], 'csv', opts)).toBe('name;v\nv1.2;3');
+  });
+  it('S11: the code formats are unchanged, because they are code', () => {
+    for (const f of ['latex', 'matlab', 'python', 'r'] as const) {
+      expect(renderTable([numeric], f, opts)).toBe(renderTable([numeric], f));
+    }
+  });
+});
