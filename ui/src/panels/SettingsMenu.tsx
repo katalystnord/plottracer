@@ -153,6 +153,24 @@ export function SettingsMenu({ settings, onChange, agentStatus }: SettingsMenuPr
               <div key={spec.key} data-testid={`setting-row-${spec.key}`} style={{ padding: '4px 0 6px', ...(spec.under ? { marginLeft: 22 } : {}) }}>
                 {spec.kind === 'folder' ? (
                   <FolderSetting label={spec.label} value={settings[spec.key] as string} testId={`setting-${spec.key}`} onChange={(v) => onChange({ [spec.key]: v })} />
+                ) : spec.kind === 'choice' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontWeight: 600 }}>{spec.label}</span>
+                    <span role="radiogroup" aria-label={spec.label} style={{ display: 'flex', gap: 10 }}>
+                      {spec.options.map((o) => (
+                        <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                          <input
+                            type="radio"
+                            name={`setting-${spec.key}`}
+                            data-testid={`setting-${spec.key}-${o.value}`}
+                            checked={settings[spec.key] === o.value}
+                            onChange={() => onChange({ [spec.key]: o.value })}
+                          />
+                          {o.label}
+                        </label>
+                      ))}
+                    </span>
+                  </div>
                 ) : spec.kind === 'boolean' ? (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, cursor: 'pointer' }}>
                     <input

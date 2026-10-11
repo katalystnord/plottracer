@@ -26,6 +26,9 @@ export interface Settings {
   /** The folder an agent may open figures from and save into (M6, M10); '' = none. */
   agentFolder: string;
   agentMaySave: boolean;
+  /** M14: how an agent works when it connects - in rounds the user approves, or on its own. */
+  agentStartMode: 'rounds' | 'automatic';
+  agentRoundSize: number;
 }
 
 /** The values the app shipped with before Settings existed. */
@@ -41,6 +44,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   agentsEnabled: false,
   agentFolder: '',
   agentMaySave: false,
+  agentStartMode: 'rounds',
+  agentRoundSize: 5,
 });
 
 /** `under`: the row shows only while that switch is on - so with agents off, the
@@ -49,6 +54,7 @@ type SpecBase = { key: keyof Settings; group: string; label: string; explains: s
 export type SettingSpec =
   | (SpecBase & { kind: 'boolean' })
   | (SpecBase & { kind: 'folder' })
+  | (SpecBase & { kind: 'choice'; options: readonly { value: string; label: string }[] })
   | (SpecBase & { kind: 'number'; min: number; max: number; step: number; integer: boolean });
 
 /**
@@ -112,6 +118,17 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     label: 'Agents may save into the folder',
     explains: 'Lets an agent write its exports into that folder. It never writes over an existing file. Off, an export is only handed back to the agent.',
   },
+  {
+    key: 'agentStartMode', group: 'Agents', kind: 'choice', under: 'agentsEnabled',
+    label: 'An agent starts',
+    options: [{ value: 'rounds', label: 'In rounds' }, { value: 'automatic', label: 'Automatic' }],
+    explains: 'In rounds, an agent takes a few steps, then waits for you to approve them, undo them, or let it go on by itself. Automatic, it goes on until you pause it. The strip along the canvas switches it while an agent works.',
+  },
+  {
+    key: 'agentRoundSize', group: 'Agents', kind: 'number', under: 'agentsEnabled', min: 1, max: 50, step: 1, integer: true,
+    label: 'Steps in a round',
+    explains: 'How many steps that change the figure an agent takes before it waits for you. Looking at the figure is not a step.',
+  },
 ];
 
 /** Each key's value if it passes its spec's limits, else the default (S3). */
@@ -125,6 +142,8 @@ export function parseSettings(raw: unknown): Settings {
       if (typeof v === 'boolean') (out[spec.key] as boolean) = v;
     } else if (spec.kind === 'folder') {
       if (typeof v === 'string' && v.length <= 4096) (out[spec.key] as string) = v;
+    } else if (spec.kind === 'choice') {
+      if (typeof v === 'string' && spec.options.some((o) => o.value === v)) (out[spec.key] as string) = v;
     } else if (
       typeof v === 'number' && Number.isFinite(v) && v >= spec.min && v <= spec.max && (!spec.integer || Number.isInteger(v))
     ) {

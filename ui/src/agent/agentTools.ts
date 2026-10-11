@@ -69,6 +69,8 @@ export interface AgentStateInput {
   tip: string | null;
   series: readonly AgentSeries[];
   places: readonly { kind: string; at: readonly [number, number]; text: string }[];
+  /** M14 (R9): how the agent is working - in rounds or automatic, and whether it waits. */
+  working?: string | null;
 }
 
 export const NOT_CALIBRATED =
@@ -104,6 +106,7 @@ export function describeState(st: AgentStateInput): string {
     const step = st.step ? ` The walk is on step ${st.step.index + 1} of ${st.step.count}: "${st.step.label}".` : '';
     lines.push(`Calibration: not done.${step} ${NOT_CALIBRATED}`);
   }
+  if (st.working) lines.push(st.working);
   if (st.tip) lines.push(`On screen now: "${st.tip}"`);
   lines.push(`Series (${st.series.length}):`);
   for (const s of st.series) lines.push(`  ${describeSeries(s)}`);

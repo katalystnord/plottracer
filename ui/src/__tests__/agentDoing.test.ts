@@ -286,7 +286,7 @@ describe('M11: one step, one Undo entry; the agent never undoes the user', () =>
     const { h } = host(s);
     await doAgentTool('place_points', { series: 1, points: [{ x: 200, y: 200 }, { x: 250, y: 175 }] }, h);
     const r = await doAgentTool('undo', {}, h);
-    expect(textOf(r)).toMatch(/Undid your last step: place_points on series \[1\]/);
+    expect(textOf(r)).toMatch(/Undid your last step: Placed 2 points in "Series 1"/);
     expect(s.getDatasets()[0]!.getCount()).toBe(0);
   });
 

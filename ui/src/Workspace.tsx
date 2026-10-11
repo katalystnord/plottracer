@@ -64,7 +64,8 @@ import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Menu, MenuItem, Divider } from '@mui/material';
 import { IconButton } from './IconButton.js';
 import { GraphTypeCardPicker } from './GraphTypeCardPicker.js';
-import { AgentStrip } from './agent/AgentStrip.js';
+import { AgentStrip, type AgentRoundsControls } from './agent/AgentStrip.js';
+import { AgentRounds } from './agent/agentRounds.js';
 import { useAgentBridge, useAgentStatus, type AgentHost } from './agent/useAgentBridge.js';
 import { AgentStepLog } from './agent/agentDoing.js';
 import { NOT_CALIBRATED } from './agent/agentTools.js';
@@ -674,6 +675,31 @@ export function Workspace() {
     }
     return agentStepsRef.current;
   };
+  // M14: the connected agent's rounds - one per connection, starting as
+  // Settings says (R10, R11).
+  const agentRoundsRef = useRef<{ client: number; rounds: AgentRounds } | null>(null);
+  const agentRounds = (): AgentRounds | null => {
+    if (agentClient === null) return null;
+    if (agentRoundsRef.current?.client !== agentClient) {
+      agentRoundsRef.current = {
+        client: agentClient,
+        rounds: new AgentRounds({ size: settingsRef.current.agentRoundSize, mode: settingsRef.current.agentStartMode }),
+      };
+    }
+    return agentRoundsRef.current.rounds;
+  };
+  const recordAgentStep = (label: string) => {
+    agentSteps().record(history.getPresent(), label);
+    agentRounds()?.afterStep(label);
+  };
+  const [, setRoundsTick] = useState(0);
+  useEffect(() => {
+    const r = agentRounds();
+    if (!r) return;
+    return r.subscribe(() => setRoundsTick((t) => t + 1));
+    // the rounds are made per connection, so the connection is the dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentClient]);
   useAgentBridge(agentHostRef);
   const [axesTypeId, setAxesTypeId] = useState(XY_AXES_CONFIG.id);
   const sessionRef = useRef<CalibrationSession<CalibratedAxes>>(new CalibrationSession(XY_AXES_CONFIG));
@@ -8328,6 +8354,7 @@ export function Workspace() {
         };
       }),
       places: linePlaces,
+      working: agentRounds()?.describe() ?? null,
     }),
     renderRegion: (r) => imageCanvasRef.current?.getRegionPngDataURL(r) ?? null,
     session: () => sessionRef.current,
@@ -8336,13 +8363,14 @@ export function Workspace() {
     // agent's so its own undo can tell whether it is still the newest.
     commitStep: (label) => {
       commit();
-      agentSteps().record(history.getPresent(), label);
+      recordAgentStep(label);
     },
     undoAgentStep: () => {
       const c = agentSteps().check(history.getPresent());
       if (c === 'none' || c === 'user-changed') return c;
       undo();
       agentSteps().pop();
+      agentRounds()?.stepUndone();
       return { undone: c.label };
     },
     showSelection: (series, points) => {
@@ -8363,7 +8391,7 @@ export function Workspace() {
       setColorTraceColor(colour);
       const before = history.getPresent();
       const r = await findLinesWith(colour);
-      if (history.getPresent() !== before) agentSteps().record(history.getPresent(), 'find_lines');
+      if (history.getPresent() !== before) recordAgentStep(`Found lines of colour ${colour}`);
       return r;
     },
     inkAt: (x, y) => {
@@ -8372,7 +8400,7 @@ export function Workspace() {
     },
     maskArea: (rect) => {
       const refusal = maskArea(rect);
-      if (!refusal) agentSteps().record(history.getPresent(), 'mask_area');
+      if (!refusal) recordAgentStep('Masked an area');
       return refusal;
     },
     exportText: (format, scope) => {
@@ -8385,6 +8413,7 @@ export function Workspace() {
     saveFile: async (name, content) =>
       window.electronAPI?.agentSaveFile ? window.electronAPI.agentSaveFile(name, content) : { error: 'Saving needs the PlotTracer app.' },
     settings: () => ({ decimalComma: settingsRef.current.decimalComma, fullPrecision: exportFullPrecision }),
+    rounds: agentRounds,
     openFigure: async ({ name, dataURL, page }) => {
       // ⚑ An agent never discards the user's work: where a person would be asked,
       // the agent is refused and told why.
@@ -8394,6 +8423,9 @@ export function Workspace() {
       const canvas = imageCanvasRef.current;
       if (!canvas) return { isError: true, content: [{ type: 'text', text: 'PlotTracer is still starting. Try again in a moment.' }] };
       agentSteps().clear();
+      // a new document: the round's steps were on the old one and cannot be undone here
+      const r = agentRounds();
+      if (r) r.setMode(r.view().mode);
       const before = canvas.getImageData();
       await canvas.openFileContent(dataURL, name);
       const doc = pdfDocRef.current;
@@ -8420,6 +8452,40 @@ export function Workspace() {
       return { content: [{ type: 'text', text: `Opened ${name}${pages}${size}. ${NOT_CALIBRATED}` }] };
     },
   };
+
+  // M14: what the strip shows of the rounds, and the person's answers (R2-R6).
+  const agentRoundsControls: AgentRoundsControls | null = (() => {
+    const r = agentRounds();
+    if (!r) return null;
+    const view = r.view();
+    const n = view.steps.length;
+    const undoRoundDisabled =
+      n === 0
+        ? 'There is nothing in this round to undo.'
+        : agentSteps().check(history.getPresent()) === 'user-changed'
+          ? 'You have changed the figure since the agent’s last step, so Undo this round could take back your own work. Use Undo in the top bar instead.'
+          : agentSteps().size() < n
+            ? 'Some of this round’s steps can no longer be undone here; use Undo in the top bar.'
+            : null;
+    return {
+      view,
+      undoRoundDisabled,
+      onApprove: () => r.approve(),
+      onUndoRound: () => {
+        if (undoRoundDisabled) return;
+        // exactly the round's steps, off the same history (R4)
+        for (let i = 0; i < n; i++) {
+          undo();
+          agentSteps().pop();
+        }
+        r.undoRound();
+      },
+      onContinueAutomatically: () => r.continueAutomatically(),
+      onPause: () => r.pause(),
+      onResume: () => r.resume(),
+      onSetMode: (mode) => r.setMode(mode),
+    };
+  })();
 
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;
   // Distance/Area read the Set-scale px->unit; Angle is degrees (no reference).
@@ -8692,6 +8758,7 @@ export function Workspace() {
           <AgentStrip
             status={agentStatus}
             waiting={agentWaitingOn !== null && agentWaitingOn.client === agentClient && agentWaitingOn.session === session && axes === null}
+            rounds={agentRoundsControls}
             onDisconnect={() => { void window.electronAPI?.disconnectAgent?.(); }}
             onAllowReconnect={() => { void window.electronAPI?.allowAgentReconnect?.(); }}
           />

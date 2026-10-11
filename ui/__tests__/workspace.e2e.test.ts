@@ -12592,7 +12592,7 @@ describe('Workspace: Settings (v2.7)', () => {
     await expect.poll(async () => page.getByTestId('series-select').locator('option').first().textContent()).toBe('Blend A (0)');
     expect((await call('undo')).text).toBe('The user has changed the figure since your last step; call get_state.');
     await page.getByTestId('redo').click();
-    expect((await call('undo')).text).toMatch(/Undid your last step: place_points on series \[1\]/);
+    expect((await call('undo')).text).toMatch(/Undid your last step: Placed 9 points in "Blend A"/);
     await expect.poll(async () => page.getByTestId('series-select').locator('option').first().textContent()).toBe('Blend A (0)');
     await call('place_points', { series: 'Blend A', points: blendA });
 
@@ -12620,6 +12620,87 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('agent-strip').waitFor({ state: 'detached', timeout: 5000 });
     fs.rmSync(folder, { recursive: true, force: true });
   }, 180000);
+
+  it('M14 R1-R10 in rounds the agent waits after its round; Approve, Undo this round, Continue automatically and Pause answer it from the strip', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await openSettings();
+    await page.getByTestId('setting-agentsEnabled').check();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
+    // R10: an agent starts in rounds, and the round size is a setting
+    expect(await page.getByTestId('setting-agentStartMode-rounds').isChecked()).toBe(true);
+    await typeSetting('agentRoundSize', '2');
+    const url = (await textOf('setting-agents-address')).trim();
+    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-claude-code'))![1]!;
+    await closeSettings();
+    const init = await rpc(url, token, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e-agent', version: '1' } } });
+    const session = init.headers.get('mcp-session-id')!;
+    let id = 10;
+    const call = async (name: string, args: unknown = {}) => {
+      const j = await (await rpc(url, token, { jsonrpc: '2.0', id: id++, method: 'tools/call', params: { name, arguments: args } }, session)).json();
+      const r = j.result as { isError?: boolean; content: { type: string; text?: string }[] };
+      return { isError: !!r.isError, text: r.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n') };
+    };
+    const seriesName = async () => (await page.getByTestId('series-select').locator('option').first().textContent()) ?? '';
+    const isHeld = async (p: Promise<unknown>) => {
+      let done = false;
+      void p.then(() => { done = true; });
+      await page.waitForTimeout(600);
+      return !done;
+    };
+
+    // R1: the round's steps go as they come, and the strip counts them
+    await call('rename_series', { series: 1, name: 'A' });
+    expect(await textOf('agent-round-text')).toMatch(/Round: 1 of 2 steps\. 1\. Renamed "Series 1" to "A"/);
+    await call('rename_series', { series: 1, name: 'B' });
+    // R2: a full round waits for the person, and the next step is held
+    expect(await textOf('agent-round-text')).toMatch(/The agent has taken 2 steps and is waiting for you/);
+    expect((await call('get_state')).text).toMatch(/in rounds of 2 steps, chosen by the user; 2 steps taken this round.*waiting for the user to approve/);
+    const third = call('rename_series', { series: 1, name: 'C' });
+    expect(await isHeld(third)).toBe(true);
+    expect(await seriesName()).toBe('B (0)');
+    // R7: looking does not wait behind it
+    expect((await call('list_points', { series: 1 })).text).toMatch(/\[1\] "B"/);
+    // R3: Approve and continue runs it, and a new round starts
+    await page.getByTestId('agent-approve').click();
+    expect((await third).text).toMatch(/Renamed "B" to series \[1\] "C"/);
+    expect(await textOf('agent-round-text')).toMatch(/Round: 1 of 2 steps/);
+
+    // R4: Undo this round takes back exactly its steps; the held step does not run
+    await call('rename_series', { series: 1, name: 'D' });
+    const held = call('rename_series', { series: 1, name: 'E' });
+    expect(await isHeld(held)).toBe(true);
+    await page.getByTestId('agent-undo-round').click();
+    const r4 = await held;
+    expect(r4.isError).toBe(true);
+    expect(r4.text).toBe('The user undid your last 2 steps. Call get_state to see the figure as it is now.');
+    await expect.poll(seriesName).toBe('B (0)');
+
+    // R5: Continue automatically - nothing is held any more
+    await call('rename_series', { series: 1, name: 'F' });
+    await call('rename_series', { series: 1, name: 'G' });
+    const h5 = call('rename_series', { series: 1, name: 'H' });
+    expect(await isHeld(h5)).toBe(true);
+    await page.getByTestId('agent-continue-automatically').click();
+    expect((await h5).isError).toBe(false);
+    for (const n of ['I', 'J', 'K']) expect((await call('rename_series', { series: 1, name: n })).isError).toBe(false);
+    expect(await page.getByTestId('agent-mode-automatic').getAttribute('aria-pressed')).toBe('true');
+
+    // R6: Pause holds the next step, Resume lets it go
+    await page.getByTestId('agent-pause').click();
+    expect(await textOf('agent-round-text')).toMatch(/Paused\. The agent's next step waits until you resume/);
+    const h6 = call('rename_series', { series: 1, name: 'L' });
+    expect(await isHeld(h6)).toBe(true);
+    await page.getByTestId('agent-resume').click();
+    expect((await h6).isError).toBe(false);
+    await expect.poll(seriesName).toBe('L (0)');
+
+    await openSettings();
+    await typeSetting('agentRoundSize', '5');
+    await page.getByTestId('setting-agentsEnabled').uncheck();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'detached' });
+    await closeSettings();
+  }, 120000);
 
   it('M6 a PDF opens on the page the agent asks for, and the answer says which page of how many', async () => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-agent-pdf-'));

@@ -383,7 +383,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
         session.setActiveDataset(before);
         return refuse(`${refusal} ${seriesList(host.getState().series)}`);
       }
-      host.commitStep(`add_series "${name}"`);
+      host.commitStep(`Added series "${name}"`);
       return text(`Added ${named(host, index)}. It is the selected series on screen. ${seriesList(host.getState().series)}`);
     }
 
@@ -397,7 +397,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       const refusal = session.renameDataset(s.index, name);
       if (refusal) return refuse(refusal);
       session.setActiveDataset(s.index);
-      host.commitStep(`rename_series ${sid(s.index)}`);
+      host.commitStep(`Renamed "${old}" to "${name}"`);
       return text(`Renamed "${old}" to ${named(host, s.index)}.`);
     }
 
@@ -415,7 +415,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       for (const i of [...picked].sort((x, y) => y - x)) session.removeDataset(i);
       const ai = keep ? session.getDatasets().indexOf(keep) : -1;
       host.showSelection(ai >= 0 ? ai : session.getActiveDatasetIndex(), []);
-      host.commitStep(`remove_series ${names.join(', ')}`);
+      host.commitStep(`Removed ${names.join(', ')}`);
       return text(`Removed ${names.join(', ')}.\nThe series ids have changed. ${seriesList(host.getState().series)}`);
     }
 
@@ -456,7 +456,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
         const k = all.findIndex((q, i) => !placedAt.includes(i) && q.x === p.x && q.y === p.y);
         if (k >= 0) placedAt.push(k);
       }
-      host.commitStep(`place_points on series ${sid(s.index)}`);
+      host.commitStep(`Placed ${after - before} ${after - before === 1 ? 'point' : 'points'} in "${seriesNow(host, s.index)?.name ?? ''}"`);
       host.showSelection(s.index, placedAt);
       const took = after - before;
       const rows = placedAt.map((k) => `  ${pno(k)}: pixel (${fmt(all[k]!.x)}, ${fmt(all[k]!.y)}) → ${valuesText(all[k]!.data)}`);
@@ -485,7 +485,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
           ? `Point ${pno(k)} is interpolated between guide points, so it cannot be moved; move a guide point instead.`
           : `Point ${pno(k)} did not move.`);
       }
-      host.commitStep(`move_point ${pno(k)} of series ${sid(s.index)}`);
+      host.commitStep(`Moved point ${pno(k)} of "${seriesNow(host, s.index)?.name ?? ''}"`);
       host.showSelection(s.index, [k]);
       const snapped = now.x !== to.x || now.y !== to.y ? ` It was kept on the axis it belongs to, as a drag would be, at pixel (${fmt(now.x)}, ${fmt(now.y)}).` : '';
       return withCloseUp(host, `Moved point ${pno(k)} of ${named(host, s.index)} from (${fmt(was.x)}, ${fmt(was.y)}) to (${fmt(now.x)}, ${fmt(now.y)}) → ${valuesText(now.data)}.${snapped}`, [now]);
@@ -513,7 +513,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       session.setActiveDataset(s.index);
       if (session.getLinePoints(s.index)) session.removeLinePoints(picked.indices.map((point) => ({ index: s.index, point })));
       else session.removeDataPoints(picked.indices);
-      host.commitStep(`delete_points from series ${sid(s.index)}`);
+      host.commitStep(`Deleted ${picked.indices.length} ${picked.indices.length === 1 ? 'point' : 'points'} from "${state.series.find((x) => x.index === s.index)?.name ?? ''}"`);
       return text(`Deleted ${picked.indices.length} ${picked.indices.length === 1 ? 'point' : 'points'} from ${name0.replace(/ \(now .*\)$/, '')}.${idsChanged(host, seriesBefore)}`);
     }
 
@@ -527,7 +527,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       const refusal = session.cutLineAt(s.index, k);
       if (refusal) return refuse(refusal);
       session.setActiveDataset(s.index);
-      host.commitStep(`cut_line series ${sid(s.index)} at point ${pno(k)}`);
+      host.commitStep(`Cut "${seriesNow(host, s.index)?.name ?? ''}" at point ${pno(k)}`);
       return text(`Cut ${named(host, s.index)} at point ${pno(k)}.${idsChanged(host, seriesBefore)}`);
     }
 
@@ -540,7 +540,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       const otherName = seriesNow(host, o.index)!.name;
       const refusal = session.joinLines(s.index, o.index);
       if (refusal) return refuse(refusal);
-      host.commitStep(`join_lines ${sid(s.index)} + ${sid(o.index)}`);
+      host.commitStep(`Joined "${otherName}" onto "${keepName}"`);
       return text(`Joined "${otherName}" onto "${keepName}"; the gap between them is marked bridged.\nThe series ids have changed. ${seriesList(host.getState().series)}`);
     }
 
@@ -554,7 +554,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       const moved = session.movePointsToLine(s.index, idx, t.index);
       if (!moved) return refuse('Nothing moved: both have to be lines (not guide-point curves or slotted series), different ones, and the points have to exist.');
       session.setActiveDataset(t.index);
-      host.commitStep(`move_to_line ${sid(s.index)} → ${sid(t.index)}`);
+      host.commitStep(`Moved ${moved} ${moved === 1 ? 'point' : 'points'} from "${seriesNow(host, s.index)?.name ?? ''}" to "${seriesNow(host, t.index)?.name ?? ''}"`);
       return text(`Moved ${moved} ${moved === 1 ? 'point' : 'points'} from ${named(host, s.index)} to ${named(host, t.index)}.`);
     }
 
@@ -570,7 +570,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       const after = session.getContourLevel(s.index);
       if (before?.value === after?.value && before?.source === after?.source) return text(`${named(host, s.index)} already has that level.`);
       session.setActiveDataset(s.index);
-      host.commitStep(`set_level of series ${sid(s.index)}`);
+      host.commitStep(level === null ? `Cleared the level of "${seriesNow(host, s.index)?.name ?? ''}"` : `Set the level of "${seriesNow(host, s.index)?.name ?? ''}" to ${fmt(level)}`);
       return text(level === null ? `Cleared the level of ${named(host, s.index)}.` : `Set the level of ${named(host, s.index)} to ${fmt(level)}, recorded as typed.`);
     }
 
@@ -594,7 +594,7 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       if (!changed.length) return text('Those lines already have their label reads as levels.');
       for (const i of changed) session.setContourLevel(i, session.getLabelRead(i)!.value, 'label');
       session.setActiveDataset(changed[changed.length - 1]!);
-      host.commitStep(`use_label_read on ${changed.map(sid).join(', ')}`);
+      host.commitStep(`Took the label levels of ${changed.map((i) => `"${seriesNow(host, i)?.name ?? ''}"`).join(', ')}`);
       return text(`Took the label read as the level of ${changed.map((i) => `${sid(i)} "${seriesNow(host, i)!.name}" = ${fmt(session.getContourLevel(i)!.value)}`).join(', ')}, recorded as read from the label.`);
     }
 
@@ -711,5 +711,9 @@ export class AgentStepLog<T> {
 
   clear(): void {
     this.steps = [];
+  }
+
+  size(): number {
+    return this.steps.length;
   }
 }

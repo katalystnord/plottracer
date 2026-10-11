@@ -63,6 +63,8 @@ describe('Settings (v2.7)', () => {
       agentsEnabled: false,
       agentFolder: '',
       agentMaySave: false,
+      agentStartMode: 'rounds',
+      agentRoundSize: 5,
     });
   });
 
@@ -75,7 +77,13 @@ describe('Settings (v2.7)', () => {
 
   it('S13: the folder and may-save rows sit under the agent switch, shown only while it is on', () => {
     const under = SETTING_SPECS.filter((s) => s.under === 'agentsEnabled').map((s) => s.key);
-    expect(under).toEqual(['agentFolder', 'agentMaySave']);
+    expect(under).toEqual(['agentFolder', 'agentMaySave', 'agentStartMode', 'agentRoundSize']);
+  });
+
+  it('R10: an agent starts in rounds of 5 unless the user chose otherwise', () => {
+    expect(DEFAULT_SETTINGS).toMatchObject({ agentStartMode: 'rounds', agentRoundSize: 5 });
+    expect(parseSettings({ agentStartMode: 'automatic', agentRoundSize: 3 })).toMatchObject({ agentStartMode: 'automatic', agentRoundSize: 3 });
+    expect(parseSettings({ agentStartMode: 'fast', agentRoundSize: 0 })).toMatchObject({ agentStartMode: 'rounds', agentRoundSize: 5 });
   });
 
   it('M1: agents are off until the user turns them on', () => {
