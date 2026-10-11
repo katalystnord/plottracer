@@ -156,6 +156,11 @@ export const DOING_TOOLS: readonly AgentTool[] = [
     inputSchema: { type: 'object', properties: { series: SERIES_PROP, level: { type: ['number', 'null'] } }, required: ['series', 'level'], additionalProperties: false },
   },
   {
+    name: 'use_label_read',
+    description: 'Contour plots: take the level Find lines read off a line\'s printed label, as the Use button beside the line\'s Level does. It is recorded as read from the label (measured), not as typed. get_state shows which lines have a read on offer.',
+    inputSchema: { type: 'object', properties: { series: { description: 'A series number or name, or a list of them.', oneOf: [SERIES_PROP.oneOf[0], SERIES_PROP.oneOf[1], { type: 'array', items: { oneOf: SERIES_PROP.oneOf }, minItems: 1 }] } }, required: ['series'], additionalProperties: false },
+  },
+  {
     name: 'find_lines',
     description: 'XY and contour plots: find every line of one colour inside the plot box, as Auto-extract ▸ Find lines does. Give the colour as #rrggbb, or a figure pixel ON a line to take the colour from. A second run replaces the lines the last one found (not ones the user worked on). Returns what the card says: lines found, gaps bridged, places to check.',
     inputSchema: {
@@ -196,7 +201,7 @@ export const AGENT_TOOLS: readonly AgentTool[] = [...SEEING_TOOLS, ...DOING_TOOL
 /** The tools that add or change data, refused before the figure is calibrated (M7). */
 export const NEEDS_CALIBRATION: ReadonlySet<string> = new Set([
   'add_series', 'rename_series', 'remove_series', 'place_points', 'move_point', 'select_points', 'delete_points', 'cut_line', 'join_lines', 'move_to_line',
-  'set_level', 'find_lines', 'mask_area', 'export',
+  'set_level', 'use_label_read', 'find_lines', 'mask_area', 'export',
 ]);
 
 // ── M9a: which series ────────────────────────────────────────────────────────
@@ -567,6 +572,30 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       session.setActiveDataset(s.index);
       host.commitStep(`set_level of series ${sid(s.index)}`);
       return text(level === null ? `Cleared the level of ${named(host, s.index)}.` : `Set the level of ${named(host, s.index)} to ${fmt(level)}, recorded as typed.`);
+    }
+
+    case 'use_label_read': {
+      if (session.getConfig().id !== 'contour') return refuse(`A ${state.graphType} figure has no levels; use_label_read is for contour plots.`);
+      const asked = Array.isArray(args.series) ? args.series : [args.series];
+      const picked: number[] = [];
+      for (const one of asked) {
+        const r = resolveSeries(one, state.series);
+        if ('error' in r) return refuse(`${r.error}\nNo level was taken.`);
+        const lr = session.getLabelRead(r.index);
+        if (!lr || lr.value === null) {
+          return refuse(`${describeSeries(seriesNow(host, r.index)!)} has no label read on offer${lr?.refused ? ` (${lr.refused})` : ''}; set_level types a level instead. No level was taken.`);
+        }
+        if (!picked.includes(r.index)) picked.push(r.index);
+      }
+      const changed = picked.filter((i) => {
+        const lv = session.getContourLevel(i);
+        return !(lv && lv.source === 'label' && lv.value === session.getLabelRead(i)!.value);
+      });
+      if (!changed.length) return text('Those lines already have their label reads as levels.');
+      for (const i of changed) session.setContourLevel(i, session.getLabelRead(i)!.value, 'label');
+      session.setActiveDataset(changed[changed.length - 1]!);
+      host.commitStep(`use_label_read on ${changed.map(sid).join(', ')}`);
+      return text(`Took the label read as the level of ${changed.map((i) => `${sid(i)} "${seriesNow(host, i)!.name}" = ${fmt(session.getContourLevel(i)!.value)}`).join(', ')}, recorded as read from the label.`);
     }
 
     case 'find_lines': {

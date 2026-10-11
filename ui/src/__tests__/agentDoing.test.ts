@@ -11,6 +11,7 @@ import {
   USER_CHANGED,
   doAgentTool,
   resolveSeries,
+  seriesList,
   type AgentDoingHost,
   type ToolResult,
 } from '../agent/agentDoing.js';
@@ -50,6 +51,7 @@ function host(session: Session, opts: { calibrated?: boolean } = {}) {
       tip: 'Click a point.',
       series: session.getDatasetInfos().map((d) => ({
         index: d.index, name: d.name, colour: d.color, pointCount: d.pointCount, level: session.getContourLevel(d.index), selected: d.active,
+        labelRead: session.getLabelRead(d.index),
       })),
       places: [],
     }),
@@ -317,6 +319,22 @@ describe('M13 / M10 / M8', () => {
     const r = await doAgentTool('set_level', { series: 1, level: 0.5 }, h);
     expect(textOf(r)).toMatch(/recorded as typed/);
     expect(s.getContourLevel(0)).toMatchObject({ value: 0.5, source: 'typed' });
+  });
+
+  it('M8 / M12: a label read Find lines offers is shown, and use_label_read records it as read from the label, not typed', async () => {
+    const s = calibrate(CONTOUR_AXES_CONFIG);
+    s.addFoundLines([line([[120, 200], [160, 200]]), line([[120, 150], [160, 150]])]);
+    s.setLabelRead(0, { text: '3', value: 3, refused: null, at: [140, 200] });
+    s.setLabelRead(1, { text: '?', value: null, refused: 'it is not a number', at: [140, 150] });
+    const { h, seen } = host(s);
+    const listed = seriesList(h.getState().series);
+    expect(listed).toMatch(/\[1\] "Line 1" - 2 points, no level, its label reads "3" = 3 \(offered; use_label_read takes it\)/);
+    expect(listed).toMatch(/\[2\] "Line 2" - 2 points, no level, its label read as "\?" was not used - it is not a number/);
+    const r = await doAgentTool('use_label_read', { series: 1 }, h);
+    expect(textOf(r)).toMatch(/recorded as read from the label/);
+    expect(s.getContourLevel(0)).toMatchObject({ value: 3, source: 'label' });
+    expect((await doAgentTool('use_label_read', { series: 2 }, h))?.isError).toBe(true);
+    expect(seen.commits).toBe(1);
   });
 
   it('M13: set_level on a type with no levels is refused', async () => {

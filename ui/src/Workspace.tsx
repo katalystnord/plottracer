@@ -8321,6 +8321,10 @@ export function Workspace() {
           pointCount: d.pointCount,
           level: level ? { value: level.value, source: level.source } : null,
           selected: d.active,
+          labelRead: (() => {
+            const lr = sessionRef.current.getLabelRead(d.index);
+            return lr ? { text: lr.text, value: lr.value, refused: lr.refused } : null;
+          })(),
         };
       }),
       places: linePlaces,

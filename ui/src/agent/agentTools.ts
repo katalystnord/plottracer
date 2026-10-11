@@ -54,6 +54,8 @@ export interface AgentSeries {
   pointCount: number;
   level: { value: number; source: string } | null;
   selected: boolean;
+  /** What Find lines read off the line's printed label, offered beside its Level. */
+  labelRead?: { text: string; value: number | null; refused: string | null } | null;
 }
 
 export interface AgentStateInput {
@@ -76,7 +78,15 @@ const hex = ([r, g, b]: readonly [number, number, number]) =>
 
 export function describeSeries(s: AgentSeries): string {
   const level = s.level ? `level ${s.level.value} (${s.level.source})` : 'no level';
-  return `[${s.index + 1}] "${s.name}" - ${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}, ${level}, colour ${hex(s.colour)}${s.selected ? ', selected on screen' : ''}`;
+  const lr = s.labelRead;
+  const offered = !lr
+    ? ''
+    : lr.value !== null && !(s.level?.source === 'label' && s.level.value === lr.value)
+      ? `, its label reads "${lr.text}" = ${lr.value} (offered; use_label_read takes it)`
+      : lr.value === null
+        ? `, its label ${lr.text ? `read as "${lr.text}"` : 'could not be read'} was not used${lr.refused ? ` - ${lr.refused}` : ''}`
+        : '';
+  return `[${s.index + 1}] "${s.name}" - ${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}, ${level}${offered}, colour ${hex(s.colour)}${s.selected ? ', selected on screen' : ''}`;
 }
 
 export function describeState(st: AgentStateInput): string {
