@@ -12620,4 +12620,39 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('agent-strip').waitFor({ state: 'detached', timeout: 5000 });
     fs.rmSync(folder, { recursive: true, force: true });
   }, 180000);
+
+  it('M6 a PDF opens on the page the agent asks for, and the answer says which page of how many', async () => {
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-agent-pdf-'));
+    fs.copyFileSync(path.join(REPO_ROOT, 'samples', 'multipage-figures.pdf'), path.join(folder, 'paper.pdf'));
+    await resetWorkspace('xy');
+    await openSettings();
+    await page.getByTestId('setting-agentsEnabled').check();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
+    const url = (await textOf('setting-agents-address')).trim();
+    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-claude-code'))![1]!;
+    try {
+      await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, folder);
+      await page.getByTestId('setting-agentFolder-choose').click();
+      await expect.poll(() => textOf('setting-agentFolder')).toBe(folder);
+    } finally {
+      await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, SAMPLE_IMAGE);
+    }
+    await closeSettings();
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    const init = await rpc(url, token, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e-agent', version: '1' } } });
+    const session = init.headers.get('mcp-session-id')!;
+    const call = async (name: string, args: unknown) => {
+      const j = await (await rpc(url, token, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }, session)).json();
+      return (j.result.content as { text: string }[]).map((c) => c.text).join('\n');
+    };
+    expect(await call('open_figure', { path: 'paper.pdf', page: 2 })).toMatch(/Opened paper\.pdf, page 2 of 3 \(\d+ × \d+ pixels\)/);
+    expect(await textOf('pdf-page-label')).toBe('Page 2 / 3');
+    expect(await call('open_figure', { path: 'paper.pdf', page: 9 })).toMatch(/has no page 9; it has 3/);
+    await openSettings();
+    await page.getByTestId('setting-agentsEnabled').uncheck();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'detached' });
+    await closeSettings();
+    fs.rmSync(folder, { recursive: true, force: true });
+  }, 120000);
 });

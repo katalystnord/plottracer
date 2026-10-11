@@ -552,7 +552,7 @@ interface ImageCanvasProps {
    * which owns PDF state, rendering (ui/src/pdfRender.ts) and page navigation
    * (checkpoint 96). ImageCanvas stays image-only; the rendered page comes back
    * through loadImageFromSrc like any other picture. */
-  onPdfBytes?: (bytes: Uint8Array, fileName?: string) => void;
+  onPdfBytes?: (bytes: Uint8Array, fileName?: string) => void | Promise<void>;
   /** When true (a placement/pick tool is active), the idle canvas cursor is a
    * crosshair rather than the pan "grab" hand -- the hand wrongly implied
    * panning while the user was aiming a calibration/point click. A live drag
@@ -997,7 +997,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     // exactly. beforeOpenImage (the unsaved-work guard) already ran.
     const bytes = dataURLToBytes(dataURL);
     if (pagedDocumentFormat(bytes)) {
-      onPdfBytes?.(bytes, name);
+      await onPdfBytes?.(bytes, name);
       return;
     }
     const loaded = loadImageFromSrc(dataURL, name);

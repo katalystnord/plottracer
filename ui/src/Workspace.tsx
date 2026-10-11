@@ -657,6 +657,16 @@ export function Workspace() {
   const agentClient = agentStatus?.client?.since ?? null;
   // a new connection starts with no steps of its own (M11)
   const agentStepsClientRef = useRef<number | null>(null);
+  /** Poll until `get` gives something, or give up after `ms`. */
+  const waitFor = async <T,>(get: () => T | null | undefined, ms: number): Promise<T | null> => {
+    const end = Date.now() + ms;
+    for (;;) {
+      const v = get();
+      if (v) return v;
+      if (Date.now() > end) return null;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  };
   const agentSteps = () => {
     if (agentStepsClientRef.current !== agentClient) {
       agentStepsRef.current.clear();
@@ -8289,7 +8299,12 @@ export function Workspace() {
   agentHostRef.current = {
     getState: () => ({
       figure: canvasHasImage
-        ? { fileName: imageCanvasRef.current?.getImageFileName() ?? null, width: canvasImageDims.w, height: canvasImageDims.h }
+        ? {
+            fileName: imageCanvasRef.current?.getImageFileName() ?? null,
+            width: canvasImageDims.w,
+            height: canvasImageDims.h,
+            ...(pdfStateRef.current ? { page: { page: pdfStateRef.current.page, count: pdfStateRef.current.pageCount } } : {}),
+          }
         : null,
       graphType: sessionRef.current.getConfig().label,
       calibrated: sessionRef.current.getAxes() !== null,
@@ -8366,7 +8381,7 @@ export function Workspace() {
     saveFile: async (name, content) =>
       window.electronAPI?.agentSaveFile ? window.electronAPI.agentSaveFile(name, content) : { error: 'Saving needs the PlotTracer app.' },
     settings: () => ({ decimalComma: settingsRef.current.decimalComma, fullPrecision: exportFullPrecision }),
-    openFigure: async ({ name, dataURL }) => {
+    openFigure: async ({ name, dataURL, page }) => {
       // ⚑ An agent never discards the user's work: where a person would be asked,
       // the agent is refused and told why.
       if (dirtyRef.current) {
@@ -8375,12 +8390,30 @@ export function Workspace() {
       const canvas = imageCanvasRef.current;
       if (!canvas) return { isError: true, content: [{ type: 'text', text: 'PlotTracer is still starting. Try again in a moment.' }] };
       agentSteps().clear();
+      const before = canvas.getImageData();
       await canvas.openFileContent(dataURL, name);
+      const doc = pdfDocRef.current;
+      const paged = doc !== null && pdfStateRef.current !== null;
+      if (page !== undefined && page !== 1) {
+        if (!paged || !doc || page > doc.pageCount) {
+          return { isError: true, content: [{ type: 'text', text: `Opened ${name}, but it has no page ${page}${paged && doc ? `; it has ${doc.pageCount}` : ' - it is a single image'}. Page 1 is shown.` }] };
+        }
+        await waitFor(() => (canvas.getImageData() !== before ? true : null), 20000);
+        const page1 = canvas.getImageData();
+        await goToPdfPage(page);
+        await waitFor(() => (canvas.getImageData() !== page1 ? true : null), 20000);
+      }
+      // ⚑ Answered only once the figure is on screen: a PDF page renders after
+      // the open returns, and an answer before it would describe nothing.
+      const shown = await waitFor(() => {
+        const img = canvas.getImageData();
+        return img && img !== before && (!paged || pdfStateRef.current?.page === (page ?? 1)) ? img : null;
+      }, 20000);
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
       agentHostRef.current?.waitingForCalibration();
-      const st = agentHostRef.current?.getState();
-      const size = st?.figure ? ` (${st.figure.width} × ${st.figure.height} pixels)` : '';
-      return { content: [{ type: 'text', text: `Opened ${name}${size}. ${NOT_CALIBRATED}` }] };
+      const size = shown ? ` (${shown.width} × ${shown.height} pixels)` : '';
+      const pages = paged && doc ? `, page ${page ?? 1} of ${doc.pageCount}` : '';
+      return { content: [{ type: 'text', text: `Opened ${name}${pages}${size}. ${NOT_CALIBRATED}` }] };
     },
   };
 

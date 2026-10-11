@@ -291,7 +291,8 @@ function registerAgentBridge(ipcMain, getDir, getMainWindow, version) {
     if (name === 'open_figure') {
       const f = readFigure(current.agentFolder, args && args.path)
       if (f.error) return Promise.resolve({ isError: true, content: [{ type: 'text', text: f.error }] })
-      return toWindow('call', name, { name: f.name, path: f.path, dataURL: f.dataURL })
+      const page = args && Number.isInteger(args.page) ? args.page : undefined
+      return toWindow('call', name, { name: f.name, path: f.path, dataURL: f.dataURL, ...(page ? { page } : {}) })
     }
     return toWindow('call', name, args)
   }

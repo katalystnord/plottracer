@@ -11,7 +11,7 @@ import { AGENT_TOOLS, doAgentTool, type AgentDoingHost, type ToolResult } from '
  */
 export interface AgentHost extends AgentDoingHost {
   /** M6: open a figure the main process has already checked and read. */
-  openFigure: (figure: { name: string; dataURL: string }) => Promise<ToolResult>;
+  openFigure: (figure: { name: string; dataURL: string; page?: number }) => Promise<ToolResult>;
 }
 
 const refuse = (text: string): ToolResult => ({ isError: true, content: [{ type: 'text', text }] });
@@ -60,7 +60,8 @@ export async function answerAgentCall(call: AgentCall, host: AgentHost): Promise
       const name = typeof args.name === 'string' ? args.name : null;
       const dataURL = typeof args.dataURL === 'string' ? args.dataURL : null;
       if (!name || !dataURL) return refuse('open_figure is answered through the folder chosen in Settings; call list_folder.');
-      return host.openFigure({ name, dataURL });
+      const page = typeof args.page === 'number' && Number.isInteger(args.page) && args.page >= 1 ? args.page : undefined;
+      return host.openFigure({ name, dataURL, ...(page ? { page } : {}) });
     }
     case 'list_folder':
       return refuse('The folder is listed by PlotTracer itself, outside this window; try again.');

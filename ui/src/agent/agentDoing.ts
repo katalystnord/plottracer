@@ -87,8 +87,8 @@ export const DOING_TOOLS: readonly AgentTool[] = [
   },
   {
     name: 'open_figure',
-    description: 'Open a figure from the folder the user chose for agents (a name from list_folder). It replaces what is open, so it is refused while the user has unsaved work. The user then picks the graph type and calibrates it; until they have, the tools that change data are refused.',
-    inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'A file name from list_folder.' } }, required: ['path'], additionalProperties: false },
+    description: 'Open a figure from the folder the user chose for agents (a name from list_folder); for a PDF or a multi-page TIFF, the page to open (1 when left out). It replaces what is open, so it is refused while the user has unsaved work. The user then picks the graph type and calibrates it; until they have, the tools that change data are refused.',
+    inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'A file name from list_folder.' }, page: { type: 'integer', minimum: 1 } }, required: ['path'], additionalProperties: false },
   },
   {
     name: 'add_series',

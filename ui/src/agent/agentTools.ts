@@ -57,7 +57,7 @@ export interface AgentSeries {
 }
 
 export interface AgentStateInput {
-  figure: { fileName: string | null; width: number; height: number } | null;
+  figure: { fileName: string | null; width: number; height: number; page?: { page: number; count: number } } | null;
   graphType: string;
   calibrated: boolean;
   /** The calibration walk's current step, while it is not done. */
@@ -84,7 +84,8 @@ export function describeState(st: AgentStateInput): string {
     return 'No figure is open in PlotTracer. Open one with open_figure (list_folder shows what you may open), or ask the user to open one.';
   }
   const lines: string[] = [];
-  lines.push(`Figure: ${st.figure.fileName ?? 'unnamed'}, ${st.figure.width} × ${st.figure.height} pixels.`);
+  const page = st.figure.page ? `, page ${st.figure.page.page} of ${st.figure.page.count}` : '';
+  lines.push(`Figure: ${st.figure.fileName ?? 'unnamed'}${page}, ${st.figure.width} × ${st.figure.height} pixels.`);
   lines.push(`Graph type: ${st.graphType}.`);
   if (st.calibrated) {
     lines.push('Calibration: done (by the user).');

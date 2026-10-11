@@ -26,6 +26,10 @@ describe('what the agent sees (M4, M5)', () => {
     expect(text).toMatch(/Calibration: done/);
   });
 
+  it('M5 / M6: for a page of a PDF, get_state says which page of how many', () => {
+    expect(describeState({ ...base, figure: { fileName: 'paper.pdf', width: 800, height: 600, page: { page: 2, count: 3 } } })).toContain('Figure: paper.pdf, page 2 of 3, 800 × 600 pixels.');
+  });
+
   it('M5: get_state gives the prompt on screen, in the same words', () => {
     expect(describeState(base)).toContain('"Pick a line on the canvas, or press Find lines."');
   });
