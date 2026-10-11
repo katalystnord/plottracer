@@ -67,7 +67,7 @@ export function useAgentBridge(hostRef: RefObject<AgentHost | null>): void {
     const api = window.electronAPI;
     if (!api?.onAgentCall || !api.answerAgent) return;
     const answer = api.answerAgent;
-    return api.onAgentCall((call) => {
+    const off = api.onAgentCall((call) => {
       try {
         const host = hostRef.current;
         if (!host) throw new Error('PlotTracer is still starting. Try again in a moment.');
@@ -76,6 +76,12 @@ export function useAgentBridge(hostRef: RefObject<AgentHost | null>): void {
         answer(call.callId, undefined, e instanceof Error ? e.message : String(e));
       }
     });
+    // only now can a call be answered, so only now is the main process told
+    api.notifyAgentReady?.(true);
+    return () => {
+      api.notifyAgentReady?.(false);
+      off();
+    };
   }, [hostRef]);
 }
 

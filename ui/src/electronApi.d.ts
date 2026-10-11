@@ -104,6 +104,8 @@ declare global {
       onAgentStatus?: (callback: (status: AgentStatus) => void) => () => void;
       onAgentCall?: (callback: (call: AgentCall) => void) => () => void;
       answerAgent?: (callId: number, result: unknown, error?: string) => void;
+      /** Tell the main process the window is (or no longer is) answering calls. */
+      notifyAgentReady?: (ready: boolean) => void;
       disconnectAgent?: () => Promise<AgentStatus>;
       allowAgentReconnect?: () => Promise<AgentStatus>;
     };

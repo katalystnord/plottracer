@@ -209,20 +209,26 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     });
     try {
       await agentApp.firstWindow();
-      const token = await expect.poll(() => (fs.existsSync(path.join(profile, 'agent-token')) ? fs.readFileSync(path.join(profile, 'agent-token'), 'utf8').trim() : ''), { timeout: 20000 }).toMatch(/^[0-9a-f]{48}$/)
-        .then(() => fs.readFileSync(path.join(profile, 'agent-token'), 'utf8').trim());
+      const tokenFile = path.join(profile, 'agent-token');
+      await expect.poll(() => fs.existsSync(tokenFile), { timeout: 20000 }).toBe(true);
+      const token = fs.readFileSync(tokenFile, 'utf8').trim();
       const post = (body: unknown, session?: string) =>
         fetch('http://127.0.0.1:47897/mcp', {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${token}`, ...(session ? { 'mcp-session-id': session } : {}) },
           body: JSON.stringify(body),
+          signal: AbortSignal.timeout(15000),
         });
       const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'packaged-check' } } });
       expect(init.status).toBe(200);
       const session = init.headers.get('mcp-session-id')!;
-      const state = (await (await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'get_state', arguments: {} } }, session)).json()) as {
-        result: { content: { text: string }[] };
-      };
+      // an agent told "still starting" tries again, and so does this check
+      const getState = async () =>
+        ((await (await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'get_state', arguments: {} } }, session)).json()) as {
+          result: { content: { text: string }[] };
+        }).result.content[0]?.text ?? '';
+      await expect.poll(getState, { timeout: 30000, interval: 500 }).not.toMatch(/still starting/);
+      const state = { result: { content: [{ text: await getState() }] } };
       expect(state.result.content[0]?.text).toMatch(/No figure is open/);
     } finally {
       await agentApp.close();

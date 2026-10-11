@@ -236,10 +236,22 @@ function registerAgentBridge(ipcMain, getDir, getMainWindow, version) {
   let server = null
   let nextCall = 1
   const pending = new Map()
+  // ⚑ Whether the window is listening for calls. A call sent before it is would
+  // be lost, and the agent would wait out the whole timeout for nothing - so it
+  // is refused at once, with the reason. A reload starts the window over.
+  let ready = false
+  let watched = null
+  ipcMain.on('agent:ready', () => { ready = true })
+  ipcMain.on('agent:gone', () => { ready = false })
 
   function toWindow(kind, name, args) {
     const win = getMainWindow()
     if (!win || win.isDestroyed()) return Promise.reject(new Error('PlotTracer has no window open.'))
+    if (watched !== win) {
+      watched = win
+      win.webContents.on('did-start-loading', () => { ready = false })
+    }
+    if (!ready) return Promise.reject(new Error('PlotTracer is still starting. Try again in a moment.'))
     const callId = nextCall++
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -292,7 +304,11 @@ function registerAgentBridge(ipcMain, getDir, getMainWindow, version) {
   ipcMain.handle('agent:disconnect', () => { server?.disconnect(); return fullStatus() })
   ipcMain.handle('agent:allow-reconnect', () => { server?.allowReconnect(); return fullStatus() })
 
-  return { apply, stop: () => (server ? server.stop() : Promise.resolve()) }
+  return {
+    apply,
+    stop: () => (server ? server.stop() : Promise.resolve()),
+    call: (name, args) => toWindow('call', name, args),
+  }
 }
 
 module.exports.registerAgentBridge = registerAgentBridge

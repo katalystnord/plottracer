@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('agent:call', listener)
   },
   answerAgent: (callId, result, error) => ipcRenderer.send('agent:result', { callId, result, error }),
+  notifyAgentReady: (ready) => ipcRenderer.send(ready ? 'agent:ready' : 'agent:gone'),
   disconnectAgent: () => ipcRenderer.invoke('agent:disconnect'),
   allowAgentReconnect: () => ipcRenderer.invoke('agent:allow-reconnect'),
 })

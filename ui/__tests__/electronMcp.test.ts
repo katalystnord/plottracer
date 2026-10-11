@@ -222,3 +222,44 @@ describe('the agent token', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe('the bridge to the window', () => {
+  const { registerAgentBridge } = require('../electron-mcp.cjs') as {
+    registerAgentBridge: (
+      ipcMain: unknown,
+      getDir: () => string,
+      getMainWindow: () => unknown,
+      version: string
+    ) => { apply: (s: unknown) => Promise<void>; stop: () => Promise<void>; call: (name: string, args: unknown) => Promise<unknown> };
+  };
+
+  function fakes() {
+    const on = new Map<string, (e: unknown, msg: unknown) => void>();
+    const ipcMain = { on: (ch: string, fn: (e: unknown, msg: unknown) => void) => on.set(ch, fn), handle: () => undefined };
+    const sent: { ch: string; msg: { callId: number } }[] = [];
+    const win = {
+      isDestroyed: () => false,
+      webContents: { send: (ch: string, msg: { callId: number }) => sent.push({ ch, msg }), on: () => undefined },
+    };
+    return { on, ipcMain, sent, win };
+  }
+
+  it('a call that arrives before the window is listening is refused at once, with the reason', async () => {
+    const f = fakes();
+    const bridge = registerAgentBridge(f.ipcMain, () => os.tmpdir(), () => f.win, '9');
+    const started = Date.now();
+    await expect(bridge.call('get_state', {})).rejects.toThrow(/still starting/);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(f.sent.filter((s) => s.ch === 'agent:call')).toHaveLength(0);
+  });
+
+  it('once the window says it is listening, a call reaches it and its answer comes back', async () => {
+    const f = fakes();
+    const bridge = registerAgentBridge(f.ipcMain, () => os.tmpdir(), () => f.win, '9');
+    f.on.get('agent:ready')!({}, undefined);
+    const answer = bridge.call('get_state', {});
+    const sent = f.sent.find((s) => s.ch === 'agent:call')!;
+    f.on.get('agent:result')!({}, { callId: sent.msg.callId, result: { ok: 1 } });
+    await expect(answer).resolves.toEqual({ ok: 1 });
+  });
+});
