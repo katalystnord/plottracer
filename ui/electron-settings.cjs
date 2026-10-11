@@ -46,13 +46,19 @@ function writeSettingsFile(dir, value) {
 
 // `getDir` is a getter because app.getPath('userData') is only final once the
 // command line (--user-data-dir) has been read.
-function registerSettingsHandlers(ipcMain, getDir) {
+// `onWrite` hears every stored value, so the main process can act on a setting
+// it owns (the agent server, M1) without reading the file back.
+function registerSettingsHandlers(ipcMain, getDir, onWrite) {
   // Synchronous on purpose: the renderer needs the starting values for its
   // first render, and this is one small local file.
   ipcMain.on('settings:get', (event) => {
     event.returnValue = readSettingsFile(getDir())
   })
-  ipcMain.handle('settings:set', (_event, value) => writeSettingsFile(getDir(), value))
+  ipcMain.handle('settings:set', (_event, value) => {
+    const ok = writeSettingsFile(getDir(), value)
+    if (ok && onWrite) onWrite(value)
+    return ok
+  })
 }
 
 module.exports = { SETTINGS_FILE, readSettingsFile, writeSettingsFile, registerSettingsHandlers }

@@ -196,6 +196,40 @@ describe.runIf(RUN)('the packaged app is complete', () => {
       .toMatch(/7 lines found/);
   }, 180000);
 
+  it('serves agents over MCP, from the main-process file the package ships (v2.7)', async () => {
+    // ⚑ Its own profile, so the check never switches agents on in the profile
+    // of the person running it.
+    const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-packaged-agents-'));
+    fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ agentsEnabled: true }));
+    const agentApp = await electron.launch({
+      executablePath: BINARY,
+      args: [...ozoneArgs(), `--user-data-dir=${profile}`],
+      timeout: 60000,
+      env: { ...process.env, WPD_E2E: '1', PLOTTRACER_MCP_PORT: '47897' },
+    });
+    try {
+      await agentApp.firstWindow();
+      const token = await expect.poll(() => (fs.existsSync(path.join(profile, 'agent-token')) ? fs.readFileSync(path.join(profile, 'agent-token'), 'utf8').trim() : ''), { timeout: 20000 }).toMatch(/^[0-9a-f]{48}$/)
+        .then(() => fs.readFileSync(path.join(profile, 'agent-token'), 'utf8').trim());
+      const post = (body: unknown, session?: string) =>
+        fetch('http://127.0.0.1:47897/mcp', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${token}`, ...(session ? { 'mcp-session-id': session } : {}) },
+          body: JSON.stringify(body),
+        });
+      const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', clientInfo: { name: 'packaged-check' } } });
+      expect(init.status).toBe(200);
+      const session = init.headers.get('mcp-session-id')!;
+      const state = (await (await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'get_state', arguments: {} } }, session)).json()) as {
+        result: { content: { text: string }[] };
+      };
+      expect(state.result.content[0]?.text).toMatch(/No figure is open/);
+    } finally {
+      await agentApp.close();
+      fs.rmSync(profile, { recursive: true, force: true });
+    }
+  }, 120000);
+
   it('leaves no language data in the install directory', async () => {
     // ⚠️ The default writes `eng.traineddata` to the working directory, which for
     // an installed app is root-owned. Asserted HERE as well as in the unit test,

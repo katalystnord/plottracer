@@ -22,6 +22,7 @@ export interface Settings {
   labelConfidence: number;
   exportFullPrecision: boolean;
   decimalComma: boolean;
+  agentsEnabled: boolean;
 }
 
 /** The values the app shipped with before Settings existed. */
@@ -34,6 +35,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   labelConfidence: 0.8,
   exportFullPrecision: false,
   decimalComma: false,
+  agentsEnabled: false,
 });
 
 export type SettingSpec =
@@ -85,6 +87,11 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     key: 'decimalComma', group: 'Export', kind: 'boolean',
     label: 'Decimal comma',
     explains: 'CSV and TSV write 1,5 instead of 1.5, and CSV separates fields with a semicolon, which is what a spreadsheet set to Swedish or German expects. JSON, the workbooks and the code formats are unchanged.',
+  },
+  {
+    key: 'agentsEnabled', group: 'Agents', kind: 'boolean',
+    label: 'Let agents use PlotTracer',
+    explains: 'An AI agent on this computer can connect over MCP, look at the figure and work in this window; every step it takes shows here. You pick the graph type and calibrate - the agent cannot.',
   },
 ];
 

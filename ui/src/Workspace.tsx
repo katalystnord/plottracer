@@ -64,6 +64,8 @@ import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Menu, MenuItem, Divider } from '@mui/material';
 import { IconButton } from './IconButton.js';
 import { GraphTypeCardPicker } from './GraphTypeCardPicker.js';
+import { AgentStrip } from './agent/AgentStrip.js';
+import { useAgentBridge, useAgentStatus, type AgentHost } from './agent/useAgentBridge.js';
 import {
   AppShell,
   TopBar,
@@ -639,6 +641,12 @@ export function Workspace() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // Agents (v2.7, docs/v2.7-mcp-cases.md): the server's state, and the host a
+  // tool call is answered from - refreshed every render below, after the facts
+  // it reads exist.
+  const agentStatus = useAgentStatus();
+  const agentHostRef = useRef<AgentHost | null>(null);
+  useAgentBridge(agentHostRef);
   const [axesTypeId, setAxesTypeId] = useState(XY_AXES_CONFIG.id);
   const sessionRef = useRef<CalibrationSession<CalibratedAxes>>(new CalibrationSession(XY_AXES_CONFIG));
   /** Last image height reported by the canvas -- see handleCanvasStatus. Every
@@ -8218,6 +8226,33 @@ export function Workspace() {
 
   const noPointsHint = buildNoPointsHint({ mode, config, heatmapHasGrid: heatmapShownGrid !== null });
 
+  // ⚑ What an agent is told is read from the same values the screen shows: the
+  // tips bar's sentence, the series list, the places to check (M5).
+  agentHostRef.current = {
+    getState: () => ({
+      figure: canvasHasImage
+        ? { fileName: imageCanvasRef.current?.getImageFileName() ?? null, width: canvasImageDims.w, height: canvasImageDims.h }
+        : null,
+      graphType: config.label,
+      calibrated: axes !== null,
+      step: axes === null && currentStep ? { index: session.getStepIndex(), count: steps.length, label: currentStep.label } : null,
+      tip: ocrError ?? guidanceTip,
+      series: datasetInfos.map((d) => {
+        const level = session.getContourLevel(d.index);
+        return {
+          index: d.index,
+          name: d.name,
+          colour: d.color,
+          pointCount: d.pointCount,
+          level: level ? { value: level.value, source: level.source } : null,
+          selected: d.active,
+        };
+      }),
+      places: linePlaces,
+    }),
+    renderRegion: (r) => imageCanvasRef.current?.getRegionPngDataURL(r) ?? null,
+  };
+
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;
   // Distance/Area read the Set-scale px->unit; Angle is degrees (no reference).
 
@@ -8478,11 +8513,20 @@ export function Workspace() {
             onStartChallenge={game.start}
             appVersion={__APP_VERSION__}
           />
-          <SettingsMenu settings={settings} onChange={updateSettings} />
+          <SettingsMenu settings={settings} onChange={updateSettings} agentStatus={agentStatus} />
         </TopBarGroup>
       </TopBar>
 
       <CanvasRegion ref={canvasRegionRef}>
+        {/* M3: which agent is connected, since when, and Disconnect. Along the
+            bottom edge of the canvas, where it covers the least of a figure. */}
+        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 6 }}>
+          <AgentStrip
+            status={agentStatus}
+            onDisconnect={() => { void window.electronAPI?.disconnectAgent?.(); }}
+            onAllowReconnect={() => { void window.electronAPI?.allowAgentReconnect?.(); }}
+          />
+        </div>
         {/* Foldable calibration card-bar (checkpoint 50), anchored to the TOP of
             the canvas and overlaid on the chart -- most charts keep their plot
             (and the calibration points) in the lower/left region, so the top

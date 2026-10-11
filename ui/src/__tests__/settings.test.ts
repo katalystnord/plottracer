@@ -60,7 +60,14 @@ describe('Settings (v2.7)', () => {
       labelConfidence: 0.8,
       exportFullPrecision: false,
       decimalComma: false,
+      agentsEnabled: false,
     });
+  });
+
+  it('M1: agents are off until the user turns them on', () => {
+    expect(DEFAULT_SETTINGS.agentsEnabled).toBe(false);
+    expect(parseSettings({ agentsEnabled: 'yes' }).agentsEnabled).toBe(false);
+    expect(parseSettings({ agentsEnabled: true }).agentsEnabled).toBe(true);
   });
 
   it('every default passes its own limits', () => {

@@ -43,4 +43,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // on every change. See ui/electron-settings.cjs and ui/src/settings.ts.
   getSettings: () => ipcRenderer.sendSync('settings:get'),
   setSettings: (value) => ipcRenderer.invoke('settings:set', value),
+
+  // Agents (v2.7, docs/v2.7-mcp-cases.md). The main process runs the MCP server
+  // and hands each tool call to the window; the window answers through
+  // answerAgent. The status says whether it listens, where, and who is connected.
+  getAgentStatus: () => ipcRenderer.invoke('agent:get-status'),
+  onAgentStatus: (callback) => {
+    const listener = (_e, status) => callback(status)
+    ipcRenderer.on('agent:status', listener)
+    return () => ipcRenderer.removeListener('agent:status', listener)
+  },
+  onAgentCall: (callback) => {
+    const listener = (_e, call) => callback(call)
+    ipcRenderer.on('agent:call', listener)
+    return () => ipcRenderer.removeListener('agent:call', listener)
+  },
+  answerAgent: (callId, result, error) => ipcRenderer.send('agent:result', { callId, result, error }),
+  disconnectAgent: () => ipcRenderer.invoke('agent:disconnect'),
+  allowAgentReconnect: () => ipcRenderer.invoke('agent:allow-reconnect'),
 })

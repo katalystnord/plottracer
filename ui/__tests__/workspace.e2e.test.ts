@@ -76,6 +76,9 @@ const REPO_ROOT = path.resolve(__dirname, '../..');
  * module-scope side effect here.
  */
 const E2E_USER_DATA = freshProfile();
+// The agent server's port for this run (v2.7): never the one a PlotTracer the
+// developer has open might be using.
+process.env.PLOTTRACER_MCP_PORT ??= '47899';
 
 
 /** The bundled spider example's published ground truth - anchors in IMAGE pixels,
@@ -12400,4 +12403,91 @@ describe('Workspace: Settings (v2.7)', () => {
       expect(await page.getByTestId('series-use-label').count(), `line ${i}`).toBe(0);
     }
   }, 150000);
+
+  // ── Agents over MCP (v2.7, docs/v2.7-mcp-cases.md) ─────────────────────────
+  // Gate 4 for a person AND an agent: the person turns agents on from the gear,
+  // and the agent connects with exactly the command the card shows - the test
+  // takes the address and the token from the screen, never from a file.
+  async function rpc(url: string, token: string, body: unknown, session?: string) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${token}`,
+        ...(session ? { 'mcp-session-id': session } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    return res;
+  }
+
+  it('M1/M2/M3/M4/M5 turning agents on shows how to connect; a connected agent is named on screen, sees the figure and the state without moving the view, and Disconnect keeps it out', async () => {
+    await resetWorkspace('xy');
+    await openSettings();
+    expect(await page.getByTestId('setting-row-agentsEnabled').isVisible()).toBe(true);
+    // M1: nothing to connect to while it is off
+    expect(await page.getByTestId('setting-agents-address').count()).toBe(0);
+    await page.getByTestId('setting-agentsEnabled').check();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
+    const url = (await textOf('setting-agents-address')).trim();
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
+    const command = await textOf('setting-agents-claude-code');
+    expect(command).toContain(url);
+    const token = /Bearer ([0-9a-f]+)/.exec(command)![1]!;
+    await closeSettings();
+
+    // M2: a client without the token is refused
+    expect((await rpc(url, 'wrong', { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} })).status).toBe(401);
+    const init = await rpc(url, token, {
+      jsonrpc: '2.0', id: 1, method: 'initialize',
+      params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e-agent', version: '1' } },
+    });
+    expect(init.status).toBe(200);
+    const session = init.headers.get('mcp-session-id')!;
+
+    // M3: the screen names it
+    await page.getByTestId('agent-strip').waitFor({ state: 'visible' });
+    expect(await textOf('agent-strip-text')).toMatch(/Agent connected: e2e-agent, since \d/);
+
+    // M5: the state, in the words on screen
+    const tools = await (await rpc(url, token, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, session)).json();
+    expect(tools.result.tools.map((t: { name: string }) => t.name)).toEqual(['get_state', 'view_figure']);
+    const state = await (await rpc(url, token, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_state', arguments: {} } }, session)).json();
+    const text: string = state.result.content[0].text;
+    expect(text).toMatch(/Graph type: XY/);
+    expect(text).toMatch(/Calibration: not done/);
+    expect(text).toContain((await textOf('tips-bar')).replace('💡', '').trim());
+
+    // M4: the whole figure, and a close-up, without the user's view moving
+    const viewBefore = await textOf('view-state');
+    const whole = await (await rpc(url, token, { jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'view_figure', arguments: {} } }, session)).json();
+    const img = whole.result.content[0];
+    expect(img.type).toBe('image');
+    const png = Buffer.from(img.data, 'base64');
+    expect(png.subarray(1, 4).toString()).toBe('PNG');
+    const pngWidth = png.readUInt32BE(16);
+    expect(whole.result.content[1].text).toContain(`picture ${pngWidth} ×`);
+    const close = await (await rpc(url, token, {
+      jsonrpc: '2.0', id: 5, method: 'tools/call',
+      params: { name: 'view_figure', arguments: { region: { x: 10, y: 10, width: 50, height: 40 }, zoom: 4 } },
+    }, session)).json();
+    expect(Buffer.from(close.result.content[0].data, 'base64').readUInt32BE(16)).toBe(200);
+    expect(await textOf('view-state')).toBe(viewBefore);
+
+    // M3: Disconnect, and the way back, both on screen
+    await page.getByTestId('agent-disconnect').click();
+    await expect.poll(() => textOf('agent-strip-text')).toMatch(/Agent disconnected/);
+    expect((await rpc(url, token, { jsonrpc: '2.0', id: 6, method: 'tools/list' }, session)).status).toBe(404);
+    expect((await rpc(url, token, { jsonrpc: '2.0', id: 7, method: 'initialize', params: { clientInfo: { name: 'e2e-agent' } } })).status).toBe(403);
+    await page.getByTestId('agent-allow-reconnect').click();
+    expect((await rpc(url, token, { jsonrpc: '2.0', id: 8, method: 'initialize', params: { clientInfo: { name: 'e2e-agent' } } })).status).toBe(200);
+
+    // M1: turned off, nothing listens and the strip goes
+    await openSettings();
+    await page.getByTestId('setting-agentsEnabled').uncheck();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'detached' });
+    await expect(rpc(url, token, { jsonrpc: '2.0', id: 9, method: 'initialize', params: {} })).rejects.toThrow();
+    expect(await page.getByTestId('agent-strip').count()).toBe(0);
+  }, 90000);
 });

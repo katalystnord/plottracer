@@ -134,10 +134,16 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
   // ⚠️ It matters in the e2e harness too - a live worker thread is a test run
   // that hangs on teardown rather than a feature that misbehaves on screen.
   // Settings (v2.7): the main process owns the file - see electron-settings.cjs.
-  const { registerSettingsHandlers } = require('./electron-settings.cjs')
-  registerSettingsHandlers(ipcMain, () => require('electron').app.getPath('userData'))
+  const { registerSettingsHandlers, readSettingsFile } = require('./electron-settings.cjs')
+  const userData = () => require('electron').app.getPath('userData')
+  // The agent server (v2.7, M1) follows the *Let agents use PlotTracer* setting.
+  const { registerAgentBridge } = require('./electron-mcp.cjs')
+  const agents = registerAgentBridge(ipcMain, userData, getMainWindow, require('electron').app.getVersion())
+  registerSettingsHandlers(ipcMain, userData, (value) => { void agents.apply(value) })
+  require('electron').app.whenReady().then(() => agents.apply(readSettingsFile(userData())))
 
   require('electron').app.on('will-quit', () => {
+    void agents.stop()
     const { shutdownOcr } = require('./electron-ocr.cjs')
     void shutdownOcr()
   })

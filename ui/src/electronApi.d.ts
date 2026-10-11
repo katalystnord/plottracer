@@ -15,6 +15,29 @@ export interface ElectronProjectOpenResult {
   base64: string;
 }
 
+/** The agent server's state (v2.7), pushed by ui/electron-mcp.cjs. */
+export interface AgentStatus {
+  /** The Settings switch is on, so the server should be listening. */
+  enabled: boolean;
+  listening: boolean;
+  port: number | null;
+  wantPort: number;
+  host: string;
+  token: string | null;
+  client: { name: string; since: number } | null;
+  /** Disconnected by the user and not yet let back (M3). */
+  blocked: boolean;
+  error: string | null;
+}
+
+/** One request from the agent for the window to answer. */
+export interface AgentCall {
+  callId: number;
+  kind: 'list' | 'call';
+  name?: string;
+  args?: unknown;
+}
+
 export interface ElectronFileFilter {
   name: string;
   extensions: string[];
@@ -76,6 +99,13 @@ declare global {
       getSettings?: () => unknown;
       /** Write the Settings back; resolves false when the file could not be written. */
       setSettings?: (value: Record<string, unknown>) => Promise<boolean>;
+      /** Agents (v2.7) - see ui/electron-mcp.cjs and ui/src/agent/. */
+      getAgentStatus?: () => Promise<AgentStatus>;
+      onAgentStatus?: (callback: (status: AgentStatus) => void) => () => void;
+      onAgentCall?: (callback: (call: AgentCall) => void) => () => void;
+      answerAgent?: (callId: number, result: unknown, error?: string) => void;
+      disconnectAgent?: () => Promise<AgentStatus>;
+      allowAgentReconnect?: () => Promise<AgentStatus>;
     };
   }
 }

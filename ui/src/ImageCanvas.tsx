@@ -623,6 +623,11 @@ export interface ImageCanvasHandle {
    * DOM element and is deliberately not part of either layer, so it never
    * appears in the snapshot. */
   getCompositePngDataURL: () => string | null;
+  /** A PNG of one region of the figure, in the image's own pixels, at `scale`
+   * picture pixels per image pixel, with the marks drawn over it (v2.7, M4).
+   * The same two layers as getCompositePngDataURL, rendered for that region
+   * rather than for the screen, so an agent looking never moves the view. */
+  getRegionPngDataURL: (region: { x: number; y: number; width: number; height: number; scale: number }) => string | null;
   /** The currently VISIBLE region of the image, in image-pixel coordinates,
    * clamped to the image bounds -- i.e. what the user has framed in the view
    * (checkpoint 102). Null if no image is loaded or nothing is visible. Used by
@@ -1109,6 +1114,35 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     return out.toDataURL('image/png');
   }, [image, getOverlayCanvas]);
 
+  const getRegionPngDataURL = useCallback(
+    (r: { x: number; y: number; width: number; height: number; scale: number }): string | null => {
+      if (!image) return null;
+      const out = document.createElement('canvas');
+      out.width = Math.max(1, Math.round(r.width * r.scale));
+      out.height = Math.max(1, Math.round(r.height * r.scale));
+      const ctx = out.getContext('2d');
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = r.scale < 1;
+      ctx.drawImage(image, r.x, r.y, r.width, r.height, 0, 0, out.width, out.height);
+      // The overlay lives in screen space at the current view; Konva renders any
+      // part of it, on screen or not, at the pixel ratio that turns the view's
+      // scale into the one asked for.
+      const layer = overlayLayerRef.current;
+      if (layer && layer.visible()) {
+        const marks = layer.toCanvas({
+          x: view.offsetX + r.x * view.scale,
+          y: view.offsetY + r.y * view.scale,
+          width: r.width * view.scale,
+          height: r.height * view.scale,
+          pixelRatio: r.scale / view.scale,
+        });
+        ctx.drawImage(marks, 0, 0, out.width, out.height);
+      }
+      return out.toDataURL('image/png');
+    },
+    [image, view]
+  );
+
   // The visible image region in image-pixel space (checkpoint 102): map the two
   // canvas corners back through the view transform and clamp to the image. This
   // is exactly "what the user has framed", which the Capture-figure step crops
@@ -1157,9 +1191,10 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       zoomTo,
       centreOn,
       getCompositePngDataURL,
+      getRegionPngDataURL,
       getViewImageRect,
     }),
-    [loadImageFromSrc, clearImage, imageFileName, applyImageTransform, openImage, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, centreOn, getCompositePngDataURL, getViewImageRect]
+    [loadImageFromSrc, clearImage, imageFileName, applyImageTransform, openImage, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, centreOn, getCompositePngDataURL, getRegionPngDataURL, getViewImageRect]
   );
 
   // Notify Workspace of scale / image-loaded changes (checkpoint 42) so the

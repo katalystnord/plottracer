@@ -3,6 +3,8 @@ import { theme } from '../theme.js';
 import { FloatingPanel } from '../FloatingPanel.js';
 import { SettingsIcon } from '../icons.js';
 import { DEFAULT_SETTINGS, SETTING_SPECS, type SettingSpec, type Settings } from '../settings.js';
+import type { AgentStatus } from '../electronApi.js';
+import { agentConfig } from '../agent/useAgentBridge.js';
 
 /**
  * The Settings card (v2.7, docs/v2.7-settings-cases.md) - the gear at the right
@@ -17,6 +19,44 @@ import { DEFAULT_SETTINGS, SETTING_SPECS, type SettingSpec, type Settings } from
 export interface SettingsMenuProps {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
+  /** The agent server's state, shown under *Let agents use PlotTracer* (M2). */
+  agentStatus?: AgentStatus | null;
+}
+
+/** Where an agent connects, and what to paste into it (M2) - shown while the
+ * switch is on, so turning it on is visibly what made the address exist. */
+function AgentConnection({ status }: { status: AgentStatus | null | undefined }) {
+  const small = { fontSize: theme.font.size.small, lineHeight: 1.35 } as const;
+  if (!status || (!status.listening && !status.error)) {
+    return <div data-testid="setting-agents-status" style={{ ...small, color: theme.color.text.legend, marginTop: 4 }}>Starting…</div>;
+  }
+  if (status.error) {
+    return <div data-testid="setting-agents-status" style={{ ...small, color: theme.color.error, marginTop: 4 }}>{status.error}</div>;
+  }
+  const cfg = agentConfig(status);
+  if (!cfg) return null;
+  const copy = (text: string) => { void navigator.clipboard?.writeText(text).catch(() => undefined); };
+  const code = {
+    display: 'block', fontFamily: 'monospace', fontSize: theme.font.size.small, whiteSpace: 'pre-wrap' as const,
+    wordBreak: 'break-all' as const, background: theme.color.background.panel, border: `1px solid ${theme.color.border.regular}`,
+    borderRadius: theme.border.radius.regular, padding: '4px 6px', margin: '2px 0 4px',
+  };
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div data-testid="setting-agents-status" style={small}>
+        Listening on this computer only, at <span data-testid="setting-agents-address" style={{ fontFamily: 'monospace' }}>{cfg.url}</span>
+      </div>
+      <div style={{ ...small, marginTop: 4 }}>To connect Claude Code, run:</div>
+      <code data-testid="setting-agents-claude-code" style={code}>{cfg.claudeCode}</code>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button type="button" data-testid="setting-agents-copy-command" onClick={() => copy(cfg.claudeCode)}>Copy command</button>
+        <button type="button" data-testid="setting-agents-copy-json" title={cfg.json} onClick={() => copy(cfg.json)}>Copy JSON for other clients</button>
+      </div>
+      <div style={{ ...small, color: theme.color.text.legend, marginTop: 4 }}>
+        The token in it is the key: only a client holding it can connect, and a web page never can.
+      </div>
+    </div>
+  );
 }
 
 const caption = {
@@ -70,7 +110,7 @@ function NumberSetting({ spec, value, onChange }: {
   );
 }
 
-export function SettingsMenu({ settings, onChange }: SettingsMenuProps) {
+export function SettingsMenu({ settings, onChange, agentStatus }: SettingsMenuProps) {
   const groups = [...new Set(SETTING_SPECS.map((s) => s.group))];
   const isDefault = SETTING_SPECS.every((s) => settings[s.key] === DEFAULT_SETTINGS[s.key]);
   return (
@@ -104,6 +144,7 @@ export function SettingsMenu({ settings, onChange }: SettingsMenuProps) {
                 <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, marginTop: 2, lineHeight: 1.35 }}>
                   {spec.explains}
                 </div>
+                {spec.key === 'agentsEnabled' && settings.agentsEnabled && <AgentConnection status={agentStatus} />}
               </div>
             ))}
           </div>
