@@ -23,6 +23,9 @@ export interface Settings {
   exportFullPrecision: boolean;
   decimalComma: boolean;
   agentsEnabled: boolean;
+  /** The folder an agent may open figures from and save into (M6, M10); '' = none. */
+  agentFolder: string;
+  agentMaySave: boolean;
 }
 
 /** The values the app shipped with before Settings existed. */
@@ -36,11 +39,17 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   exportFullPrecision: false,
   decimalComma: false,
   agentsEnabled: false,
+  agentFolder: '',
+  agentMaySave: false,
 });
 
+/** `under`: the row shows only while that switch is on - so with agents off, the
+ * card shows nothing of them but the switch itself. */
+type SpecBase = { key: keyof Settings; group: string; label: string; explains: string; under?: keyof Settings };
 export type SettingSpec =
-  | { key: keyof Settings; group: string; label: string; explains: string; kind: 'boolean' }
-  | { key: keyof Settings; group: string; label: string; explains: string; kind: 'number'; min: number; max: number; step: number; integer: boolean };
+  | (SpecBase & { kind: 'boolean' })
+  | (SpecBase & { kind: 'folder' })
+  | (SpecBase & { kind: 'number'; min: number; max: number; step: number; integer: boolean });
 
 /**
  * Every setting, in the order the card shows them. The card renders from this
@@ -93,6 +102,16 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     label: 'Let agents use PlotTracer',
     explains: 'An AI agent on this computer can connect over MCP, look at the figure and work in this window; every step it takes shows here. You pick the graph type and calibrate - the agent cannot.',
   },
+  {
+    key: 'agentFolder', group: 'Agents', kind: 'folder', under: 'agentsEnabled',
+    label: 'Folder agents may open from',
+    explains: 'An agent can list and open the figures in this folder (and two levels of folders inside it), and nothing outside it.',
+  },
+  {
+    key: 'agentMaySave', group: 'Agents', kind: 'boolean', under: 'agentsEnabled',
+    label: 'Agents may save into the folder',
+    explains: 'Lets an agent write its exports into that folder. It never writes over an existing file. Off, an export is only handed back to the agent.',
+  },
 ];
 
 /** Each key's value if it passes its spec's limits, else the default (S3). */
@@ -104,6 +123,8 @@ export function parseSettings(raw: unknown): Settings {
     const v = src[spec.key];
     if (spec.kind === 'boolean') {
       if (typeof v === 'boolean') (out[spec.key] as boolean) = v;
+    } else if (spec.kind === 'folder') {
+      if (typeof v === 'string' && v.length <= 4096) (out[spec.key] as string) = v;
     } else if (
       typeof v === 'number' && Number.isFinite(v) && v >= spec.min && v <= spec.max && (!spec.integer || Number.isInteger(v))
     ) {

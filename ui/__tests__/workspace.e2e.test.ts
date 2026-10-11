@@ -12452,7 +12452,7 @@ describe('Workspace: Settings (v2.7)', () => {
 
     // M5: the state, in the words on screen
     const tools = await (await rpc(url, token, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, session)).json();
-    expect(tools.result.tools.map((t: { name: string }) => t.name)).toEqual(['get_state', 'view_figure']);
+    expect(tools.result.tools.map((t: { name: string }) => t.name).slice(0, 2)).toEqual(['get_state', 'view_figure']);
     const state = await (await rpc(url, token, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_state', arguments: {} } }, session)).json();
     const text: string = state.result.content[0].text;
     expect(text).toMatch(/Graph type: XY/);
@@ -12490,4 +12490,134 @@ describe('Workspace: Settings (v2.7)', () => {
     await expect(rpc(url, token, { jsonrpc: '2.0', id: 9, method: 'initialize', params: {} })).rejects.toThrow();
     await page.getByTestId('agent-strip').waitFor({ state: 'detached', timeout: 5000 });
   }, 90000);
+
+  it('M6-M11 an agent opens a figure from the chosen folder, waits while the person calibrates, then places, finds, corrects, undoes and exports - each step on screen and one Undo entry', async () => {
+    const FIG = 'xy-multiseries-modulus';
+    const truth = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'samples', `${FIG}.truth.json`), 'utf8')) as {
+      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+      series: { name: string; points: { x: number; y: number }[] }[];
+    };
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-agent-figures-'));
+    fs.copyFileSync(path.join(REPO_ROOT, 'samples', `${FIG}.png`), path.join(folder, `${FIG}.png`));
+    const realFolder = fs.realpathSync(folder);
+    const imageToLocal = async (x: number, y: number) => {
+      const m = /scale: ([\d.]+), offset: \(([-\d.]+), ([-\d.]+)\)/.exec((await textOf('view-state')) ?? '')!;
+      return { lx: Number(m[2]) + x * Number(m[1]), ly: Number(m[3]) + y * Number(m[1]) };
+    };
+    const clickImagePixel = async (x: number, y: number) => {
+      const { lx, ly } = await imageToLocal(x, y);
+      await clickAt(lx, ly);
+    };
+
+    await resetWorkspace('xy');
+    await openSettings();
+    // S13: the folder and saving rows are not there until agents are on
+    expect(await page.getByTestId('setting-row-agentFolder').count()).toBe(0);
+    await page.getByTestId('setting-agentsEnabled').check();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
+    const url = (await textOf('setting-agents-address')).trim();
+    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-claude-code'))![1]!;
+    // M6: the folder is chosen with the system's folder picker, which the button opens
+    expect(await textOf('setting-agentFolder')).toMatch(/None chosen/);
+    try {
+      await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, folder);
+      await page.getByTestId('setting-agentFolder-choose').click();
+      await expect.poll(() => textOf('setting-agentFolder')).toBe(folder);
+    } finally {
+      await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('setting-agentMaySave').check();
+    await closeSettings();
+    // a fresh document, so opening one discards nothing
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+
+    const init = await rpc(url, token, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e-agent', version: '1' } } });
+    const session = init.headers.get('mcp-session-id')!;
+    let id = 10;
+    const call = async (name: string, args: unknown = {}) => {
+      const j = await (await rpc(url, token, { jsonrpc: '2.0', id: id++, method: 'tools/call', params: { name, arguments: args } }, session)).json();
+      const r = j.result as { isError?: boolean; content: { type: string; text?: string }[] };
+      return { isError: !!r.isError, text: r.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n'), images: r.content.filter((c) => c.type === 'image').length };
+    };
+
+    // M6: the folder, and nothing outside it
+    expect((await call('list_folder')).text).toContain(`${FIG}.png`);
+    const outside = await call('open_figure', { path: '../x.png' });
+    expect(outside.isError).toBe(true);
+    expect(outside.text).toContain(realFolder);
+    const opened = await call('open_figure', { path: `${FIG}.png` });
+    expect(opened.text).toMatch(/Opened xy-multiseries-modulus\.png \(900 × 700 pixels\)/);
+
+    // M7: refused until the person has calibrated, and the screen says an agent waits
+    const early = await call('place_points', { series: 1, points: [{ x: 232, y: 105 }] });
+    expect(early.isError).toBe(true);
+    expect(early.text).toMatch(/not calibrated yet. Ask the user to pick its graph type and calibrate it/);
+    expect(await textOf('agent-strip-waiting')).toMatch(/waiting for you to pick the graph type and calibrate/);
+
+    // the person calibrates where the prompts say (gate 4)
+    expect(await textOf('tips-bar')).toMatch(/then press Capture/);
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = truth.calibration.anchors;
+    expect(await textOf('tips-bar')).toMatch(/X1: Click the pixel position of a known X value/);
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    expect(await textOf('tips-bar')).toMatch(/X2: Click a second pixel position of a known, different X value/);
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    expect(await textOf('tips-bar')).toMatch(/Y1: the X1 corner again, reused for you/);
+    await confirmValue(String(a.y1.value));
+    expect(await textOf('tips-bar')).toMatch(/Y2: Click a second pixel position of a known, different Y value/);
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('agent-strip-waiting').waitFor({ state: 'detached' });
+
+    // M9 / M9a: name the series, place Blend A's markers as clicks, see them ringed
+    expect((await call('rename_series', { series: 1, name: 'Blend A' })).text).toMatch(/Renamed "Series 1" to series \[1\] "Blend A"/);
+    const toPx = (p: { x: number; y: number }) => ({
+      x: a.x1.px + ((p.x - a.x1.value) * (a.x2.px - a.x1.px)) / (a.x2.value - a.x1.value),
+      y: a.y1.py + ((p.y - a.y1.value) * (a.y2.py - a.y1.py)) / (a.y2.value - a.y1.value),
+    });
+    const blendA = truth.series.find((x) => x.name === 'Blend A')!.points.map(toPx);
+    const placed = await call('place_points', { series: 'Blend A', points: blendA });
+    expect(placed.isError).toBe(false);
+    expect(placed.text).toMatch(/Placed 9 points in series \[1\] "Blend A" \(now 9 points\), recorded as clicks/);
+    expect(placed.images).toBe(1);
+    expect(await page.getByTestId('series-select').locator('option').first().textContent()).toBe('Blend A (9)');
+    // M11: the agent's step is on the user's own Undo, as one entry
+    await page.getByTestId('undo').click();
+    await expect.poll(async () => page.getByTestId('series-select').locator('option').first().textContent()).toBe('Blend A (0)');
+    expect((await call('undo')).text).toBe('The user has changed the figure since your last step; call get_state.');
+    await page.getByTestId('redo').click();
+    expect((await call('undo')).text).toMatch(/Undid your last step: place_points on series \[1\]/);
+    await expect.poll(async () => page.getByTestId('series-select').locator('option').first().textContent()).toBe('Blend A (0)');
+    await call('place_points', { series: 'Blend A', points: blendA });
+
+    // M8: Find lines on Blend B's colour, the legend masked first; the agent hears the card's words
+    expect((await call('add_series', { name: 'Blend B' })).text).toMatch(/Added series \[2\] "Blend B"/);
+    expect((await call('mask_area', { region: { x: 772, y: 45, width: 108, height: 90 } })).isError).toBe(false);
+    const b1 = toPx(truth.series.find((x) => x.name === 'Blend B')!.points[0]!);
+    const b2 = toPx(truth.series.find((x) => x.name === 'Blend B')!.points[1]!);
+    const found = await call('find_lines', { at: { x: Math.round((b1.x + b2.x) / 2), y: Math.round((b1.y + b2.y) / 2) } });
+    expect(found.isError).toBe(false);
+    expect(found.text).toContain(`The Find lines card says: "${await textOf('find-lines-summary')}"`);
+
+    // M10: the record of every series, and saved into the folder only
+    const out = await call('export', { format: 'csv', series: 'Blend A', save_as: 'blend-a.csv' });
+    expect(out.isError).toBe(false);
+    expect(out.text).toMatch(/The record of series \[1\] "Blend A" alone/);
+    expect(fs.readFileSync(path.join(folder, 'blend-a.csv'), 'utf8').trim().split('\n')).toHaveLength(10);
+
+    // S13: off again, nothing of agents shows but the switch
+    await openSettings();
+    await page.getByTestId('setting-agentsEnabled').uncheck();
+    await page.getByTestId('setting-row-agentFolder').waitFor({ state: 'detached' });
+    expect(await page.getByTestId('setting-row-agentMaySave').count()).toBe(0);
+    await closeSettings();
+    await page.getByTestId('agent-strip').waitFor({ state: 'detached', timeout: 5000 });
+    fs.rmSync(folder, { recursive: true, force: true });
+  }, 180000);
 });

@@ -1,6 +1,7 @@
 import { useEffect, useState, type RefObject } from 'react';
 import type { AgentCall, AgentStatus } from '../electronApi.js';
-import { AGENT_TOOLS, describeState, planView, type AgentStateInput } from './agentTools.js';
+import { describeState, planView } from './agentTools.js';
+import { AGENT_TOOLS, doAgentTool, type AgentDoingHost, type ToolResult } from './agentDoing.js';
 
 /**
  * The window's half of the agent server (v2.7, docs/v2.7-mcp-cases.md): the
@@ -8,12 +9,10 @@ import { AGENT_TOOLS, describeState, planView, type AgentStateInput } from './ag
  * Workspace through `hostRef`, which Workspace refreshes every render so a call
  * always reads the figure as it is NOW.
  */
-export interface AgentHost {
-  getState: () => AgentStateInput;
-  renderRegion: (r: { x: number; y: number; width: number; height: number; scale: number }) => string | null;
+export interface AgentHost extends AgentDoingHost {
+  /** M6: open a figure the main process has already checked and read. */
+  openFigure: (figure: { name: string; dataURL: string }) => Promise<ToolResult>;
 }
-
-type ToolResult = { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean };
 
 const refuse = (text: string): ToolResult => ({ isError: true, content: [{ type: 'text', text }] });
 
@@ -21,7 +20,7 @@ function num(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
-export function answerAgentCall(call: AgentCall, host: AgentHost): unknown {
+export async function answerAgentCall(call: AgentCall, host: AgentHost): Promise<unknown> {
   if (call.kind === 'list') return AGENT_TOOLS;
   const args = (call.args && typeof call.args === 'object' ? call.args : {}) as Record<string, unknown>;
   switch (call.name) {
@@ -57,8 +56,19 @@ export function answerAgentCall(call: AgentCall, host: AgentHost): unknown {
         ],
       } satisfies ToolResult;
     }
-    default:
+    case 'open_figure': {
+      const name = typeof args.name === 'string' ? args.name : null;
+      const dataURL = typeof args.dataURL === 'string' ? args.dataURL : null;
+      if (!name || !dataURL) return refuse('open_figure is answered through the folder chosen in Settings; call list_folder.');
+      return host.openFigure({ name, dataURL });
+    }
+    case 'list_folder':
+      return refuse('The folder is listed by PlotTracer itself, outside this window; try again.');
+    default: {
+      const done = await doAgentTool(String(call.name), call.args, host);
+      if (done) return done;
       return refuse(`PlotTracer has no tool "${String(call.name)}". Its tools are: ${AGENT_TOOLS.map((t) => t.name).join(', ')}.`);
+    }
   }
 }
 
@@ -67,14 +77,20 @@ export function useAgentBridge(hostRef: RefObject<AgentHost | null>): void {
     const api = window.electronAPI;
     if (!api?.onAgentCall || !api.answerAgent) return;
     const answer = api.answerAgent;
+    // ⚑ One call at a time, in the order they came: a step (Find lines reading
+    // labels) can take a while, and a second step must not start on a figure
+    // the first one is still changing.
+    let queue: Promise<void> = Promise.resolve();
     const off = api.onAgentCall((call) => {
-      try {
-        const host = hostRef.current;
-        if (!host) throw new Error('PlotTracer is still starting. Try again in a moment.');
-        answer(call.callId, answerAgentCall(call, host));
-      } catch (e) {
-        answer(call.callId, undefined, e instanceof Error ? e.message : String(e));
-      }
+      queue = queue.then(async () => {
+        try {
+          const host = hostRef.current;
+          if (!host) throw new Error('PlotTracer is still starting. Try again in a moment.');
+          answer(call.callId, await answerAgentCall(call, host));
+        } catch (e) {
+          answer(call.callId, undefined, e instanceof Error ? e.message : String(e));
+        }
+      });
     });
     // only now can a call be answered, so only now is the main process told
     api.notifyAgentReady?.(true);

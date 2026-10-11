@@ -110,6 +110,36 @@ function NumberSetting({ spec, value, onChange }: {
   );
 }
 
+/** A folder, chosen with the system's own folder picker (M6). */
+function FolderSetting({ label, value, testId, onChange }: { label: string; value: string; testId: string; onChange: (v: string) => void }) {
+  const choose = window.electronAPI?.chooseFolder;
+  return (
+    <div>
+      <div style={{ fontWeight: 600 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+        <span
+          data-testid={testId}
+          title={value || undefined}
+          style={{
+            flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'rtl', textAlign: 'left',
+            fontSize: theme.font.size.small, color: value ? theme.color.text.primary : theme.color.text.legend,
+          }}
+        >
+          {value || 'None chosen - agents cannot open or save files'}
+        </span>
+        <button type="button" data-testid={`${testId}-choose`} disabled={!choose} onClick={() => { void choose?.().then((p) => { if (p) onChange(p); }); }}>
+          Choose…
+        </button>
+        {value && (
+          <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange('')}>
+            Clear
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SettingsMenu({ settings, onChange, agentStatus }: SettingsMenuProps) {
   const groups = [...new Set(SETTING_SPECS.map((s) => s.group))];
   const isDefault = SETTING_SPECS.every((s) => settings[s.key] === DEFAULT_SETTINGS[s.key]);
@@ -119,9 +149,11 @@ export function SettingsMenu({ settings, onChange, agentStatus }: SettingsMenuPr
         {groups.map((g) => (
           <div key={g}>
             <div style={caption}>{g}</div>
-            {SETTING_SPECS.filter((s) => s.group === g).map((spec) => (
-              <div key={spec.key} data-testid={`setting-row-${spec.key}`} style={{ padding: '4px 0 6px' }}>
-                {spec.kind === 'boolean' ? (
+            {SETTING_SPECS.filter((s) => s.group === g && (!s.under || settings[s.under] === true)).map((spec) => (
+              <div key={spec.key} data-testid={`setting-row-${spec.key}`} style={{ padding: '4px 0 6px', ...(spec.under ? { marginLeft: 22 } : {}) }}>
+                {spec.kind === 'folder' ? (
+                  <FolderSetting label={spec.label} value={settings[spec.key] as string} testId={`setting-${spec.key}`} onChange={(v) => onChange({ [spec.key]: v })} />
+                ) : spec.kind === 'boolean' ? (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, cursor: 'pointer' }}>
                     <input
                       type="checkbox"

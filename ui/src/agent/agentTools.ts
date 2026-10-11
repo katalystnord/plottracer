@@ -15,7 +15,8 @@ export interface AgentTool {
   inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[]; additionalProperties?: boolean };
 }
 
-export const AGENT_TOOLS: readonly AgentTool[] = [
+/** The tools that only LOOK (M4, M5). The doing tools are in agentDoing.ts. */
+export const SEEING_TOOLS: readonly AgentTool[] = [
   {
     name: 'get_state',
     description:
@@ -45,6 +46,8 @@ export const AGENT_TOOLS: readonly AgentTool[] = [
 // ── get_state ────────────────────────────────────────────────────────────────
 
 export interface AgentSeries {
+  /** Position in the series list, from 0. The agent sees and names it from 1,
+   * the way the screen counts ("Series 1"), so the two never disagree. */
   index: number;
   name: string;
   colour: [number, number, number];
@@ -73,12 +76,12 @@ const hex = ([r, g, b]: readonly [number, number, number]) =>
 
 export function describeSeries(s: AgentSeries): string {
   const level = s.level ? `level ${s.level.value} (${s.level.source})` : 'no level';
-  return `[${s.index}] "${s.name}" - ${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}, ${level}, colour ${hex(s.colour)}${s.selected ? ', selected on screen' : ''}`;
+  return `[${s.index + 1}] "${s.name}" - ${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}, ${level}, colour ${hex(s.colour)}${s.selected ? ', selected on screen' : ''}`;
 }
 
 export function describeState(st: AgentStateInput): string {
   if (!st.figure) {
-    return 'No figure is open in PlotTracer. Ask the user to open one.';
+    return 'No figure is open in PlotTracer. Open one with open_figure (list_folder shows what you may open), or ask the user to open one.';
   }
   const lines: string[] = [];
   lines.push(`Figure: ${st.figure.fileName ?? 'unnamed'}, ${st.figure.width} × ${st.figure.height} pixels.`);

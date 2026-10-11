@@ -61,6 +61,15 @@ const PROJECT_FILTERS = [
 // reference, since both callers only assign their own `mainWindow`
 // variable once createWindow() runs, after these handlers are registered.
 function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
+  // Settings ▸ Agents ▸ the folder agents may use (M6).
+  ipcMain.handle('dialog:openFolder', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(getMainWindow(), {
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Folder agents may open from',
+    })
+    return canceled || !filePaths.length ? null : filePaths[0]
+  })
+
   ipcMain.handle('dialog:openImage', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog(getMainWindow(), {
       properties: ['openFile'],

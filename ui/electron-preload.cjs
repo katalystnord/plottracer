@@ -62,4 +62,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   notifyAgentReady: (ready) => ipcRenderer.send(ready ? 'agent:ready' : 'agent:gone'),
   disconnectAgent: () => ipcRenderer.invoke('agent:disconnect'),
   allowAgentReconnect: () => ipcRenderer.invoke('agent:allow-reconnect'),
+  agentSaveFile: (name, content) => ipcRenderer.invoke('agent:save-file', { name, content }),
+  chooseFolder: () => ipcRenderer.invoke('dialog:openFolder'),
 })

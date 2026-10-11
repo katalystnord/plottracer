@@ -66,6 +66,8 @@ import { IconButton } from './IconButton.js';
 import { GraphTypeCardPicker } from './GraphTypeCardPicker.js';
 import { AgentStrip } from './agent/AgentStrip.js';
 import { useAgentBridge, useAgentStatus, type AgentHost } from './agent/useAgentBridge.js';
+import { AgentStepLog } from './agent/agentDoing.js';
+import { NOT_CALIBRATED } from './agent/agentTools.js';
 import {
   AppShell,
   TopBar,
@@ -646,6 +648,22 @@ export function Workspace() {
   // it reads exist.
   const agentStatus = useAgentStatus();
   const agentHostRef = useRef<AgentHost | null>(null);
+  const agentStepsRef = useRef(new AgentStepLog<DocSnapshot>());
+  // M7: an agent asked for a step this figure is not calibrated for, so the
+  // screen says it is waiting for the person. Remembered with WHICH connection
+  // and WHICH document it waits on, so it ends by itself when either changes,
+  // and is shown only while that document is uncalibrated.
+  const [agentWaitingOn, setAgentWaitingOn] = useState<{ client: number; session: object } | null>(null);
+  const agentClient = agentStatus?.client?.since ?? null;
+  // a new connection starts with no steps of its own (M11)
+  const agentStepsClientRef = useRef<number | null>(null);
+  const agentSteps = () => {
+    if (agentStepsClientRef.current !== agentClient) {
+      agentStepsRef.current.clear();
+      agentStepsClientRef.current = agentClient;
+    }
+    return agentStepsRef.current;
+  };
   useAgentBridge(agentHostRef);
   const [axesTypeId, setAxesTypeId] = useState(XY_AXES_CONFIG.id);
   const sessionRef = useRef<CalibrationSession<CalibratedAxes>>(new CalibrationSession(XY_AXES_CONFIG));
@@ -2010,6 +2028,24 @@ export function Workspace() {
     setCropMode(false);
     setCropRect(null);
   }, []);
+  /** Mask an area (Image ▸ Mask an area, and an agent's mask_area, v2.7 M9).
+   * Returns the refusal, else null once the area is painted out and recorded. */
+  const maskArea = useCallback((rect: { x: number; y: number; width: number; height: number }): string | null => {
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return 'No figure is open.';
+    const masked = maskRegion(img.data, img.width, img.height, rect);
+    if (!masked) return 'That area is not inside the figure.';
+    // ⚑ AND IT REMEMBERS WHERE (v2.6). Painting the area out is what every
+    // reader needs; Find lines also needs to know WHERE it was, so a line
+    // passing behind a masked legend can be bridged across it (N4) rather
+    // than stopping at its edge. Recorded before the transform so the
+    // undoable snapshot it captures carries it.
+    const c = clampCropRect(rect, img.width, img.height);
+    if (c) sessionRef.current.setNotDataRegions([...sessionRef.current.getNotDataRegions(), c]);
+    applyPixelTransform(masked, false);
+    return null;
+  }, [applyPixelTransform]);
+
   const applyCrop = useCallback(() => {
     const img = imageCanvasRef.current?.getImageData();
     if (!img || !cropRect) return;
@@ -2025,19 +2061,9 @@ export function Workspace() {
     // geometry, and the only thing that leaves is evidence the user told us was
     // not evidence. It rides the same undo as every other image edit.
     if (cropIntent === 'mask') {
-      const masked = maskRegion(img.data, img.width, img.height, cropRect);
       setCropMode(false);
       setCropRect(null);
-      if (masked) {
-        // ⚑ AND IT REMEMBERS WHERE (v2.6). Painting the area out is what every
-        // reader needs; Find lines also needs to know WHERE it was, so a line
-        // passing behind a masked legend can be bridged across it (N4) rather
-        // than stopping at its edge. Recorded before the transform so the
-        // undoable snapshot it captures carries it.
-        const c = clampCropRect(cropRect, img.width, img.height);
-        if (c) sessionRef.current.setNotDataRegions([...sessionRef.current.getNotDataRegions(), c]);
-        applyPixelTransform(masked, false);
-      }
+      maskArea(cropRect);
       return;
     }
     const clamped = clampCropRect(cropRect, img.width, img.height);
@@ -2053,7 +2079,7 @@ export function Workspace() {
       applyProvenance({ ...provenanceRef.current, crops: [...(provenanceRef.current.crops ?? []), entry] });
       applyPixelTransform(result, true);
     }
-  }, [cropRect, cropIntent, applyPixelTransform, applyProvenance]);
+  }, [cropRect, cropIntent, applyPixelTransform, applyProvenance, maskArea]);
 
   // Capture figure (checkpoint 102) -- the first step of the calibration
   // pipeline, and the design's keystone. The
@@ -3973,6 +3999,55 @@ export function Workspace() {
   const cutAtPixelRef = useRef<((px: number, py: number) => void) | null>(null);
 
 
+  /**
+   * Place one data point at a figure pixel, exactly as a click in place-point
+   * mode does - without the undo entry, which the caller records. A click and an
+   * agent's place_points (v2.7 M9) both come through here, so an agent's point
+   * IS a click: the same spider snap, the same insert-in-place, the same contour
+   * closing.
+   */
+  const placePointAt = useCallback(
+    (px: number, py: number) => {
+      // ⚑ ASKED BEFORE THE POINT IS ADDED (v1.4, Spider). The click is snapped onto
+      // the axis the cursor is filling, which is what makes the dot land on the ray
+      // -- and which erases the offset this check reads. Afterwards there is
+      // nothing left to notice, so it has to happen here. Null for every other
+      // graph type, and for a click already nearest the axis it is filling.
+      const notice = session.previewSpiderCapture(px, py);
+      setCaptureNotice(notice ? { ...notice, mode, seriesIndex: session.getActiveDatasetIndex() } : null);
+      session.addDataPoint(px, py);
+      // Insert-in-place (v1.1 #1) may splice the new point into the middle of the
+      // curve, so the newest is no longer the last index -- find it by its clicked
+      // pixel, the same way the interpolation-anchor branch above does. A snapped
+      // spider point is NOT at the clicked pixel, and falls through to the
+      // last-index fallback, which is correct: the grouped path always appends.
+      const placed = session.getDataPoints();
+      setActivePointIndex(indexOfPlacedPoint(placed, px, py, true));
+      // Placing a point selects it, but the user did not PICK it to look at -- they
+      // are stepping round the chart, and the guidance they need is the next slot.
+      // Cleared explicitly rather than left alone: with points deleted, the new
+      // index can coincide with a previously picked one.
+      setPickedPointIndex(null);
+      // C3 (v2.6): a contour line clicked all the way round CLOSES when the
+      // gap back to its first point is the line's own ink - never by how
+      // close the ends are. It then ends on its first point, as R and
+      // matplotlib store a closed contour.
+      if (session.getConfig().id === 'contour') {
+        const ai = session.getActiveDatasetIndex();
+        const pts = session.getLinePoints(ai);
+        const imageData = imageCanvasRef.current?.getImageData();
+        if (pts && imageData && pts.length >= 6) {
+          const ink = sampleInkRgb(imageData, pts[0]!.x, pts[0]!.y);
+          if (inkClosesLoop(imageData.data, imageData.width, imageData.height, pts.map((p) => [p.x, p.y] as [number, number]), ink)) {
+            session.closeLine(ai);
+            setActivePointIndex(null);
+          }
+        }
+      }
+    },
+    [session, mode]
+  );
+
   const handleImageClick = useCallback(
     (px: number, py: number) => {
       // ⚑⚑ THE CANVAS HAS NO CATEGORY-MARKING MODE ANY MORE (v2.3). A branch
@@ -4120,48 +4195,13 @@ export function Workspace() {
           return;
         }
         case 'add-point': {
-          // ⚑ ASKED BEFORE THE POINT IS ADDED (v1.4, Spider). The click is snapped onto
-          // the axis the cursor is filling, which is what makes the dot land on the ray
-          // -- and which erases the offset this check reads. Afterwards there is
-          // nothing left to notice, so it has to happen here. Null for every other
-          // graph type, and for a click already nearest the axis it is filling.
-          const notice = session.previewSpiderCapture(px, py);
-          setCaptureNotice(notice ? { ...notice, mode, seriesIndex: session.getActiveDatasetIndex() } : null);
-          session.addDataPoint(px, py);
-          // Insert-in-place (v1.1 #1) may splice the new point into the middle of the
-          // curve, so the newest is no longer the last index -- find it by its clicked
-          // pixel, the same way the interpolation-anchor branch above does. A snapped
-          // spider point is NOT at the clicked pixel, and falls through to the
-          // last-index fallback, which is correct: the grouped path always appends.
-          const placed = session.getDataPoints();
-          setActivePointIndex(indexOfPlacedPoint(placed, px, py, true));
-          // Placing a point selects it, but the user did not PICK it to look at -- they
-          // are stepping round the chart, and the guidance they need is the next slot.
-          // Cleared explicitly rather than left alone: with points deleted, the new
-          // index can coincide with a previously picked one.
-          setPickedPointIndex(null);
-          // C3 (v2.6): a contour line clicked all the way round CLOSES when the
-          // gap back to its first point is the line's own ink - never by how
-          // close the ends are. It then ends on its first point, as R and
-          // matplotlib store a closed contour.
-          if (session.getConfig().id === 'contour') {
-            const ai = session.getActiveDatasetIndex();
-            const pts = session.getLinePoints(ai);
-            const imageData = imageCanvasRef.current?.getImageData();
-            if (pts && imageData && pts.length >= 6) {
-              const ink = sampleInkRgb(imageData, pts[0]!.x, pts[0]!.y);
-              if (inkClosesLoop(imageData.data, imageData.width, imageData.height, pts.map((p) => [p.x, p.y] as [number, number]), ink)) {
-                session.closeLine(ai);
-                setActivePointIndex(null);
-              }
-            }
-          }
+          placePointAt(px, py);
           commit();
           return;
         }
       }
     },
-    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid, canvasHasImage]
+    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid, canvasHasImage, placePointAt]
   );
 
   // Bar capture (v2.0): a drag's two opposite corners become a bar's two
@@ -5860,25 +5900,10 @@ export function Workspace() {
   }, [confirmDiscardIfDirty, loadCalibratedFigure, setSourcePdf, buildFigureRecordFromDeserialized, restoreFigure, closePdf, importForeignProject]);
 
 
-  const exportData = useCallback(
-    // target 'clipboard' (v1.1 #4) copies the very same rendered text a file
-    // export would write, in the chosen text format, rather than opening the
-    // save dialog. Binary formats (xlsx/png) never call it.
-    async (format: ExportFormat, target: 'file' | 'clipboard' = 'file') => {
-      if (!window.electronAPI) {
-        setProjectError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
-        return;
-      }
-      const exportAxes = session.getAxes();
-      if (!exportAxes) {
-        setProjectError('Calibrate the axes before exporting data.');
-        return;
-      }
-      setProjectError(null);
-      // Copying leaves the menu open so its "Copied" tick is visible and a
-      // second format can be grabbed; a file export dismisses it as before.
-      if (target === 'file') setExportAnchor(null);
-
+  // What an export is made of, built once for the Export menu and for an
+  // agent's export (v2.7 M10), so both hand out the same record.
+  const buildExportAssembly = useCallback(
+    (exportAxes: NonNullable<ReturnType<typeof session.getAxes>>, scopeOverride?: 'active' | 'all') => {
       // Precision: round each value to the figure's own resolution unless the
       // user asked for full precision (v1.0). Only the CHOICE is made here --
       // the assembly turns it into a rounder and applies it (the flat/JSON
@@ -5911,11 +5936,11 @@ export function Workspace() {
       // record (David; tenet 9). It came out of this component so it could be
       // tested without launching Electron. What stays here is the part that is
       // genuinely the component's: where the bytes end up.
-      const assembly = {
+      return {
         session,
         axes: exportAxes,
         configId: config.id,
-        scope: exportScope,
+        scope: scopeOverride ?? exportScope,
         precision: mode,
         measures,
         // ⚑ Resolved here for the same reason `measures` is: a heatmap's cells
@@ -5926,6 +5951,30 @@ export function Workspace() {
         heatmapCells: heatmapCellsRef.current,
         ...(heatmapKeyRef.current ? { heatmapKey: heatmapKeyRef.current } : {}),
       };
+    },
+    [session, exportScope, exportFullPrecision, axes, config]
+  );
+
+  const exportData = useCallback(
+    // target 'clipboard' (v1.1 #4) copies the very same rendered text a file
+    // export would write, in the chosen text format, rather than opening the
+    // save dialog. Binary formats (xlsx/png) never call it.
+    async (format: ExportFormat, target: 'file' | 'clipboard' = 'file') => {
+      if (!window.electronAPI) {
+        setProjectError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
+        return;
+      }
+      const exportAxes = session.getAxes();
+      if (!exportAxes) {
+        setProjectError('Calibrate the axes before exporting data.');
+        return;
+      }
+      setProjectError(null);
+      // Copying leaves the menu open so its "Copied" tick is visible and a
+      // second format can be grabbed; a file export dismisses it as before.
+      if (target === 'file') setExportAnchor(null);
+
+      const assembly = buildExportAssembly(exportAxes);
 
       let content: string;
       let ext: string;
@@ -6007,7 +6056,7 @@ export function Workspace() {
     // `axes` is a real dependency since ckpt 82: a slope's value is derived
     // from it at export time rather than read off a frozen string, so an export
     // captured with a stale axes would write stale numbers.
-    [session, markClean, exportScope, exportFullPrecision, axes, exportBaseName, config]
+    [session, markClean, exportBaseName, buildExportAssembly]
   );
 
   // Checkpoint 93: save a PNG snapshot of the figure with the digitization
@@ -6498,18 +6547,23 @@ export function Workspace() {
   // F1-F12, K1). The colour is By colour's own pick: the same question asked
   // by a different reader.
 
-  const handleFindLines = useCallback(async () => {
+  // ⚑ The colour is an argument, and the card's sentence is the answer, so the
+  // button and an agent's find_lines (v2.7 M8) are one path: the agent is told
+  // what the card says, word for word.
+  const findLinesWith = useCallback(async (colour: string): Promise<{ text: string; error?: boolean }> => {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = imageCanvasRef.current?.getImageData();
-    const target = hexToRGB(colorTraceColor);
+    const target = hexToRGB(colour);
     const box = calibrationBoxRegion(session.getPlacedPoints());
     if (!kind || !imageData || !session.getAxes() || !box) {
-      setFindLinesSummary('Calibrate the axes first - Find lines looks inside the plot box they mark.');
-      return;
+      const t = 'Calibrate the axes first - Find lines looks inside the plot box they mark.';
+      setFindLinesSummary(t);
+      return { text: t, error: true };
     }
     if (!target) {
-      setFindLinesSummary('Pick the lines’ colour first (Pick from image takes it off the figure).');
-      return;
+      const t = 'Pick the lines’ colour first (Pick from image takes it off the figure).';
+      setFindLinesSummary(t);
+      return { text: t, error: true };
     }
     setFindLinesSummary(null);
     setFillLevelsNotice(null);
@@ -6524,13 +6578,14 @@ export function Workspace() {
     if ('error' in found || sessionRef.current !== session) {
       setFindLinesBusy(null);
       setFindLinesSummary('error' in found ? found.error : null);
-      return;
+      return { text: 'error' in found ? found.error : 'The figure changed while Find lines ran, so its result was dropped. Call get_state.', error: true };
     }
     const res = found;
     if (!res.lines.length) {
+      const t = 'No line of that colour was found inside the plot box. Repick the colour from a line.';
       setFindLinesBusy(null);
-      setFindLinesSummary('No line of that colour was found inside the plot box. Repick the colour from a line.');
-      return;
+      setFindLinesSummary(t);
+      return { text: t, error: true };
     }
     // ⚑⚑ READ EVERY LABEL BEFORE CHANGING ANYTHING (audit B2). The reads are
     // slow; the result is applied in ONE step once they are in, so nothing the
@@ -6553,7 +6608,7 @@ export function Workspace() {
     if (sessionRef.current !== session) {
       setFindLinesBusy(null);
       setFindLinesSummary(null);
-      return;
+      return { text: 'The figure changed while Find lines read the labels, so its result was dropped. Call get_state.', error: true };
     }
     const reads = readSlots(raw, settingsRef.current.labelConfidence);
     // a second press REPLACES what the last one found (audit C1: by what the
@@ -6599,16 +6654,19 @@ export function Workspace() {
     const gaps = res.lines.reduce((n, L) => n + L.gaps.length, 0);
     setLinePlaces(places);
     setSelectedPointIndices([]); setLineSelection([]);
-    setFindLinesSummary(
+    const summary =
       `${res.lines.length} line${res.lines.length === 1 ? '' : 's'} found, ${gaps} gap${gaps === 1 ? '' : 's'} bridged` +
         (fromKey ? `; levels read off the colour key on ${fromKey.set} line${fromKey.set === 1 ? '' : 's'}${fromKey.offKey ? `, ${fromKey.offKey} not on the key` : ''}` : '') +
         (kind === 'contours' && !fromKey ? `; labels read on ${read} line${read === 1 ? '' : 's'}, not used on ${notRead} - the read is offered beside each line's Level` : '') +
         (res.labelInk.length ? `; ${res.labelInk.length} small mark${res.labelInk.length === 1 ? '' : 's'} (label text and the like) left out` : '') +
-        `. ${places.length ? `${places.length} place${places.length === 1 ? '' : 's'} to check, listed on the right.` : 'Nothing it was unsure of.'} Undo removes the whole result.`
-    );
+        `. ${places.length ? `${places.length} place${places.length === 1 ? '' : 's'} to check, listed on the right.` : 'Nothing it was unsure of.'} Undo removes the whole result.`;
+    setFindLinesSummary(summary);
     setFindLinesBusy(null);
     commit();
-  }, [session, colorTraceColor, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices]);
+    const placesText = places.length ? `\nPlaces to check:\n${places.map((pl) => `  - ${pl.kind} at (${Math.round(pl.at[0])}, ${Math.round(pl.at[1])}): ${pl.text}`).join('\n')}` : '';
+    return { text: `The Find lines card says: "${summary}"${placesText}` };
+  }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices]);
+  const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
 
   /** C4: unset contour levels filled in from the ones the user has set, in equal
    * steps between them - refused, and saying why, where the levels are uneven. */
@@ -8233,12 +8291,14 @@ export function Workspace() {
       figure: canvasHasImage
         ? { fileName: imageCanvasRef.current?.getImageFileName() ?? null, width: canvasImageDims.w, height: canvasImageDims.h }
         : null,
-      graphType: config.label,
-      calibrated: axes !== null,
+      graphType: sessionRef.current.getConfig().label,
+      calibrated: sessionRef.current.getAxes() !== null,
       step: axes === null && currentStep ? { index: session.getStepIndex(), count: steps.length, label: currentStep.label } : null,
       tip: ocrError ?? guidanceTip,
-      series: datasetInfos.map((d) => {
-        const level = session.getContourLevel(d.index);
+      // ⚑ LIVE, from the session: a result written right after a step must
+      // count what the step made, not what the screen last drew.
+      series: sessionRef.current.getDatasetInfos().map((d) => {
+        const level = sessionRef.current.getContourLevel(d.index);
         return {
           index: d.index,
           name: d.name,
@@ -8251,6 +8311,77 @@ export function Workspace() {
       places: linePlaces,
     }),
     renderRegion: (r) => imageCanvasRef.current?.getRegionPngDataURL(r) ?? null,
+    session: () => sessionRef.current,
+    placeLikeClick: placePointAt,
+    // M11: the step is ONE entry on the shared history, remembered as the
+    // agent's so its own undo can tell whether it is still the newest.
+    commitStep: (label) => {
+      commit();
+      agentSteps().record(history.getPresent(), label);
+    },
+    undoAgentStep: () => {
+      const c = agentSteps().check(history.getPresent());
+      if (c === 'none' || c === 'user-changed') return c;
+      undo();
+      agentSteps().pop();
+      return { undone: c.label };
+    },
+    showSelection: (series, points) => {
+      sessionRef.current.setActiveDataset(series);
+      // a selection is drawn, and kept, only in Select - so that is where the
+      // agent's selection is shown, as the user's own would be
+      if (points.length) setMode('select');
+      setLineSelection([]);
+      setSelectedPointIndices([...points]);
+      setActivePointIndex(points.length === 1 ? points[0]! : null);
+      bump();
+    },
+    waitingForCalibration: () => { if (agentClient !== null) setAgentWaitingOn({ client: agentClient, session: sessionRef.current }); },
+    afterRender: () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+    findLines: async (colour) => {
+      // the card shows what the agent asked for: its mode, its colour, its result
+      setMode('find-lines');
+      setColorTraceColor(colour);
+      const before = history.getPresent();
+      const r = await findLinesWith(colour);
+      if (history.getPresent() !== before) agentSteps().record(history.getPresent(), 'find_lines');
+      return r;
+    },
+    inkAt: (x, y) => {
+      const imageData = imageCanvasRef.current?.getImageData();
+      return imageData ? rgbToHex(sampleInkRgb(imageData, x, y)) : null;
+    },
+    maskArea: (rect) => {
+      const refusal = maskArea(rect);
+      if (!refusal) agentSteps().record(history.getPresent(), 'mask_area');
+      return refusal;
+    },
+    exportText: (format, scope) => {
+      const ax = sessionRef.current.getAxes();
+      if (!ax) return { error: NOT_CALIBRATED };
+      const assembly = buildExportAssembly(ax, scope);
+      if (format === 'json') return { content: buildExportJson(assembly) };
+      return { content: renderTable(buildExportSections(assembly), format, { decimalComma: settingsRef.current.decimalComma }) };
+    },
+    saveFile: async (name, content) =>
+      window.electronAPI?.agentSaveFile ? window.electronAPI.agentSaveFile(name, content) : { error: 'Saving needs the PlotTracer app.' },
+    settings: () => ({ decimalComma: settingsRef.current.decimalComma, fullPrecision: exportFullPrecision }),
+    openFigure: async ({ name, dataURL }) => {
+      // ⚑ An agent never discards the user's work: where a person would be asked,
+      // the agent is refused and told why.
+      if (dirtyRef.current) {
+        return { isError: true, content: [{ type: 'text', text: 'The user has work in PlotTracer that is not saved or exported, so opening another figure would discard it. Ask the user to save or export it first.' }] };
+      }
+      const canvas = imageCanvasRef.current;
+      if (!canvas) return { isError: true, content: [{ type: 'text', text: 'PlotTracer is still starting. Try again in a moment.' }] };
+      agentSteps().clear();
+      await canvas.openFileContent(dataURL, name);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      agentHostRef.current?.waitingForCalibration();
+      const st = agentHostRef.current?.getState();
+      const size = st?.figure ? ` (${st.figure.width} × ${st.figure.height} pixels)` : '';
+      return { content: [{ type: 'text', text: `Opened ${name}${size}. ${NOT_CALIBRATED}` }] };
+    },
   };
 
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;
@@ -8523,6 +8654,7 @@ export function Workspace() {
         <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 6 }}>
           <AgentStrip
             status={agentStatus}
+            waiting={agentWaitingOn !== null && agentWaitingOn.client === agentClient && agentWaitingOn.session === session && axes === null}
             onDisconnect={() => { void window.electronAPI?.disconnectAgent?.(); }}
             onAllowReconnect={() => { void window.electronAPI?.allowAgentReconnect?.(); }}
           />

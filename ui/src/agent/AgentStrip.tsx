@@ -7,8 +7,10 @@ import type { AgentStatus } from '../electronApi.js';
  * says the agent is kept out, and offers the way back - so being disconnected is
  * never a hidden state.
  */
-export function AgentStrip({ status, onDisconnect, onAllowReconnect }: {
+export function AgentStrip({ status, waiting = false, onDisconnect, onAllowReconnect }: {
   status: AgentStatus | null;
+  /** M7: the agent asked for a step this figure is not calibrated for. */
+  waiting?: boolean;
   onDisconnect: () => void;
   onAllowReconnect: () => void;
 }) {
@@ -30,6 +32,11 @@ export function AgentStrip({ status, onDisconnect, onAllowReconnect }: {
         <span aria-hidden>🤖</span>
         <span data-testid="agent-strip-text">
           Agent connected: <b>{status.client.name}</b>, since {since}. Every step it takes shows here.
+          {waiting && (
+            <span data-testid="agent-strip-waiting">
+              {' '}<b>It is waiting for you</b> to pick the graph type and calibrate this figure.
+            </span>
+          )}
         </span>
         <button type="button" data-testid="agent-disconnect" onClick={onDisconnect} style={{ marginLeft: 'auto' }}>
           Disconnect

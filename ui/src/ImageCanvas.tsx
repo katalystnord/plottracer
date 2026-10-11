@@ -604,6 +604,8 @@ export interface ImageCanvasHandle {
    * "Choose Image…" button can live in Workspace.tsx's top bar instead of a
    * strip inside the canvas region. */
   openImage: () => void;
+  /** Open a file's content as the Open dialog would after its choice (v2.7 M6). */
+  openFileContent: (dataURL: string, name: string | undefined) => Promise<void>;
   /** Zoom actions, exposed so the zoom control can render in the top bar
    * (checkpoint 42). Same callbacks the native menu already drives. */
   zoomIn: () => void;
@@ -985,6 +987,24 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     originalImageDataRef.current = ctx.getImageData(0, 0, image.width, image.height);
   }, [image]);
 
+  // The tail every open shares - the dialog's, and an agent's open_figure (v2.7
+  // M6), which arrives already checked and read by the main process.
+  const openFileContent = useCallback(async (dataURL: string, name: string | undefined) => {
+    setOpenError(null);
+    // A paged document <img> can't decode (PDF, or TIFF/multipage TIFF -- B7)
+    // goes to Workspace's paged-source path. Detected by CONTENT (the actual
+    // bytes), not the dataURL's mime, so it matches loadImageFile's routing
+    // exactly. beforeOpenImage (the unsaved-work guard) already ran.
+    const bytes = dataURLToBytes(dataURL);
+    if (pagedDocumentFormat(bytes)) {
+      onPdfBytes?.(bytes, name);
+      return;
+    }
+    const loaded = loadImageFromSrc(dataURL, name);
+    onImageOpened?.(name);
+    await loaded;
+  }, [loadImageFromSrc, onImageOpened, onPdfBytes]);
+
   const openImage = useCallback(async () => {
     if (!window.electronAPI) {
       setOpenError('electronAPI is not available - this UI must run inside the Electron dev harness (npm run ui:electron).');
@@ -993,20 +1013,8 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     if (beforeOpenImage && !beforeOpenImage()) return; // unsaved-work guard declined
     const result = await window.electronAPI.openImage();
     if (!result) return; // dialog was cancelled
-    setOpenError(null);
-    const name = result.filePath.split(/[\\/]/).pop();
-    // A paged document <img> can't decode (PDF, or TIFF/multipage TIFF -- B7)
-    // goes to Workspace's paged-source path. Detected by CONTENT (the actual
-    // bytes), not the dataURL's mime, so it matches loadImageFile's routing
-    // exactly. beforeOpenImage (the unsaved-work guard) already ran above.
-    const bytes = dataURLToBytes(result.dataURL);
-    if (pagedDocumentFormat(bytes)) {
-      onPdfBytes?.(bytes, name);
-      return;
-    }
-    loadImageFromSrc(result.dataURL, name);
-    onImageOpened?.(name);
-  }, [loadImageFromSrc, beforeOpenImage, onImageOpened, onPdfBytes]);
+    await openFileContent(result.dataURL, result.filePath.split(/[\\/]/).pop());
+  }, [beforeOpenImage, openFileContent]);
 
   // Checkpoint 32's four zoom actions, named and shared rather than left as
   // inline lambdas inside the menu effect below -- checkpoint 34's
@@ -1184,6 +1192,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       getImageData: () => originalImageDataRef.current,
       applyImageTransform,
       openImage,
+      openFileContent,
       zoomIn,
       zoomOut,
       zoomFit,
@@ -1194,7 +1203,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       getRegionPngDataURL,
       getViewImageRect,
     }),
-    [loadImageFromSrc, clearImage, imageFileName, applyImageTransform, openImage, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, centreOn, getCompositePngDataURL, getRegionPngDataURL, getViewImageRect]
+    [loadImageFromSrc, clearImage, imageFileName, applyImageTransform, openImage, openFileContent, zoomIn, zoomOut, zoomFit, zoom100, zoomTo, centreOn, getCompositePngDataURL, getRegionPngDataURL, getViewImageRect]
   );
 
   // Notify Workspace of scale / image-loaded changes (checkpoint 42) so the

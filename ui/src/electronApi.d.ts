@@ -108,6 +108,10 @@ declare global {
       notifyAgentReady?: (ready: boolean) => void;
       disconnectAgent?: () => Promise<AgentStatus>;
       allowAgentReconnect?: () => Promise<AgentStatus>;
+      /** Write an agent's export into the chosen folder; the main process checks the folder and may-save (M10). */
+      agentSaveFile?: (name: string, content: string) => Promise<{ path: string } | { error: string }>;
+      /** The folder picker for Settings ▸ Agents; null when cancelled. */
+      chooseFolder?: () => Promise<string | null>;
     };
   }
 }

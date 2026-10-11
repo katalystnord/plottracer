@@ -263,3 +263,93 @@ describe('the bridge to the window', () => {
     await expect(answer).resolves.toEqual({ ok: 1 });
   });
 });
+
+describe('the folder agents may use (M6, M10)', () => {
+  const mcp = require('../electron-mcp.cjs') as {
+    resolveInFolder: (folder: unknown, asked: unknown) => { path: string } | { error: string };
+    listFolder: (folder: unknown) => { text: string; isError?: boolean };
+    saveInFolder: (settings: unknown, name: unknown, content: string) => { path: string } | { error: string };
+    registerAgentBridge: (
+      ipcMain: unknown,
+      getDir: () => string,
+      getMainWindow: () => unknown,
+      version: string
+    ) => { apply: (s: unknown) => Promise<void>; stop: () => Promise<void>; call: (name: string, args: unknown) => Promise<unknown> };
+  };
+
+  function folderWithFigure() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-agent-folder-'));
+    const folder = path.join(root, 'figures');
+    fs.mkdirSync(folder);
+    fs.writeFileSync(path.join(folder, 'fig.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    fs.writeFileSync(path.join(folder, 'notes.txt'), 'not a figure');
+    fs.writeFileSync(path.join(root, 'secret.png'), Buffer.from([1]));
+    return { root, folder };
+  }
+
+  it('M6: with no folder chosen, opening is refused and the agent is told where the user chooses one', () => {
+    expect(mcp.resolveInFolder('', 'fig.png')).toMatchObject({ error: expect.stringMatching(/Settings ▸ Agents/) });
+  });
+
+  it('M6: a path outside the chosen folder is refused, naming the folder', () => {
+    const { folder, root } = folderWithFigure();
+    for (const asked of ['../secret.png', path.join(root, 'secret.png')]) {
+      const r = mcp.resolveInFolder(folder, asked);
+      expect(r, asked).toMatchObject({ error: expect.stringContaining(folder) });
+    }
+  });
+
+  it('M6: a link inside the folder that points outside it is refused too', () => {
+    const { folder, root } = folderWithFigure();
+    fs.symlinkSync(path.join(root, 'secret.png'), path.join(folder, 'link.png'));
+    expect(mcp.resolveInFolder(folder, 'link.png')).toMatchObject({ error: expect.stringContaining(folder) });
+  });
+
+  it('M6: a name inside the folder resolves to it', () => {
+    const { folder } = folderWithFigure();
+    expect(mcp.resolveInFolder(folder, 'fig.png')).toEqual({ path: fs.realpathSync(path.join(folder, 'fig.png')) });
+  });
+
+  it('M6: list_folder lists the figures an agent may open, and only those', () => {
+    const { folder } = folderWithFigure();
+    const r = mcp.listFolder(folder);
+    expect(r.text).toContain('fig.png');
+    expect(r.text).not.toContain('notes.txt');
+    expect(r.text).toContain(folder);
+  });
+
+  it('M6: open_figure outside the folder never reaches the window; inside, the window gets the figure', async () => {
+    const { folder } = folderWithFigure();
+    const on = new Map<string, (e: unknown, msg: unknown) => void>();
+    const sent: { ch: string; msg: { callId: number; name: string; args: { dataURL?: string; name?: string } } }[] = [];
+    const win = { isDestroyed: () => false, webContents: { send: (ch: string, msg: never) => sent.push({ ch, msg }), on: () => undefined } };
+    const bridge = mcp.registerAgentBridge({ on: (ch: string, fn: never) => on.set(ch, fn), handle: () => undefined }, () => os.tmpdir(), () => win, '9');
+    await bridge.apply({ agentsEnabled: false, agentFolder: folder });
+    on.get('agent:ready')!({}, undefined);
+    await expect(bridge.call('open_figure', { path: '../secret.png' })).resolves.toMatchObject({ isError: true });
+    expect(sent.filter((s) => s.ch === 'agent:call')).toHaveLength(0);
+    const answer = bridge.call('open_figure', { path: 'fig.png' });
+    await new Promise((r) => setTimeout(r, 10));
+    const call = sent.find((s) => s.ch === 'agent:call')!;
+    expect(call.msg.name).toBe('open_figure');
+    expect(call.msg.args.name).toBe('fig.png');
+    expect(call.msg.args.dataURL).toMatch(/^data:image\/png;base64,/);
+    on.get('agent:result')!({}, { callId: call.msg.callId, result: { content: [{ type: 'text', text: 'Opened' }] } });
+    await expect(answer).resolves.toMatchObject({ content: [{ text: 'Opened' }] });
+  });
+
+  it('M10: saving is refused unless the user lets agents save', () => {
+    const { folder } = folderWithFigure();
+    expect(mcp.saveInFolder({ agentFolder: folder, agentMaySave: false }, 'out.csv', 'x')).toMatchObject({ error: expect.stringMatching(/may save/i) });
+  });
+
+  it('M10: with saving allowed, a file is written inside the folder only, and never over an existing file', () => {
+    const { folder } = folderWithFigure();
+    const settings = { agentFolder: folder, agentMaySave: true };
+    const r = mcp.saveInFolder(settings, 'out.csv', 'x,y\n1,2');
+    expect(r).toEqual({ path: path.join(fs.realpathSync(folder), 'out.csv') });
+    expect(fs.readFileSync(path.join(folder, 'out.csv'), 'utf8')).toBe('x,y\n1,2');
+    expect(mcp.saveInFolder(settings, 'out.csv', 'again')).toMatchObject({ error: expect.stringMatching(/already exists/) });
+    expect(mcp.saveInFolder(settings, '../out.csv', 'x')).toMatchObject({ error: expect.stringContaining(folder) });
+  });
+});

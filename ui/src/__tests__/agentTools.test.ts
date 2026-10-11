@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AGENT_TOOLS, describeState, planView, type AgentStateInput } from '../agent/agentTools.js';
+import { SEEING_TOOLS, describeState, planView, type AgentStateInput } from '../agent/agentTools.js';
 
 // The agent's two ways of SEEING (v2.7, docs/v2.7-mcp-cases.md, M4-M5). The
 // window gathers the facts; these pure halves decide what the agent is told.
@@ -32,8 +32,8 @@ describe('what the agent sees (M4, M5)', () => {
 
   it('M5 / M9a: every series is listed by id, name, colour, point count and level', () => {
     const text = describeState(base);
-    expect(text).toContain('[0] "Line 1" - 120 points, level 0.5 (typed), colour #1f77b4, selected on screen');
-    expect(text).toContain('[1] "Line 2" - 0 points, no level, colour #ff7f0e');
+    expect(text).toContain('[1] "Line 1" - 120 points, level 0.5 (typed), colour #1f77b4, selected on screen');
+    expect(text).toContain('[2] "Line 2" - 0 points, no level, colour #ff7f0e');
   });
 
   it('M5: get_state lists the places to check, with where they are', () => {
@@ -89,9 +89,9 @@ describe('what the agent sees (M4, M5)', () => {
     });
   });
 
-  it('the tools an agent can find are the ones that exist, each described', () => {
-    expect(AGENT_TOOLS.map((t) => t.name)).toEqual(['get_state', 'view_figure']);
-    for (const t of AGENT_TOOLS) {
+  it('the looking tools are the ones that exist, each described', () => {
+    expect(SEEING_TOOLS.map((t) => t.name)).toEqual(['get_state', 'view_figure']);
+    for (const t of SEEING_TOOLS) {
       expect(t.description.length).toBeGreaterThan(40);
       expect(t.inputSchema.type).toBe('object');
     }

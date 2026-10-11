@@ -280,14 +280,32 @@ function registerAgentBridge(ipcMain, getDir, getMainWindow, version) {
     if (win && !win.isDestroyed()) win.webContents.send('agent:status', fullStatus())
   }
 
+  let current = {}
+  // M6: the tools that touch the disk are answered here, after the folder check;
+  // only a figure that passed it is handed to the window.
+  function handleCall(name, args) {
+    if (name === 'list_folder') {
+      const r = listFolder(current.agentFolder)
+      return Promise.resolve({ content: [{ type: 'text', text: r.text }], ...(r.isError ? { isError: true } : {}) })
+    }
+    if (name === 'open_figure') {
+      const f = readFigure(current.agentFolder, args && args.path)
+      if (f.error) return Promise.resolve({ isError: true, content: [{ type: 'text', text: f.error }] })
+      return toWindow('call', name, { name: f.name, path: f.path, dataURL: f.dataURL })
+    }
+    return toWindow('call', name, args)
+  }
+  ipcMain.handle('agent:save-file', (_event, { name, content }) => saveInFolder(current, name, String(content ?? '')))
+
   async function apply(settings) {
+    current = settings && typeof settings === 'object' ? settings : {}
     const on = settings && settings.agentsEnabled === true
     if (on && !server) {
       token = readOrCreateToken(getDir())
       server = createMcpServer({
         token,
         version,
-        onCall: (name, args) => toWindow('call', name, args),
+        onCall: handleCall,
         listTools: () => toWindow('list'),
         onStatus: pushStatus,
       })
@@ -307,9 +325,110 @@ function registerAgentBridge(ipcMain, getDir, getMainWindow, version) {
   return {
     apply,
     stop: () => (server ? server.stop() : Promise.resolve()),
-    call: (name, args) => toWindow('call', name, args),
+    call: handleCall,
   }
 }
 
 module.exports.registerAgentBridge = registerAgentBridge
 module.exports.DEFAULT_PORT = DEFAULT_PORT
+
+// ── The folder agents may use (M6, M10) ─────────────────────────────────────
+// Decided HERE, in the main process, because this is the side that can read
+// and write the disk: the window never hands the agent a path it did not check.
+// The folder is chosen in Settings ▸ Agents; nothing outside it is reachable,
+// whichever way the path is spelled (`..`, absolute, or a link inside the
+// folder pointing out of it).
+
+const FIGURE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg', 'pdf', 'tif', 'tiff']
+const FIGURE_MIME = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', bmp: 'image/bmp', webp: 'image/webp',
+  gif: 'image/gif', svg: 'image/svg+xml', pdf: 'application/pdf', tif: 'image/tiff', tiff: 'image/tiff',
+}
+const NO_FOLDER = 'No folder is chosen for agents. Ask the user to choose one in PlotTracer ▸ Settings ▸ Agents.'
+
+function chosenFolder(folder) {
+  if (typeof folder !== 'string' || !folder.trim()) return { error: NO_FOLDER }
+  try {
+    const real = fs.realpathSync(folder)
+    if (!fs.statSync(real).isDirectory()) throw new Error('not a folder')
+    return { real }
+  } catch {
+    return { error: `The folder chosen for agents (${folder}) cannot be read. Ask the user to choose it again in PlotTracer ▸ Settings ▸ Agents.` }
+  }
+}
+
+function inside(real, target) {
+  const rel = path.relative(real, target)
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
+}
+
+// A path the agent gave, resolved against the folder. An existing file is
+// judged by where it REALLY is, so a link cannot lead out; a file still to be
+// written is judged by its folder.
+function resolveInFolder(folder, asked) {
+  const f = chosenFolder(folder)
+  if (f.error) return { error: f.error }
+  if (typeof asked !== 'string' || !asked.trim()) return { error: `Give a file name inside the folder agents may use (${folder}).` }
+  const outside = { error: `"${asked}" is outside the folder agents may use (${folder}).` }
+  const target = path.resolve(f.real, asked)
+  if (!inside(f.real, target)) return outside
+  let real
+  try {
+    real = fs.realpathSync(target)
+  } catch {
+    try { real = path.join(fs.realpathSync(path.dirname(target)), path.basename(target)) } catch { return { path: target } }
+  }
+  return inside(f.real, real) ? { path: real } : outside
+}
+
+function listFolder(folder) {
+  const f = chosenFolder(folder)
+  if (f.error) return { text: f.error, isError: true }
+  const found = []
+  const walk = (dir, depth) => {
+    let entries
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (e.name.startsWith('.')) continue
+      const full = path.join(dir, e.name)
+      if (e.isDirectory() && depth < 2) walk(full, depth + 1)
+      else if (e.isFile() && FIGURE_EXTENSIONS.includes(path.extname(e.name).toLowerCase().slice(1))) {
+        found.push(path.relative(f.real, full))
+      }
+    }
+  }
+  walk(f.real, 0)
+  if (!found.length) return { text: `The folder agents may use (${folder}) holds no figures (${FIGURE_EXTENSIONS.join(', ')}).` }
+  return { text: `Figures in the folder agents may use (${folder}):\n${found.map((n) => `  ${n}`).join('\n')}` }
+}
+
+function readFigure(folder, asked) {
+  const r = resolveInFolder(folder, asked)
+  if (r.error) return r
+  const ext = path.extname(r.path).toLowerCase().slice(1)
+  if (!FIGURE_EXTENSIONS.includes(ext)) return { error: `"${asked}" is not a figure PlotTracer opens (${FIGURE_EXTENSIONS.join(', ')}).` }
+  let bytes
+  try { bytes = fs.readFileSync(r.path) } catch { return { error: `"${asked}" cannot be read; list_folder shows what is there.` } }
+  return { name: path.basename(r.path), path: r.path, dataURL: `data:${FIGURE_MIME[ext]};base64,${bytes.toString('base64')}` }
+}
+
+function saveInFolder(settings, name, content) {
+  const s = settings || {}
+  if (s.agentMaySave !== true) {
+    return { error: 'The user has not let agents save. They can tick "Agents may save into the folder" in PlotTracer ▸ Settings ▸ Agents.' }
+  }
+  const r = resolveInFolder(s.agentFolder, name)
+  if (r.error) return r
+  if (fs.existsSync(r.path)) return { error: `"${name}" already exists in the folder; PlotTracer never writes over a file. Pick another name.` }
+  try {
+    fs.writeFileSync(r.path, content, 'utf8')
+  } catch (e) {
+    return { error: `"${name}" could not be written: ${String(e?.message || e)}` }
+  }
+  return { path: r.path }
+}
+
+module.exports.resolveInFolder = resolveInFolder
+module.exports.listFolder = listFolder
+module.exports.readFigure = readFigure
+module.exports.saveInFolder = saveInFolder

@@ -61,7 +61,21 @@ describe('Settings (v2.7)', () => {
       exportFullPrecision: false,
       decimalComma: false,
       agentsEnabled: false,
+      agentFolder: '',
+      agentMaySave: false,
     });
+  });
+
+  it('S13 / M6 / M10: no folder is chosen and agents may not save until the user says so', () => {
+    expect(DEFAULT_SETTINGS.agentFolder).toBe('');
+    expect(DEFAULT_SETTINGS.agentMaySave).toBe(false);
+    expect(parseSettings({ agentFolder: '/home/me/figures', agentMaySave: true })).toMatchObject({ agentFolder: '/home/me/figures', agentMaySave: true });
+    expect(parseSettings({ agentFolder: 7, agentMaySave: 'yes' })).toMatchObject({ agentFolder: '', agentMaySave: false });
+  });
+
+  it('S13: the folder and may-save rows sit under the agent switch, shown only while it is on', () => {
+    const under = SETTING_SPECS.filter((s) => s.under === 'agentsEnabled').map((s) => s.key);
+    expect(under).toEqual(['agentFolder', 'agentMaySave']);
   });
 
   it('M1: agents are off until the user turns them on', () => {
