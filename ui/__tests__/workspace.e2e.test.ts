@@ -12488,6 +12488,6 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('setting-agentsEnabled').uncheck();
     await page.getByTestId('setting-agents-address').waitFor({ state: 'detached' });
     await expect(rpc(url, token, { jsonrpc: '2.0', id: 9, method: 'initialize', params: {} })).rejects.toThrow();
-    expect(await page.getByTestId('agent-strip').count()).toBe(0);
+    await page.getByTestId('agent-strip').waitFor({ state: 'detached', timeout: 5000 });
   }, 90000);
 });
