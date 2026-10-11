@@ -42,13 +42,15 @@ export async function answerAgentCall(call: AgentCall, host: AgentHost): Promise
       if (args.zoom !== undefined && (zoom === undefined || zoom <= 0)) return refuse('zoom has to be a number above 0.');
       const plan = planView({ imageWidth: st.figure.width, imageHeight: st.figure.height, ...(region ? { region } : {}), ...(zoom !== undefined ? { zoom } : {}) });
       if ('error' in plan) return refuse(plan.error);
-      const url = host.renderRegion(plan);
+      if (args.marks !== undefined && typeof args.marks !== 'boolean') return refuse('marks has to be true or false.');
+      const url = host.renderRegion({ ...plan, marks: args.marks !== false });
       if (!url) return refuse('PlotTracer could not draw the figure just now. Call get_state, then try again.');
       const s = +plan.scale.toFixed(3);
       const text =
         `Figure pixels x ${plan.x} to ${plan.x + plan.width}, y ${plan.y} to ${plan.y + plan.height}, ` +
         `at zoom ${s} (one figure pixel is ${s} picture ${s === 1 ? 'pixel' : 'pixels'}; picture ${plan.outWidth} × ${plan.outHeight}).` +
-        (plan.note ? ` ${plan.note}` : '');
+        (plan.note ? ` ${plan.note}` : '') +
+        (args.marks === false ? ' Without PlotTracer\'s marks.' : '');
       return {
         content: [
           { type: 'image', data: url.slice(url.indexOf(',') + 1), mimeType: 'image/png' },

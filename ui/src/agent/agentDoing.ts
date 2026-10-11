@@ -29,7 +29,7 @@ export const USER_CHANGED = 'The user has changed the figure since your last ste
  * tests implement it over a real session. */
 export interface AgentDoingHost {
   getState: () => AgentStateInput;
-  renderRegion: (plan: Extract<ViewPlan, { scale: number }>) => string | null;
+  renderRegion: (plan: Extract<ViewPlan, { scale: number }> & { marks?: boolean }) => string | null;
   session: () => Session;
   /** Place a data point exactly as a click on the canvas would, in the active
    * series, without recording an undo entry (the step does that once). */

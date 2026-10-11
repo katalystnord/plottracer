@@ -101,3 +101,19 @@ describe('what the agent sees (M4, M5)', () => {
     }
   });
 });
+
+describe('view_figure without the marks', () => {
+  it('M4: marks: false asks for the figure alone, as the eye button shows it', async () => {
+    const { answerAgentCall } = await import('../agent/useAgentBridge.js');
+    const asked: { marks?: boolean }[] = [];
+    const host = {
+      getState: () => base,
+      renderRegion: (p: { marks?: boolean }) => { asked.push(p); return 'data:image/png;base64,AAAA'; },
+    } as unknown as Parameters<typeof answerAgentCall>[1];
+    const r = (await answerAgentCall({ callId: 1, kind: 'call', name: 'view_figure', args: { marks: false } }, host)) as { content: { text?: string }[] };
+    expect(asked[0]?.marks).toBe(false);
+    expect(r.content[1]?.text).toMatch(/Without PlotTracer's marks/);
+    await answerAgentCall({ callId: 2, kind: 'call', name: 'view_figure', args: {} }, host);
+    expect(asked[1]?.marks).toBe(true);
+  });
+});

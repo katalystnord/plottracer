@@ -629,7 +629,7 @@ export interface ImageCanvasHandle {
    * picture pixels per image pixel, with the marks drawn over it (v2.7, M4).
    * The same two layers as getCompositePngDataURL, rendered for that region
    * rather than for the screen, so an agent looking never moves the view. */
-  getRegionPngDataURL: (region: { x: number; y: number; width: number; height: number; scale: number }) => string | null;
+  getRegionPngDataURL: (region: { x: number; y: number; width: number; height: number; scale: number; marks?: boolean }) => string | null;
   /** The currently VISIBLE region of the image, in image-pixel coordinates,
    * clamped to the image bounds -- i.e. what the user has framed in the view
    * (checkpoint 102). Null if no image is loaded or nothing is visible. Used by
@@ -1123,7 +1123,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   }, [image, getOverlayCanvas]);
 
   const getRegionPngDataURL = useCallback(
-    (r: { x: number; y: number; width: number; height: number; scale: number }): string | null => {
+    (r: { x: number; y: number; width: number; height: number; scale: number; marks?: boolean }): string | null => {
       if (!image) return null;
       const out = document.createElement('canvas');
       out.width = Math.max(1, Math.round(r.width * r.scale));
@@ -1136,7 +1136,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
       // part of it, on screen or not, at the pixel ratio that turns the view's
       // scale into the one asked for.
       const layer = overlayLayerRef.current;
-      if (layer && layer.visible()) {
+      if (layer && layer.visible() && r.marks !== false) {
         const marks = layer.toCanvas({
           x: view.offsetX + r.x * view.scale,
           y: view.offsetY + r.y * view.scale,
