@@ -200,7 +200,9 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     // ⚑ Its own profile, so the check never switches agents on in the profile
     // of the person running it.
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-packaged-agents-'));
-    fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ agentsEnabled: true }));
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'pt-packaged-figures-'));
+    fs.copyFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-stress-strain.png'), path.join(folder, 'fig.png'));
+    fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ agentsEnabled: true, agentFolder: folder }));
     const agentApp = await electron.launch({
       executablePath: BINARY,
       args: [...ozoneArgs(), `--user-data-dir=${profile}`],
@@ -230,9 +232,17 @@ describe.runIf(RUN)('the packaged app is complete', () => {
       await expect.poll(getState, { timeout: 30000, interval: 500 }).not.toMatch(/still starting/);
       const state = { result: { content: [{ text: await getState() }] } };
       expect(state.result.content[0]?.text).toMatch(/No figure is open/);
+      // phase 2 (M6): the folder is read, and a figure opened, by the shipped main process
+      const callTool = async (name: string, args: unknown) =>
+        ((await (await post({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name, arguments: args } }, session)).json()) as {
+          result: { content: { text: string }[] };
+        }).result.content.map((c) => c.text).join('\n');
+      expect(await callTool('list_folder', {})).toContain('fig.png');
+      expect(await callTool('open_figure', { path: 'fig.png' })).toMatch(/Opened fig\.png \(\d+ × \d+ pixels\)/);
     } finally {
       await agentApp.close();
       fs.rmSync(profile, { recursive: true, force: true });
+      fs.rmSync(folder, { recursive: true, force: true });
     }
   }, 120000);
 
