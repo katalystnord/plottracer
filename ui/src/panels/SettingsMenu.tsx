@@ -46,11 +46,10 @@ function AgentConnection({ status }: { status: AgentStatus | null | undefined })
       <div data-testid="setting-agents-status" style={small}>
         Listening on this computer only, at <span data-testid="setting-agents-address" style={{ fontFamily: 'monospace' }}>{cfg.url}</span>
       </div>
-      <div style={{ ...small, marginTop: 4 }}>To connect Claude Code, run:</div>
-      <code data-testid="setting-agents-claude-code" style={code}>{cfg.claudeCode}</code>
+      <div style={{ ...small, marginTop: 4 }}>To connect an agent, give it these MCP settings:</div>
+      <code data-testid="setting-agents-config" style={code}>{cfg.json}</code>
       <div style={{ display: 'flex', gap: 6 }}>
-        <button type="button" data-testid="setting-agents-copy-command" onClick={() => copy(cfg.claudeCode)}>Copy command</button>
-        <button type="button" data-testid="setting-agents-copy-json" title={cfg.json} onClick={() => copy(cfg.json)}>Copy JSON for other clients</button>
+        <button type="button" data-testid="setting-agents-copy-config" onClick={() => copy(cfg.json)}>Copy settings</button>
       </div>
       <div style={{ ...small, color: theme.color.text.legend, marginTop: 4 }}>
         The token in it is the key: only a client holding it can connect, and a web page never can.

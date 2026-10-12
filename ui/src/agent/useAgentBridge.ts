@@ -140,13 +140,13 @@ export function useAgentStatus(): AgentStatus | null {
 }
 
 /** What to paste into an agent client to connect it. */
-export function agentConfig(status: AgentStatus): { url: string; claudeCode: string; json: string } | null {
+export function agentConfig(status: AgentStatus): { url: string; json: string } | null {
   if (!status.listening || status.port === null || !status.token) return null;
   const url = `http://${status.host}:${status.port}/mcp`;
-  const header = `Authorization: Bearer ${status.token}`;
+  // ⚑ One block for every agent (M2, David 2026-10-12): the MCP settings form
+  // agents read, naming no particular one.
   return {
     url,
-    claudeCode: `claude mcp add --transport http plottracer ${url} --header "${header}"`,
     json: JSON.stringify({ mcpServers: { plottracer: { type: 'http', url, headers: { Authorization: `Bearer ${status.token}` } } } }, null, 2),
   };
 }

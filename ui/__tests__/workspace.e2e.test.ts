@@ -12242,6 +12242,13 @@ describe('Workspace: Settings (v2.7)', () => {
     }, SAMPLE_IMAGE);
   }
 
+  it('the Settings gear sits left of Help, so Help is the last thing at the right end of the top bar (David 2026-10-12)', async () => {
+    await resetWorkspace('xy');
+    const gear = (await page.getByTestId('settings-trigger').boundingBox())!;
+    const help = (await page.getByTestId('help-trigger').boundingBox())!;
+    expect(gear.x).toBeLessThan(help.x);
+  });
+
   it('S1/S2/S4/S5/S6 the gear lists every setting; a starting value applies at once, survives a restart, and Restore defaults puts it back', async () => {
     await openSettings();
     for (const key of ['colourTolerance', 'floodFillThreshold', 'gridRemovalTolerance', 'pointsPerTrace', 'readContourLabels', 'labelConfidence', 'exportFullPrecision', 'decimalComma']) {
@@ -12432,8 +12439,10 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
     const url = (await textOf('setting-agents-address')).trim();
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
-    const command = await textOf('setting-agents-claude-code');
+    const command = await textOf('setting-agents-config');
     expect(command).toContain(url);
+    // one connection for any agent: no agent is named (David 2026-10-12)
+    expect(await textOf('setting-row-agentsEnabled')).not.toMatch(/claude/i);
     const token = /Bearer ([0-9a-f]+)/.exec(command)![1]!;
     await closeSettings();
 
@@ -12516,7 +12525,7 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('setting-agentsEnabled').check();
     await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
     const url = (await textOf('setting-agents-address')).trim();
-    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-claude-code'))![1]!;
+    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-config'))![1]!;
     // M6: the folder is chosen with the system's folder picker, which the button opens
     expect(await textOf('setting-agentFolder')).toMatch(/None chosen/);
     try {
@@ -12631,7 +12640,7 @@ describe('Workspace: Settings (v2.7)', () => {
     expect(await page.getByTestId('setting-agentStartMode-rounds').isChecked()).toBe(true);
     await typeSetting('agentRoundSize', '2');
     const url = (await textOf('setting-agents-address')).trim();
-    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-claude-code'))![1]!;
+    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-config'))![1]!;
     await closeSettings();
     const init = await rpc(url, token, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e-agent', version: '1' } } });
     const session = init.headers.get('mcp-session-id')!;
@@ -12710,7 +12719,7 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('setting-agentsEnabled').check();
     await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
     const url = (await textOf('setting-agents-address')).trim();
-    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-claude-code'))![1]!;
+    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-config'))![1]!;
     try {
       await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, folder);
       await page.getByTestId('setting-agentFolder-choose').click();

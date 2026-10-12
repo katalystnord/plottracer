@@ -8741,13 +8741,13 @@ export function Workspace() {
             plus the upstream/licence attribution -- which needs a home now the
             native menu (its Help > About) is hidden. */}
         <TopBarGroup>
+          <SettingsMenu settings={settings} onChange={updateSettings} agentStatus={agentStatus} />
           <HelpMenu
             onOpenHelpOverlay={() => setHelpOverlayOpen(true)}
             onOpenExample={(ex) => void openExample(ex)}
             onStartChallenge={game.start}
             appVersion={__APP_VERSION__}
           />
-          <SettingsMenu settings={settings} onChange={updateSettings} agentStatus={agentStatus} />
         </TopBarGroup>
       </TopBar>
 
