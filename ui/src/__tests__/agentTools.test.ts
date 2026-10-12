@@ -75,6 +75,12 @@ describe('what the agent sees (M4, M5)', () => {
     expect(text).toContain('Calibration: done (by the user). The points they placed: X1 at pixel (87.3, 636.7), X = 0; X2 at pixel (885, 636.7), X = 1.2; Y1 at pixel (87.3, 636.7), Y = 0; Y2 at pixel (87.3, 39.3), Y = 100.');
   });
 
+  it('role-play 2026-10-12: a series whose record is not points says what it holds', () => {
+    const one = base.series[0]!;
+    expect(describeState({ ...base, series: [{ ...one, pointCount: 8, record: '4 bars (8 clicks)' }] })).toContain(`[1] "${one.name}" - 4 bars (8 clicks), `);
+    expect(describeState({ ...base, series: [{ ...one, pointCount: 0, record: "no points: a heatmap's record is its cells, 20 read (export gives them)" }] })).toContain("no points: a heatmap's record is its cells, 20 read");
+  });
+
   it('and while the walk is under way, the points placed so far', () => {
     const text = describeState({ ...base, calibrated: false, step: { index: 1, count: 4, label: 'X2' }, calibration: [{ label: 'X1', px: 10, py: 20, values: [{ label: 'X', value: '0' }] }] });
     expect(text).toContain('Placed so far: X1 at pixel (10, 20), X = 0.');

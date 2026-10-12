@@ -67,7 +67,7 @@ import { GraphTypeCardPicker } from './GraphTypeCardPicker.js';
 import { AgentStrip, type AgentRoundsControls } from './agent/AgentStrip.js';
 import { AgentRounds } from './agent/agentRounds.js';
 import { useAgentBridge, useAgentStatus, type AgentHost } from './agent/useAgentBridge.js';
-import { AgentStepLog } from './agent/agentDoing.js';
+import { AgentStepLog, recordCount } from './agent/agentDoing.js';
 import { NOT_CALIBRATED } from './agent/agentTools.js';
 import {
   AppShell,
@@ -8361,6 +8361,10 @@ export function Workspace() {
           name: d.name,
           colour: d.color,
           pointCount: d.pointCount,
+          record:
+            sessionRef.current.getExportShape() === 'heatmap'
+              ? `no points: a heatmap's record is its cells, ${heatmapCellsRef.current.length} read (export gives them)`
+              : recordCount(sessionRef.current, d.index),
           level: level ? { value: level.value, source: level.source } : null,
           selected: d.active,
           labelRead: (() => {

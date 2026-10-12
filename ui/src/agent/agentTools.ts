@@ -55,6 +55,9 @@ export interface AgentSeries {
   pointCount: number;
   level: { value: number; source: string } | null;
   selected: boolean;
+  /** What the series holds when its record is not points (bars, bins, a
+   * heatmap's cells) - said in place of the point count. */
+  record?: string | null;
   /** What Find lines read off the line's printed label, offered beside its Level. */
   labelRead?: { text: string; value: number | null; refused: string | null } | null;
 }
@@ -106,7 +109,8 @@ export function describeSeries(s: AgentSeries): string {
       : lr.value === null
         ? `, its label ${lr.text ? `read as "${lr.text}"` : 'could not be read'} was not used${lr.refused ? ` - ${lr.refused}` : ''}`
         : '';
-  return `[${s.index + 1}] "${s.name}" - ${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}, ${level}${offered}, colour ${hex(s.colour)}${s.selected ? ', selected on screen' : ''}`;
+  const holds = s.record ?? `${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}`;
+  return `[${s.index + 1}] "${s.name}" - ${holds}, ${level}${offered}, colour ${hex(s.colour)}${s.selected ? ', selected on screen' : ''}`;
 }
 
 export function describeState(st: AgentStateInput): string {

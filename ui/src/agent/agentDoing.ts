@@ -303,7 +303,9 @@ function seriesNow(host: AgentDoingHost, index: number): AgentSeries | undefined
 
 function named(host: AgentDoingHost, index: number): string {
   const s = seriesNow(host, index);
-  return s ? `series ${sid(s.index)} "${s.name}" (now ${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'})` : `series ${sid(index)}`;
+  if (!s) return `series ${sid(index)}`;
+  const record = recordCount(host.session(), s.index) ?? `${s.pointCount} ${s.pointCount === 1 ? 'point' : 'points'}`;
+  return `series ${sid(s.index)} "${s.name}" (now ${record})`;
 }
 
 /** A close-up around these figure pixels, at a zoom that makes a point's
@@ -353,6 +355,23 @@ function idsChanged(host: AgentDoingHost, before: number): string {
 // ── the dispatcher ───────────────────────────────────────────────────────────
 
 /** Answer one of the doing tools, or null when `name` is not one of them. */
+/**
+ * A tuple type's record, counted the way it is recorded: a bar is two corner
+ * clicks, a box five, so "8 points" for four bars told the agent nothing true
+ * (role-play 2026-10-12). Null for the types whose record IS points.
+ */
+export function recordCount(session: CalibrationSession<CalibratedAxes>, index: number): string | null {
+  const shape = session.getExportShape();
+  if (shape !== 'tuples' && shape !== 'bins') return null;
+  const noun = session.getConfig().tupleNoun ?? 'box';
+  const plural = (n: number) => (n === 1 ? noun : noun.endsWith('x') ? `${noun}es` : `${noun}s`);
+  const rows = session.getTupleRows(index);
+  const whole = rows.filter((r) => r.points.every((p) => p !== null)).length;
+  const half = rows.length - whole;
+  const clicks = session.getDatasets()[index]?.getCount() ?? 0;
+  return `${whole} ${plural(whole)}${half ? `, and ${half} more half placed` : ''} (${clicks} ${clicks === 1 ? 'click' : 'clicks'})`;
+}
+
 export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoingHost): Promise<ToolResult | null> {
   if (!DOING_TOOLS.some((t) => t.name === name)) return null;
   const args = (rawArgs && typeof rawArgs === 'object' ? rawArgs : {}) as Record<string, unknown>;
@@ -459,6 +478,20 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       host.commitStep(`Placed ${after - before} ${after - before === 1 ? 'point' : 'points'} in "${seriesNow(host, s.index)?.name ?? ''}"`);
       host.showSelection(s.index, placedAt);
       const took = after - before;
+      const record = recordCount(session, s.index);
+      if (record !== null) {
+        // ⚑ A click on a tuple type is one corner or member of a record, not a
+        // reading of its own: its own coordinates read like a value (a baseline
+        // corner "→ 0.088"), so the record itself is what the agent is shown.
+        const clicks = placedAt.map((k, i) => `  click ${i + 1}: pixel (${fmt(all[k]!.x)}, ${fmt(all[k]!.y)})`);
+        const out = host.exportText('csv', 'active');
+        const recorded = 'error' in out ? '' : `\nAs PlotTracer records them now:\n${out.content}`;
+        return withCloseUp(
+          host,
+          `Placed ${took} ${took === 1 ? 'click' : 'clicks'} in ${named(host, s.index)}:\n${clicks.join('\n')}${recorded}`,
+          placedAt.map((k) => all[k]!)
+        );
+      }
       const rows = placedAt.map((k) => `  ${pno(k)}: pixel (${fmt(all[k]!.x)}, ${fmt(all[k]!.y)}) → ${valuesText(all[k]!.data)}`);
       const shifted = placedAt.length < took ? `\n${took - placedAt.length} point(s) were moved onto the axis they belong to, as a click would be; list_points shows where.` : '';
       return withCloseUp(

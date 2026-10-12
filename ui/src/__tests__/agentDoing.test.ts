@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, type CalibratedAxes } from '../../../engine/calibrationSession.js';
-import { CONTOUR_AXES_CONFIG, XY_AXES_CONFIG } from '../../../engine/axesTypeConfigs.js';
+import { BAR_AXES_CONFIG, CONTOUR_AXES_CONFIG, XY_AXES_CONFIG } from '../../../engine/axesTypeConfigs.js';
+import { walkCategoryAxis } from '../../../engine/__tests__/helpers/categoryWalk.js';
 import { History } from '../../../engine/history.js';
 import type { LinePoint } from '../../../engine/lineEdits.js';
 import { NOT_CALIBRATED, type AgentStateInput } from '../agent/agentTools.js';
@@ -9,6 +10,7 @@ import {
   AgentStepLog,
   NEEDS_CALIBRATION,
   USER_CHANGED,
+  recordCount,
   doAgentTool,
   resolveSeries,
   seriesList,
@@ -378,5 +380,41 @@ describe('M13 / M10 / M8', () => {
     const { h } = host(s);
     const r = await doAgentTool('find_lines', { at: { x: 200, y: 200 } }, h);
     expect(textOf(r)).toMatch(/found lines of #112233/);
+  });
+});
+
+describe('role-play 2026-10-12: an agent hears a type\'s record, not its raw clicks', () => {
+  const bar = (): Session => {
+    const s = new CalibrationSession<CalibratedAxes>(BAR_AXES_CONFIG as never);
+    s.handleCalibrationClick(300, 250);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 50);
+    s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s as never, { from: { x: 50, y: 250 }, to: { x: 450, y: 250 } });
+    expect(s.runCalibration()).toBe(true);
+    return s;
+  };
+
+  it('a bar chart counts bars: four corner clicks are 2 bars, and a lone corner is a bar half placed', () => {
+    const s = bar();
+    for (const [x, y] of [[60, 150], [140, 250], [160, 100], [240, 250], [260, 120]] as const) s.addDataPoint(x, y);
+    expect(recordCount(s, 0)).toBe('2 bars, and 1 more half placed (5 clicks)');
+  });
+
+  it('place_points on a bar chart lists the clicks by pixel only, then the bars as PlotTracer records them', async () => {
+    const s = bar();
+    const { h, seen } = host(s);
+    const r = textOf(await doAgentTool('place_points', { series: 1, points: [{ x: 60, y: 150 }, { x: 140, y: 250 }] }, h));
+    expect(r).toContain('Placed 2 clicks in series [1] "Series 1" (now 1 bar (2 clicks))');
+    expect(r).toContain('click 2: pixel (140, 250)');
+    expect(r).not.toMatch(/→/);
+    expect(r).toContain('As PlotTracer records them now:\nx,y\n1,2');
+    expect(seen.scope).toBe('active');
+  });
+
+  it('a flat type keeps its points', () => {
+    const s = calibrate(XY_AXES_CONFIG);
+    s.addDataPoint(150, 200);
+    expect(recordCount(s, 0)).toBeNull();
   });
 });
