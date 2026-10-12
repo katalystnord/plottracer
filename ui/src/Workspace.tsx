@@ -3821,6 +3821,7 @@ export function Workspace() {
   );
 
   const resetForNewImage = useCallback(() => {
+    agentRoundsRef.current?.rounds.newFigure(); // R12: a new figure starts a fresh round
     resetDocument(axesTypeId);
   }, [resetDocument, axesTypeId]);
 

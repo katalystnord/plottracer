@@ -153,6 +153,15 @@ export class AgentRounds {
     this.changed();
   }
 
+  /** R12 (David 2026-10-12): another figure is opened, so the round is over -
+   * its steps were on the figure that went. A held step is not run on the new
+   * one; the agent is told to look again. */
+  newFigure(): void {
+    this.steps = [];
+    this.release({ go: false, message: 'The user opened another figure, so that step was not taken. Call get_state.' });
+    this.changed();
+  }
+
   /** R10: the strip's mode switch. Switching starts a fresh round. */
   setMode(mode: AgentMode): void {
     this.mode = mode;

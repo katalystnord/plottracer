@@ -144,4 +144,17 @@ describe('M14: rounds of steps the person approves', () => {
     r.stepUndone();
     expect(r.view().steps).toEqual(['a']);
   });
+
+  it('R12 (David 2026-10-12): opening another figure starts a fresh round, and a held step is not run on it', async () => {
+    const { r } = rounds(2);
+    await step(r, 'a');
+    await step(r, 'b');
+    const held = r.beforeStep();
+    r.newFigure();
+    const g = await held;
+    expect(g.go).toBe(false);
+    expect(!g.go && g.message).toBe('The user opened another figure, so that step was not taken. Call get_state.');
+    expect(r.view()).toMatchObject({ steps: [], waiting: false });
+    expect((await step(r, 'c')).go).toBe(true);
+  });
 });
