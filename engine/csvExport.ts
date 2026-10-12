@@ -23,7 +23,7 @@ import type { HistogramBin } from '../algorithms/histogram.js';
 import type { GeometryResult } from '../algorithms/geometry.js';
 import type { ErrorRelation } from './errorRelation.js';
 import { type ExportValue } from '../core/exportValues.js';
-import type { ValueRounder } from '../core/exportPrecision.js';
+import { FULL_PRECISION_ROUNDER, roundToResolution, type ValueRounder } from '../core/exportPrecision.js';
 import { renderTable, type Cell, type TableSection } from './tableFormats.js';
 
 /**
@@ -55,6 +55,19 @@ export interface HeatmapKeyExport {
   from: number;
   to: number;
   log: boolean;
+  /** The key's own resolution (half a pixel's worth of value along the strip),
+   * when known - what a value read off the key is rounded to. */
+  halfStep?: number;
+}
+
+/** Rounds a reading taken off the colour key. The identity when the export is
+ * at full precision or the key's resolution is unknown. */
+export type KeyValueRounder = (v: number) => number;
+export const KEY_AS_MEASURED: KeyValueRounder = (v) => v;
+export function keyValueRounder(key: HeatmapKeyExport | undefined, full: boolean): KeyValueRounder {
+  if (full || key?.halfStep === undefined) return KEY_AS_MEASURED;
+  const h = key.halfStep;
+  return (v) => roundToResolution(v, h);
 }
 
 export interface HeatmapExportCell {
@@ -615,7 +628,8 @@ function axisHeader(cells: readonly HeatmapExportCell[], axis: 'x' | 'y', suffix
 
 export function heatmapCellsSection(
   cells: readonly HeatmapExportCell[],
-  rounder: ValueRounder
+  rounder: ValueRounder,
+  roundValue: KeyValueRounder = KEY_AS_MEASURED
 ): TableSection {
   const at = (v: number | null, cell: HeatmapExportCell, dim: 0 | 1): Cell =>
     v === null ? '' : rounder.at([dim === 0 ? v : cell.xCentre, dim === 0 ? cell.yCentre : v], dim);
@@ -700,10 +714,9 @@ export function heatmapCellsSection(
       at(c.xMax - c.xMin, c, 0),
       at(c.yMax - c.yMin, c, 1),
       // ⚑ The VALUE is not an x or a y - it is read off the colour key, whose
-      // resolution has nothing to do with the figure's pixel pitch. Rounding it
-      // through the axes' own resolution would claim a precision from the wrong
-      // instrument, so it is written as measured.
-      c.value === null ? '' : c.value,
+      // resolution has nothing to do with the figure's pixel pitch. So it is
+      // rounded by the key's own resolution, never the axes'.
+      c.value === null ? '' : roundValue(c.value),
       c.source ?? 'colour',
       c.uniformity,
     ]),
@@ -717,11 +730,11 @@ export function heatmapCellsSection(
  * about the FIGURE, not about any one cell, and repeating it 20 times would
  * invite the copies disagreeing.
  */
-export function heatmapKeySection(key: HeatmapKeyExport): TableSection {
+export function heatmapKeySection(key: HeatmapKeyExport, roundValue: KeyValueRounder = KEY_AS_MEASURED): TableSection {
   return {
     title: 'Colour key',
     header: ['key from', 'key to', 'log'],
-    rows: [[key.from, key.to, key.log ? 'yes' : '']],
+    rows: [[roundValue(key.from), roundValue(key.to), key.log ? 'yes' : '']],
   };
 }
 
@@ -734,7 +747,19 @@ export function heatmapKeySection(key: HeatmapKeyExport): TableSection {
  * has to pivot it by hand, and reconstructible from the section above if it
  * ever disagreed. An unread cell is empty here too.
  */
-export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): TableSection {
+/** A matrix coordinate rounded by its own axis, at a cell it belongs to. The
+ * rounding is applied to what is WRITTEN; the pivot keys stay raw. */
+function roundCoord(cells: readonly HeatmapExportCell[], rounder: ValueRounder, axis: 'x' | 'y', v: number): number {
+  const c = cells[0];
+  if (!c) return v;
+  return axis === 'x' ? rounder.at([v, c.yCentre], 0) : rounder.at([c.xCentre, v], 1);
+}
+
+export function heatmapMatrixSection(
+  cells: readonly HeatmapExportCell[],
+  rounder: ValueRounder = FULL_PRECISION_ROUNDER,
+  roundValue: KeyValueRounder = KEY_AS_MEASURED
+): TableSection {
   const xs = [...new Set(cells.map((c) => c.xCentre))].sort((a, b) => a - b);
   const ys = [...new Set(cells.map((c) => c.yCentre))].sort((a, b) => a - b);
   const byKey = new Map(cells.map((c) => [`${c.xCentre},${c.yCentre}`, c]));
@@ -746,7 +771,7 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
   const head = (coord: number, axis: 'x' | 'y'): string | number => {
     const cell = cells.find((c) => (axis === 'x' ? c.xCentre : c.yCentre) === coord);
     const label = axis === 'x' ? cell?.xLabel : cell?.yLabel;
-    return label !== undefined && label !== '' ? label : coord;
+    return label !== undefined && label !== '' ? label : roundCoord(cells, rounder, axis, coord);
   };
   return {
     title: 'Matrix (value per cell)',
@@ -755,7 +780,7 @@ export function heatmapMatrixSection(cells: readonly HeatmapExportCell[]): Table
       head(y, 'y'),
       ...xs.map((x) => {
         const cell = byKey.get(`${x},${y}`);
-        return cell?.value ?? '';
+        return cell?.value === null || cell?.value === undefined ? '' : roundValue(cell.value);
       }),
     ]),
   };
@@ -812,9 +837,12 @@ function edgesOf(cells: readonly HeatmapExportCell[], axis: 'x' | 'y'): number[]
  * GAP has more than n+1 boundaries, and it says so rather than closing the hole
  * to make the vector the length a library would prefer.
  */
-export function heatmapMatrixAxesSection(cells: readonly HeatmapExportCell[]): TableSection {
-  const xs = edgesOf(cells, 'x');
-  const ys = edgesOf(cells, 'y');
+export function heatmapMatrixAxesSection(
+  cells: readonly HeatmapExportCell[],
+  rounder: ValueRounder = FULL_PRECISION_ROUNDER
+): TableSection {
+  const xs = edgesOf(cells, 'x').map((v) => roundCoord(cells, rounder, 'x', v));
+  const ys = edgesOf(cells, 'y').map((v) => roundCoord(cells, rounder, 'y', v));
   const width = Math.max(xs.length, ys.length);
   // ⚑ PADDED to one length. A non-square grid gives x and y different edge
   // counts, and two rows of different length render as ragged CSV - which a
@@ -1276,22 +1304,27 @@ export function geometryTableSection(series: string, result: GeometryResult, val
 export function buildHeatmapJSON(
   cells: readonly HeatmapExportCell[],
   measurements: readonly MeasurementCsvRow[] = [],
-  key?: HeatmapKeyExport
+  key?: HeatmapKeyExport,
+  rounder: ValueRounder = FULL_PRECISION_ROUNDER,
+  roundValue: KeyValueRounder = KEY_AS_MEASURED
 ): string {
+  const rx = (v: number) => roundCoord(cells, rounder, 'x', v);
+  const ry = (v: number) => roundCoord(cells, rounder, 'y', v);
+  const rv = (v: number | null) => (v === null ? null : roundValue(v));
   const xs = [...new Set(cells.map((c) => c.xCentre))].sort((a, b) => a - b);
   const ys = [...new Set(cells.map((c) => c.yCentre))].sort((a, b) => a - b);
   const byKey = new Map(cells.map((c) => [`${c.xCentre},${c.yCentre}`, c]));
   const doc: Record<string, unknown> = {
     // ⚑ The third axis's own span, beside the readings taken on it.
-    ...(key ? { colourKey: { from: key.from, to: key.to, log: key.log } } : {}),
+    ...(key ? { colourKey: { from: roundValue(key.from), to: roundValue(key.to), log: key.log } } : {}),
     cells: cells.map((c) => ({
-      xMin: c.xMin,
-      xMax: c.xMax,
-      yMin: c.yMin,
-      yMax: c.yMax,
-      xCentre: c.xCentre,
-      yCentre: c.yCentre,
-      value: c.value,
+      xMin: rounder.at([c.xMin, c.yCentre], 0),
+      xMax: rounder.at([c.xMax, c.yCentre], 0),
+      yMin: rounder.at([c.xCentre, c.yMin], 1),
+      yMax: rounder.at([c.xCentre, c.yMax], 1),
+      xCentre: rounder.at([c.xCentre, c.yCentre], 0),
+      yCentre: rounder.at([c.xCentre, c.yCentre], 1),
+      value: rv(c.value),
       // ⚑ The machine-readable half of the source. The table's square brackets
       // around `[59]` are the half that survives a paste into a spreadsheet;
       // this is the half a program can read. Both channels, because they reach
@@ -1316,22 +1349,22 @@ export function buildHeatmapJSON(
       y: cells.some((c) => c.yIsCategory) ? 'category' : 'value',
     },
     matrix: {
-      x: xs,
+      x: xs.map(rx),
       // ⚑⚑ THE EDGES RIDE ALONGSIDE THE CENTRES, not instead of them - the same
       // rule the tick labels below already follow, for the same reason. The two
       // conventions are both real and both in use: `geom_tile` takes centres
       // plus a size, `pcolormesh` with `shading='flat'` refuses them and demands
       // n+1. A document that dropped either half would fail a real consumer.
       // See `heatmapMatrixAxesSection` for the whole argument.
-      xEdges: edgesOf(cells, 'x'),
-      y: ys,
-      yEdges: edgesOf(cells, 'y'),
+      xEdges: edgesOf(cells, 'x').map(rx),
+      y: ys.map(ry),
+      yEdges: edgesOf(cells, 'y').map(ry),
       // ⚑ The names ride ALONGSIDE the coordinate vectors rather than replacing
       // them: `matplotlib`/`plotly` want numbers for positions and strings for
       // tick labels, and both are here, aligned index for index.
       ...(hasLabels(cells, 'x') ? { xLabels: xs.map((x) => cells.find((c) => c.xCentre === x)?.xLabel ?? '') } : {}),
       ...(hasLabels(cells, 'y') ? { yLabels: ys.map((y) => cells.find((c) => c.yCentre === y)?.yLabel ?? '') } : {}),
-      values: ys.map((y) => xs.map((x) => byKey.get(`${x},${y}`)?.value ?? null)),
+      values: ys.map((y) => xs.map((x) => rv(byKey.get(`${x},${y}`)?.value ?? null))),
     },
   };
   if (measurements.length > 0) doc['measurements'] = measurementsJson(measurements);

@@ -37,6 +37,7 @@ import {
   histogramSection,
   heatmapCellsSection,
   heatmapKeySection,
+  keyValueRounder,
   heatmapMatrixAxesSection,
   heatmapMatrixSection,
   type HeatmapKeyExport,
@@ -199,7 +200,7 @@ export function buildExportJson(input: ExportAssemblyInput): string {
     );
   }
   if (exportShape === 'heatmap') {
-    return buildHeatmapJSON(input.heatmapCells ?? [], measures, input.heatmapKey);
+    return buildHeatmapJSON(input.heatmapCells ?? [], measures, input.heatmapKey, rounder, keyValueRounder(input.heatmapKey, input.precision === 'full'));
   }
   if (exportShape === 'bins') {
     return buildHistogramJSON(
@@ -400,18 +401,19 @@ export function buildExportSections(input: ExportAssemblyInput): TableSection[] 
     // meets the long form - bounds, centre, value and the evidence for it -
     // before the pivoted matrix, which is derived from it.
     const cells = input.heatmapCells ?? [];
-    sections.push(heatmapCellsSection(cells, rounder));
+    const roundValue = keyValueRounder(input.heatmapKey, input.precision === 'full');
+    sections.push(heatmapCellsSection(cells, rounder, roundValue));
     // ⚑⚑ THE BOUNDARIES IMMEDIATELY BEFORE THE VALUES THEY BOUND (A5). A
     // generator's three arguments are X, Y and C, so they are adjacent here
     // rather than one of them being left to re-derive from the long form:
     // `pcolormesh` with `shading='flat'` refuses the centres the matrix header
     // carries, so the matrix alone was the one block whose coordinate form its
     // own consumer rejects.
-    sections.push(heatmapMatrixAxesSection(cells));
-    sections.push(heatmapMatrixSection(cells));
+    sections.push(heatmapMatrixAxesSection(cells, rounder));
+    sections.push(heatmapMatrixSection(cells, rounder, roundValue));
     // ⚑ Last, because it describes the FIGURE rather than the data - a reader
     // scanning for values meets those first.
-    if (input.heatmapKey) sections.push(heatmapKeySection(input.heatmapKey));
+    if (input.heatmapKey) sections.push(heatmapKeySection(input.heatmapKey, roundValue));
   } else if (exportShape === 'bins') {
     sections.push(histogramSection(session.getHistogramBins(), rounder, errorColumnsByTuple(session, activeIndex, input.precision).error));
   } else if (exportShape === 'tuples') {

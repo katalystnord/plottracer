@@ -10197,6 +10197,29 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('series-option-0')).toBe('Series 1');
   });
 
+  it('a heatmap export is rounded as it says: positions by the axes, values and key by the colour key (role-play 2026-10-12)', async () => {
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(250);
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('heatmap-cells-summary')).toMatch(/cells read/);
+    const csvPath = path.join(os.tmpdir(), `plottracer-e2e-heat-${Date.now()}.csv`);
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath: p });
+    }, csvPath);
+    await page.getByTestId('export-csv').click();
+    await page.getByTestId('export-format-csv').click();
+    await expect.poll(() => (fs.existsSync(csvPath) ? fs.readFileSync(csvPath, 'utf8') : '')).toContain('Colour key');
+    const csv = fs.readFileSync(csvPath, 'utf8');
+    // 162.09912536443147 was what the file said; nothing measured off 900 px
+    // has eight decimals
+    const long = csv.match(/\d+\.\d{5,}/g) ?? [];
+    expect(long, long.slice(0, 3).join(' ')).toEqual([]);
+    fs.unlinkSync(csvPath);
+  });
+
   it('⚑ while every type whose record IS points still counts them', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

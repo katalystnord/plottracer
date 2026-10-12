@@ -595,6 +595,46 @@ describe('the export ROUTES a heatmap session to those sections', () => {
     expect(doc).not.toHaveProperty('series');
   });
 
+  // Role-play 2026-10-12: the export said "rounded to the figure's own
+  // resolution" and wrote 162.09912536443147. Every number in a heatmap file is
+  // rounded by its own instrument: positions by the axes, values and the key's
+  // span by the colour key.
+  const RAW: HeatmapExportCell[] = [
+    cell({ col: 0, row: 0, xMin: 0, xMax: 1.9963592233009708, yMin: 0, yMax: 1.0194805194805197, xCentre: 0.9981796116495776, yCentre: 0.5097402597407235, value: 162.09912536443147 }),
+    cell({ col: 1, row: 0, xMin: 1.9963592233009708, xMax: 4.9866504854368925, yMin: 0, yMax: 1.0194805194805197, xCentre: 3.4915048543675713, yCentre: 0.5097402597407235, value: 170.84548104956266 }),
+  ];
+  const KEY = { from: 59.76676384839651, to: 779.5918367346937, log: false, halfStep: 0.35 };
+  const decimals = (v: unknown): number => (typeof v === 'number' && String(v).includes('.') ? String(v).split('.')[1]!.length : 0);
+
+  it('rounding on: the matrix, its boundaries and the cells are rounded to the axes, the values and key to the colour key', () => {
+    const sections = buildExportSections({ ...input(RAW), heatmapKey: KEY });
+    const byTitle = (t: string) => sections.find((sec) => sec.title === t)!;
+    const cells = byTitle('Cells');
+    const vi = cells.header.indexOf('value');
+    expect(cells.rows.map((r) => r[vi])).toEqual([162.1, 170.8]);
+    for (const r of byTitle('Matrix axes (cell boundaries)').rows) for (const v of r.slice(1)) expect(decimals(v), String(v)).toBeLessThanOrEqual(2);
+    const m = byTitle('Matrix (value per cell)');
+    for (const v of [...m.header.slice(1), ...m.rows.map((r) => r[0])]) expect(decimals(v), String(v)).toBeLessThanOrEqual(2);
+    expect(m.rows[0]!.slice(1)).toEqual([162.1, 170.8]);
+    expect(byTitle('Colour key').rows[0]!.slice(0, 2)).toEqual([59.8, 779.6]);
+  });
+
+  it('rounding on: the heatmap JSON is rounded the same way', () => {
+    const doc = JSON.parse(buildExportJson({ ...input(RAW), heatmapKey: KEY }));
+    expect(doc.cells.map((c: { value: number }) => c.value)).toEqual([162.1, 170.8]);
+    for (const c of doc.cells) for (const k of ['xMin', 'xMax', 'yMin', 'yMax', 'xCentre', 'yCentre']) expect(decimals(c[k]), `${k} ${c[k]}`).toBeLessThanOrEqual(2);
+    for (const v of [...doc.matrix.x, ...doc.matrix.y, ...doc.matrix.xEdges, ...doc.matrix.yEdges]) expect(decimals(v), String(v)).toBeLessThanOrEqual(2);
+    expect(doc.matrix.values).toEqual([[162.1, 170.8]]);
+    expect([doc.colourKey.from, doc.colourKey.to]).toEqual([59.8, 779.6]);
+  });
+
+  it('full precision writes every number as measured', () => {
+    const doc = JSON.parse(buildExportJson({ ...input(RAW), precision: 'full' as const, heatmapKey: KEY }));
+    expect(doc.cells[0].value).toBe(162.09912536443147);
+    expect(doc.matrix.xEdges[1]).toBe(1.9963592233009708);
+    expect(doc.colourKey.from).toBe(59.76676384839651);
+  });
+
   it('exports an empty table before Read cells, rather than an empty FIGURE', () => {
     // A heatmap with no cells read is not a heatmap with no data - and the file
     // has no way to say which, so it says what it has: nothing yet.

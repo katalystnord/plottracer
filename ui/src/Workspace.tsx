@@ -1415,6 +1415,9 @@ export function Workspace() {
   /** The colour key's own span, captured when the cells were read - the third
    * axis's extent, which the export carries beside the readings taken on it. */
   const heatmapKeyRef = useRef<{ from: number; to: number; log: boolean } | undefined>(undefined);
+  /** The colour key's resolution, for rounding what is read off it in the export
+   * (kept from `heatmapKeySpan`, which is declared further down). */
+  const heatmapKeyHalfStepRef = useRef<number | undefined>(undefined);
   useEffect(() => {
     heatmapCellsRef.current = heatmapCells;
   }, [heatmapCells]);
@@ -5985,7 +5988,9 @@ export function Workspace() {
         // Read cells, which the export reports as an empty table rather than
         // inventing one.
         heatmapCells: heatmapCellsRef.current,
-        ...(heatmapKeyRef.current ? { heatmapKey: heatmapKeyRef.current } : {}),
+        ...(heatmapKeyRef.current
+          ? { heatmapKey: { ...heatmapKeyRef.current, ...(heatmapKeyHalfStepRef.current !== undefined ? { halfStep: heatmapKeyHalfStepRef.current } : {}) } }
+          : {}),
       };
     },
     [session, exportScope, exportFullPrecision, axes, config]
@@ -7110,6 +7115,9 @@ export function Workspace() {
     if (!k1 || !k2 || !kv1 || !kv2) return null;
     return keySpanFromClicks(k1, k2, kv1, kv2, session.getOptions()['isLogValue'] === 'true');
   }, [heatmapActive, placedPoints, session, version]);
+  useEffect(() => {
+    heatmapKeyHalfStepRef.current = heatmapKeySpan?.halfStep;
+  }, [heatmapKeySpan]);
 
   /**
    * The cursor moved: show the ink under it, on the TABLE cell.
