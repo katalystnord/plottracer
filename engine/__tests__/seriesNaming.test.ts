@@ -68,3 +68,23 @@ describe('one naming for every series', () => {
     expect(names(s)).toEqual(['Series 1', 'Blend B']);
   });
 });
+
+describe('every series its own colour (role-play 2026-10-12)', () => {
+  // Fifteen found pieces shared eight colours, and a series added by hand took
+  // the same red as one already there, so the eye could not tell them apart.
+  const colours = (s: Session) => s.getDatasetInfos().map((d) => d.color.join(','));
+
+  it('fifteen found lines get fifteen different colours', () => {
+    const s = calibrated();
+    s.addFoundLines(Array.from({ length: 15 }, (_, k) => line(240 - k * 9)));
+    expect(new Set(colours(s)).size).toBe(15);
+  });
+
+  it('a series added after a removal takes a colour no series has', () => {
+    const s = calibrated();
+    s.addFoundLines([line(200), line(150), line(100), line(80)]);
+    s.removeDataset(1);
+    s.addDataset();
+    expect(new Set(colours(s)).size).toBe(4);
+  });
+});

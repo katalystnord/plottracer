@@ -607,6 +607,34 @@ export const SERIES_COLOR_PALETTE: readonly [number, number, number][] = [
   [127, 127, 127],
 ];
 
+/** Further distinct colours, taken once the palette's eight are in use: the
+ * light halves of the same families, then the two it leaves out. */
+const SERIES_COLOR_EXTRA: readonly [number, number, number][] = [
+  [174, 199, 232], [255, 187, 120], [152, 223, 138], [255, 152, 150], [197, 176, 213],
+  [196, 156, 148], [247, 182, 210], [199, 199, 199], [188, 189, 34], [23, 190, 207],
+  [219, 219, 141], [158, 218, 229],
+];
+
+/**
+ * The first colour no series in `used` has (role-play 2026-10-12: fifteen
+ * found pieces shared eight colours, so which was which could not be seen).
+ * Past the listed ones, hues a golden angle apart.
+ */
+export function freeSeriesColour(used: readonly (readonly [number, number, number])[]): [number, number, number] {
+  const key = (c: readonly number[]) => c.join(',');
+  const taken = new Set(used.map(key));
+  for (const c of [...SERIES_COLOR_PALETTE, ...SERIES_COLOR_EXTRA]) if (!taken.has(key(c))) return [c[0], c[1], c[2]];
+  for (let k = 0; ; k++) {
+    const h = (k * 137.508) % 360;
+    const f = (n: number) => {
+      const t = (n + h / 30) % 12;
+      return Math.round(255 * (0.45 - 0.35 * Math.max(-1, Math.min(t - 3, 9 - t, 1))));
+    };
+    const c: [number, number, number] = [f(0), f(8), f(4)];
+    if (!taken.has(key(c))) return c;
+  }
+}
+
 /**
  * A slot cursor that the given dataset can actually honour.
  *
@@ -949,7 +977,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private buildDatasetEntry(name: string, paletteIndex: number): DatasetEntry {
     const dataset = new Dataset(this.config.dataDim);
     dataset.name = name;
-    const [r, g, b] = SERIES_COLOR_PALETTE[paletteIndex % SERIES_COLOR_PALETTE.length]!;
+    const [r, g, b] =
+      paletteIndex === 0 ? SERIES_COLOR_PALETTE[0]! : freeSeriesColour((this.datasetEntries ?? []).map((e) => e.dataset.colorRGB.getRGB() as [number, number, number]));
     dataset.colorRGB = new Color(r, g, b);
     // Applied here rather than at the one call site, so *every* series gets
     // the graph type's capture shape -- the constructor's "Series 1", each
@@ -3727,7 +3756,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const ds = this.datasetEntries[idx]!.dataset;
       ds.setMetadata({ ...ds.getMetadata(), [FOUND_LINE_KEY]: true });
       this.writeLinePoints(idx, pts);
-      this.setDatasetColor(idx, SERIES_COLOR_PALETTE[idx % SERIES_COLOR_PALETTE.length]!);
+      this.setDatasetColor(idx, freeSeriesColour(this.datasetEntries.filter((_, i) => i !== idx).map((e) => e.dataset.colorRGB.getRGB() as [number, number, number])));
       created.push(idx);
     });
     if (created.length) this.switchActiveDataset(created[0]!);
