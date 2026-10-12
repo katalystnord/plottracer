@@ -41,6 +41,9 @@ export interface SpreadsheetTableProps {
    * a canvas click and a keyboard step mean.
    */
   onSelectPoint: (index: number | null, seriesIndex?: number) => void;
+  /** The series' name in its header is clicked: pick the whole series, or pick
+   * it off when it is what is picked (David 2026-10-12). */
+  onSelectSeries?: (seriesIndex: number) => void;
   /**
    * ⚑⚑ IT CARRIES THE SERIES for the same reason `onSelectPoint` does (A2). The
    * marquee set is interpreted against the ACTIVE series by everything that
@@ -132,6 +135,7 @@ export function SpreadsheetTable({
   selectedPointIndices,
   activeSeriesPointCount,
   onSelectPoint,
+  onSelectSeries,
   onSelectMarquee,
   renderValue,
   renderCategoryName,
@@ -201,7 +205,10 @@ export function SpreadsheetTable({
                   s.errorColumns.length
                 }
                 data-testid={`series-col-${s.index}`}
+                onClick={onSelectSeries ? () => onSelectSeries(s.index) : undefined}
+                title={onSelectSeries ? `Click to select all of ${s.name}; click again to clear it` : undefined}
                 style={{
+                  cursor: onSelectSeries ? 'pointer' : undefined,
                   position: 'sticky',
                   top: off,
                   zIndex: 1,

@@ -4153,6 +4153,13 @@ export function Workspace() {
           // selected without first hunting down which series it ended up in.
           if (findLinesKind(session.getConfig().id)) {
             const hit = session.lineNearest(px, py, 8);
+            // ⚑ In Whole series it takes ALL of the line, whichever line it is:
+            // only the active series' markers answer a click, so on a figure of
+            // fifteen found pieces the mode selected nothing (role-play 2026-10-12).
+            if (hit >= 0 && selectSubMode === 'series') {
+              selectWholeSeriesRef.current?.(hit);
+              return;
+            }
             if (hit >= 0 && hit !== session.getActiveDatasetIndex()) {
               session.setActiveDataset(hit);
               bump();
@@ -4240,7 +4247,7 @@ export function Workspace() {
         }
       }
     },
-    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid, canvasHasImage, placePointAt]
+    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid, canvasHasImage, placePointAt, selectSubMode]
   );
 
   // Bar capture (v2.0): a drag's two opposite corners become a bar's two
@@ -6907,6 +6914,42 @@ export function Workspace() {
     },
     [session, bump]
   );
+
+  /**
+   * Make a series the active one and select ALL of it - or, when that is what
+   * is already selected, select nothing. One rule for the two places a whole
+   * line is picked: a click on a line in Select ▸ Whole series, and the series'
+   * name in the table header (David 2026-10-12: *"choose and activate a line by
+   * clicking the series name. Clicking again deselects it"*). A selection is
+   * drawn only in Select, so that is where it lands, as the agent's does.
+   */
+  const selectWholeSeries = useCallback(
+    (index: number) => {
+      const n = session.getDatasets()[index]?.getCount() ?? 0;
+      const whole = Array.from({ length: n }, (_, i) => i);
+      const already =
+        mode === 'select' &&
+        session.getActiveDatasetIndex() === index &&
+        n > 0 &&
+        selectedPointIndices.length === n;
+      if (already) {
+        setSelectedPointIndices([]);
+        setLineSelection([]);
+        return;
+      }
+      if (session.getActiveDatasetIndex() !== index) handleSelectDataset(index);
+      setMode('select');
+      setLineSelection([]);
+      setSelectedPointIndices(whole);
+      setActivePointIndex(null);
+      bump();
+    },
+    [session, mode, selectedPointIndices, handleSelectDataset, bump]
+  );
+  const selectWholeSeriesRef = useRef(selectWholeSeries);
+  useEffect(() => {
+    selectWholeSeriesRef.current = selectWholeSeries;
+  }, [selectWholeSeries]);
 
   const handleRenameDraft = useCallback(
     (index: number, name: string) => {
@@ -11074,6 +11117,7 @@ export function Workspace() {
                 setActivePointIndex(index);
                 if (index !== null) setPickedPointIndex(index);
               }}
+              onSelectSeries={selectWholeSeries}
               onSelectMarquee={(indices, seriesIndex) => {
                 // ⚑⚑ SWITCH FIRST, THEN SELECT - the same order and the same
                 // reason as `onSelectPoint` above: `handleSelectDataset` clears

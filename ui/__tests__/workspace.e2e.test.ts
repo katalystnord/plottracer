@@ -12109,6 +12109,62 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(total, { timeout: 5000 }).toBe(beforeDel - sel);
   }, 120000);
 
+  it('a whole found line is picked in one go: Select ▸ Whole series takes any line clicked, and a series name in the table header picks it and picks it off again (role-play 2026-10-12)', async () => {
+    const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
+      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+      series: { points: { x: number; y: number }[] }[];
+    };
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-dashed').waitFor({ state: 'visible' });
+    await page.getByTestId('example-dashed').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = t.calibration.anchors;
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    const toPx = (p: { x: number; y: number }) => [
+      a.x1.px + (p.x - a.x1.value) * ((a.x2.px - a.x1.px) / (a.x2.value - a.x1.value)),
+      a.y1.py + (p.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value)),
+    ] as const;
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(...toPx(t.series[0]!.points[Math.floor(t.series[0]!.points.length / 3)]!));
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 60000 }).toMatch(/lines? found/);
+    const countOf = async (i: number) => Number(((await textOf(`series-option-${i}`)) ?? '').match(/\((\d+)\)\s*$/)?.[1] ?? NaN);
+
+    // Select ▸ Whole series: a click on a line that is NOT the active one takes all of it
+    await page.getByTestId('mode-select').click();
+    await page.getByTestId('mode-select').click(); // the corner arrow: a second click opens its modes
+    await page.getByTestId('select-mode-series').click();
+    expect(await page.getByTestId('series-select').inputValue()).toBe('0');
+    await clickImagePixel(...toPx(t.series[0]!.points[Math.floor(t.series[0]!.points.length * 0.6)]!));
+    await expect.poll(() => page.getByTestId('series-select').inputValue(), { timeout: 5000 }).not.toBe('0');
+    const picked = Number(await page.getByTestId('series-select').inputValue());
+    const pickedCount = await countOf(picked);
+    await expect.poll(async () => (await textOf('tips-bar')).startsWith(`💡${pickedCount} points selected`), { timeout: 5000 }).toBe(true);
+
+    // the series name in the table's header picks its whole line, and a second click picks it off
+    await page.getByTestId('mode-pan').click();
+    await page.getByTestId('series-col-1').click();
+    expect(await page.getByTestId('series-select').inputValue()).toBe('1');
+    expect(await page.getByTestId('mode-select').getAttribute('aria-pressed')).toBe('true');
+    const count1 = await countOf(1);
+    await expect.poll(async () => (await textOf('tips-bar')).startsWith(`💡${count1} points selected`), { timeout: 5000 }).toBe(true);
+    await page.getByTestId('series-col-1').click();
+    await expect.poll(() => textOf('tips-bar'), { timeout: 5000 }).not.toMatch(/points selected/);
+  }, 120000);
+
   it('F1/F9/K1-K3 one press finds every contour line, says what it did, and a found line can be cut and joined again', async () => {
     await page.getByTestId('help-trigger').click();
     await page.getByTestId('example-contour').waitFor({ state: 'visible' });
