@@ -104,7 +104,7 @@ describe('M14: rounds of steps the person approves', () => {
 
   it('R7: looking is never a step', () => {
     for (const t of ['get_state', 'view_figure', 'list_folder', 'list_points', 'select_points', 'export', 'undo', 'open_figure']) expect(isStep(t), t).toBe(false);
-    for (const t of ['place_points', 'move_point', 'delete_points', 'cut_line', 'join_lines', 'move_to_line', 'set_level', 'use_label_read', 'find_lines', 'mask_area', 'add_series', 'rename_series', 'remove_series']) expect(isStep(t), t).toBe(true);
+    for (const t of ['place_points', 'place_guide_points', 'move_point', 'delete_points', 'cut_line', 'join_lines', 'move_to_line', 'set_level', 'use_label_read', 'find_lines', 'mask_area', 'add_series', 'rename_series', 'remove_series']) expect(isStep(t), t).toBe(true);
   });
 
   it('R8: a held call answers after 60 seconds that the agent should call again, and the round stays', async () => {

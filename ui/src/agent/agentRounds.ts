@@ -20,7 +20,7 @@ export const STILL_WAITING = 'Waiting for the user; call again to keep waiting.'
  * figure starts a new document rather than changing this one, and an undo
  * takes a step back rather than taking one. */
 const STEPS: ReadonlySet<string> = new Set([
-  'add_series', 'rename_series', 'remove_series', 'place_points', 'move_point', 'delete_points', 'cut_line',
+  'add_series', 'rename_series', 'remove_series', 'place_points', 'place_guide_points', 'move_point', 'delete_points', 'cut_line',
   'join_lines', 'move_to_line', 'set_level', 'use_label_read', 'find_lines', 'mask_area',
 ]);
 export const isStep = (name: string): boolean => STEPS.has(name);

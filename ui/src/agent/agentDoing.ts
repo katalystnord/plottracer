@@ -13,6 +13,7 @@
  * history, and a call that changes nothing records none.
  */
 import type { CalibrationSession, CalibratedAxes } from '../../../engine/calibrationSession.js';
+import { autoExtractModesFor } from '../../../engine/toolMode.js';
 import { describeSeries, NOT_CALIBRATED, planView, SEEING_TOOLS, type AgentSeries, type AgentStateInput, type AgentTool, type ViewPlan } from './agentTools.js';
 
 type Session = CalibrationSession<CalibratedAxes>;
@@ -118,6 +119,11 @@ export const DOING_TOOLS: readonly AgentTool[] = [
   {
     name: 'place_points',
     description: 'Place points in a series, each recorded exactly as the user clicking that figure pixel. One call is one step on the Undo history, so pass all the points that belong together. Returns the values each point got and a close-up picture with the new points ringed - look at it to check they sit on the line.',
+    inputSchema: { type: 'object', properties: { series: SERIES_PROP, points: { type: 'array', items: POINT_XY, minItems: 1 } }, required: ['series', 'points'], additionalProperties: false },
+  },
+  {
+    name: 'place_guide_points',
+    description: 'Lay guide points along ONE curve, as Auto-extract ▸ Guide points does: each is recorded as the user clicking that figure pixel with Guide points on, and PlotTracer draws a smooth curve through them, filling in the points between. Use it for a curve Find lines breaks up (dotted, dashed, crossed). The guide points are measured; the points between them come from the drawn curve, not from the ink, so put a guide point wherever the curve bends. Give them in order along the curve; one call is one step. Returns the guide points and a close-up.',
     inputSchema: { type: 'object', properties: { series: SERIES_PROP, points: { type: 'array', items: POINT_XY, minItems: 1 } }, required: ['series', 'points'], additionalProperties: false },
   },
   {
@@ -498,6 +504,40 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
         host,
         `Placed ${took} ${took === 1 ? 'point' : 'points'} in ${named(host, s.index)}, recorded as clicks:\n${rows.join('\n')}${shifted}`,
         placedAt.map((k) => all[k]!)
+      );
+    }
+
+    case 'place_guide_points': {
+      const s = which();
+      if ('error' in s) return refuse(s.error);
+      const cfg = session.getConfig();
+      if (!autoExtractModesFor(cfg.autoExtractKind, cfg.id).includes('interpolate')) {
+        return refuse(`Guide points is not offered for ${cfg.label} in PlotTracer, so nothing was placed. Use place_points.`);
+      }
+      if (!Array.isArray(args.points) || !args.points.length) return refuse('points has to be a list of {x, y} figure pixels, at least one.');
+      const pts = args.points.map(readXY);
+      const bad = pts.findIndex((p) => !p || !inFigure(host, p));
+      if (bad >= 0) {
+        const fig = state.figure;
+        return refuse(`Point ${bad + 1} is not a figure pixel: each point needs x and y as numbers inside the figure, which is ${fig.width} × ${fig.height}. Nothing was placed.`);
+      }
+      session.setActiveDataset(s.index);
+      const isGuide = (p: { metadata?: unknown }) => (p.metadata as Record<string, unknown> | undefined)?.['role'] === 'anchor';
+      const before = session.getDatasets()[s.index]!.getAllPixels().filter(isGuide).length;
+      for (const p of pts as { x: number; y: number }[]) session.addAnchorPoint(p.x, p.y);
+      const pixels = session.getDatasets()[s.index]!.getAllPixels();
+      const took = pixels.filter(isGuide).length - before;
+      if (took === 0) return refuse(`PlotTracer did not take these guide points. The screen says: "${state.tip ?? ''}". Call get_state.`);
+      host.commitStep(`Laid ${took} guide ${took === 1 ? 'point' : 'points'} in "${seriesNow(host, s.index)?.name ?? ''}"`);
+      const all = pointsOf(session, s.index);
+      const guideAt = all.map((_, i) => i).filter((i) => isGuide(pixels[i]!));
+      host.showSelection(s.index, guideAt);
+      const between = pixels.length - pixels.filter(isGuide).length;
+      const rows = (pts as { x: number; y: number }[]).map((p, i) => `  guide point ${i + 1}: pixel (${fmt(p.x)}, ${fmt(p.y)})`);
+      return withCloseUp(
+        host,
+        `Laid ${took} guide ${took === 1 ? 'point' : 'points'} in ${named(host, s.index)}: PlotTracer drew the curve through them, so the ${between} points between them come from that curve, not from the ink.\n${rows.join('\n')}`,
+        guideAt.map((k) => all[k]!)
       );
     }
 

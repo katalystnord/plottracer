@@ -12645,6 +12645,14 @@ describe('Workspace: Settings (v2.7)', () => {
     expect(out.text).toMatch(/The record of series \[1\] "Blend A" alone/);
     expect(fs.readFileSync(path.join(folder, 'blend-a.csv'), 'utf8').trim().split('\n')).toHaveLength(10);
 
+    // Guide points, offered to the agent as the screen offers it (role-play 2026-10-12)
+    await page.getByTestId('agent-mode-automatic').click();
+    expect((await call('add_series', { name: 'Blend C' })).text).toMatch(/Added series \[\d+\] "Blend C"/);
+    const guide = await call('place_guide_points', { series: 'Blend C', points: truth.series.find((x) => x.name === 'Blend C')!.points.map(toPx) });
+    expect(guide.isError).toBe(false);
+    expect(guide.text).toMatch(/^Laid 9 guide points in series \[\d+\] "Blend C" \(now \d+ points\): PlotTracer drew the curve through them/);
+    expect(guide.images).toBe(1);
+
     // S13: off again, nothing of agents shows but the switch
     await openSettings();
     await page.getByTestId('setting-agentsEnabled').uncheck();

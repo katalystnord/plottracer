@@ -418,3 +418,37 @@ describe('role-play 2026-10-12: an agent hears a type\'s record, not its raw cli
     expect(recordCount(s, 0)).toBeNull();
   });
 });
+
+describe('role-play 2026-10-12: Guide points, offered to an agent as the screen offers it', () => {
+  it('place_guide_points lays the guide points and PlotTracer draws the curve between them, as Auto-extract ▸ Guide points does', async () => {
+    const s = calibrate(XY_AXES_CONFIG);
+    const { h, seen } = host(s);
+    const r = await doAgentTool('place_guide_points', { series: 1, points: [{ x: 120, y: 200 }, { x: 200, y: 150 }, { x: 280, y: 180 }] }, h);
+    expect(r?.isError).toBeFalsy();
+    const pts = s.getDatasets()[0]!.getAllPixels();
+    expect(pts.filter((p) => p.metadata?.['role'] === 'anchor')).toHaveLength(3);
+    expect(pts.filter((p) => p.metadata?.['role'] === 'interpolated').length).toBeGreaterThan(0);
+    const t = textOf(r);
+    expect(t).toMatch(/^Laid 3 guide points in series \[1\] "Series 1" \(now \d+ points\): PlotTracer drew the curve through them, so the \d+ points between them come from that curve, not from the ink\./);
+    expect(t).toContain('guide point 2: pixel (200, 150)');
+    expect(seen.commits).toBe(1);
+  });
+
+  it('is refused where the screen does not offer Guide points (a bar chart), saying so', async () => {
+    const s = new CalibrationSession<CalibratedAxes>(BAR_AXES_CONFIG as never);
+    s.handleCalibrationClick(300, 250);
+    s.confirmCalibrationValues(['0']);
+    s.handleCalibrationClick(300, 50);
+    s.confirmCalibrationValues(['10']);
+    walkCategoryAxis(s as never, { from: { x: 50, y: 250 }, to: { x: 450, y: 250 } });
+    expect(s.runCalibration()).toBe(true);
+    const { h } = host(s);
+    const r = await doAgentTool('place_guide_points', { series: 1, points: [{ x: 60, y: 150 }, { x: 140, y: 200 }] }, h);
+    expect(r?.isError).toBe(true);
+    expect(textOf(r)).toMatch(/Guide points is not offered for Bar/);
+  });
+
+  it('it is listed among the tools, and it is a step', () => {
+    expect(AGENT_TOOLS.map((t) => t.name)).toContain('place_guide_points');
+  });
+});
