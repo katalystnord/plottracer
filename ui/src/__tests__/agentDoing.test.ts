@@ -77,7 +77,7 @@ function host(session: Session, opts: { calibrated?: boolean } = {}) {
     showSelection: (series, points) => { seen.selection = { series, points }; },
     waitingForCalibration: () => { seen.waiting++; },
     afterRender: async () => undefined,
-    findLines: async (colour) => ({ text: `found lines of ${colour}` }),
+    findLines: async (colour, at) => ({ text: at ? `found the line of ${colour} at ${at.join(',')}` : `found lines of ${colour}` }),
     inkAt: () => '#112233',
     maskArea: () => null,
     exportText: (format, scope) => { seen.scope = scope; return { content: format === 'json' ? '{}' : 'x,y\n1,2' }; },
@@ -450,5 +450,18 @@ describe('role-play 2026-10-12: Guide points, offered to an agent as the screen 
 
   it('it is listed among the tools, and it is a step', () => {
     expect(AGENT_TOOLS.map((t) => t.name)).toContain('place_guide_points');
+  });
+});
+
+describe('role-play 2026-10-12: Find this line, offered to an agent', () => {
+  it('find_lines with this_line_only and at finds only the line through that pixel', async () => {
+    const { h } = host(calibrate(XY_AXES_CONFIG));
+    expect(textOf(await doAgentTool('find_lines', { at: { x: 150, y: 200 }, this_line_only: true }, h))).toContain('found the line of #112233 at 150,200');
+  });
+  it('this_line_only without at is refused, saying what it needs', async () => {
+    const { h } = host(calibrate(XY_AXES_CONFIG));
+    const r = await doAgentTool('find_lines', { colour: '#112233', this_line_only: true }, h);
+    expect(r?.isError).toBe(true);
+    expect(textOf(r)).toMatch(/this_line_only needs at/);
   });
 });

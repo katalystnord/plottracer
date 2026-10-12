@@ -45,7 +45,7 @@ export interface AgentDoingHost {
   waitingForCalibration: () => void;
   /** Wait until the screen shows the latest change, so a picture is current. */
   afterRender: () => Promise<void>;
-  findLines: (colour: string) => Promise<{ text: string; error?: boolean }>;
+  findLines: (colour: string, at?: readonly [number, number]) => Promise<{ text: string; error?: boolean }>;
   /** The ink colour under a figure pixel, as Find lines' own pipette reads it. */
   inkAt: (x: number, y: number) => string | null;
   maskArea: (rect: { x: number; y: number; width: number; height: number }) => string | null;
@@ -168,10 +168,10 @@ export const DOING_TOOLS: readonly AgentTool[] = [
   },
   {
     name: 'find_lines',
-    description: 'XY and contour plots: find every line of one colour inside the plot box, as Auto-extract ▸ Find lines does. Give the colour as #rrggbb, or a figure pixel ON a line to take the colour from. A second run replaces the lines the last one found (not ones the user worked on). Returns what the card says: lines found, gaps bridged, places to check.',
+    description: 'XY and contour plots: find every line of one colour inside the plot box, as Auto-extract ▸ Find lines does. Give the colour as #rrggbb, or a figure pixel ON a line to take the colour from. A second run replaces the lines the last one found (not ones the user worked on). With this_line_only and at, it is Find this line: only the line through that pixel is found and added, and the lines already there stay. Returns what the card says: lines found, gaps bridged, places to check.',
     inputSchema: {
       type: 'object',
-      properties: { colour: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' }, at: POINT_XY },
+      properties: { colour: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' }, at: POINT_XY, this_line_only: { type: 'boolean' } },
       additionalProperties: false,
     },
   },
@@ -678,7 +678,8 @@ export async function doAgentTool(name: string, rawArgs: unknown, host: AgentDoi
       if (args.at !== undefined && (!at || !inFigure(host, at))) return refuse('at has to be a figure pixel {x, y} inside the figure.');
       if (colour === null && at) colour = host.inkAt(at.x, at.y);
       if (colour === null) return refuse('Give the lines\' colour as #rrggbb, or at: a figure pixel on a line to take it from.');
-      const r = await host.findLines(colour.toLowerCase());
+      if (args.this_line_only === true && !at) return refuse('this_line_only needs at: a figure pixel on the line to find.');
+      const r = await host.findLines(colour.toLowerCase(), args.this_line_only === true && at ? [at.x, at.y] : undefined);
       return r.error ? refuse(r.text) : text(`${r.text}\nColour ${colour.toLowerCase()}. ${seriesList(host.getState().series)}`);
     }
 

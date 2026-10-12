@@ -63,7 +63,7 @@ export interface AutoExtractCardProps {
   /** Take them back: file the held-back shapes as ordinary bars. */
   onAddHeldBackBars: () => void;
 
-  onArmEyedropper: (target: 'trace') => void;
+  onArmEyedropper: (target: 'trace' | 'find-one') => void;
 
   /**
    * Find lines (v2.6, first version) - present only on the types it applies to
@@ -261,6 +261,15 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
               }}
             >
               {findLines.replaces ? 'Find lines again' : 'Find lines'}
+            </button>
+            <button
+              type="button"
+              data-testid="find-lines-one"
+              onClick={() => onArmEyedropper('find-one')}
+              disabled={findLines.busy !== null}
+              title="Click one line on the figure: only that line is found and added, its colour taken from where you click. The lines already found stay."
+            >
+              Find this line
             </button>
             <span
               data-testid="find-lines-first-version"

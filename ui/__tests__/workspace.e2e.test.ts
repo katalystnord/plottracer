@@ -12109,6 +12109,61 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(total, { timeout: 5000 }).toBe(beforeDel - sel);
   }, 120000);
 
+  it('Find this line: a click on a curve adds that one line, a click off a line adds nothing, and the next click adds the next (role-play 2026-10-12)', async () => {
+    const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
+      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+      series: { points: { x: number; y: number }[] }[];
+    };
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-dashed').waitFor({ state: 'visible' });
+    await page.getByTestId('example-dashed').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = t.calibration.anchors;
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    const toPx = (p: { x: number; y: number }) => [
+      a.x1.px + (p.x - a.x1.value) * ((a.x2.px - a.x1.px) / (a.x2.value - a.x1.value)),
+      a.y1.py + (p.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value)),
+    ] as const;
+    const options = () => page.getByTestId('series-select').locator('option').count();
+    const pointsIn = async (i: number) => Number(((await textOf(`series-option-${i}`)) ?? '').match(/\((\d+)\)\s*$/)?.[1] ?? 0);
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+
+    // F1/F2: the solid curve, by one click on it - one series, the colour taken from the click
+    await page.getByTestId('find-lines-one').click();
+    expect(await textOf('eyedropper-hint')).toMatch(/click the line to find/);
+    expect(await textOf('tips-bar')).toMatch(/Find this line: click the line on the image/);
+    await clickImagePixel(...toPx(t.series[0]!.points[Math.floor(t.series[0]!.points.length * 0.6)]!));
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 60000 }).toMatch(/^Found the line you clicked/);
+    expect(await options()).toBe(1);
+    expect(await pointsIn(0)).toBeGreaterThan(50);
+    expect(await page.getByTestId('color-trace-color').inputValue()).toMatch(/^#[0-9a-f]{6}$/);
+
+    // F3: a click in empty plot adds nothing and says so
+    await page.getByTestId('find-lines-one').click();
+    await clickImagePixel(...toPx({ x: 9, y: 10 }));
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 60000 }).toMatch(/No line runs through where you clicked/);
+    expect(await options()).toBe(1);
+
+    // F4: the next curve is added beside the first, which stays
+    const first = await pointsIn(0);
+    await page.getByTestId('find-lines-one').click();
+    await clickImagePixel(...toPx(t.series[2]!.points[Math.floor(t.series[2]!.points.length * 0.6)]!));
+    await expect.poll(options, { timeout: 60000 }).toBe(2);
+    expect(await pointsIn(0)).toBe(first);
+  }, 120000);
+
   it('a whole found line is picked in one go: Select ▸ Whole series takes any line clicked, and a series name in the table header picks it and picks it off again (role-play 2026-10-12)', async () => {
     const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
       calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };

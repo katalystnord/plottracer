@@ -1514,7 +1514,7 @@ export function Workspace() {
   // series to the colour the figure actually draws it in; the swatches/hex
   // beside it are for figures whose series ARE'NT distinguished by colour (line
   // style, markers), where eyedropping would give two series one colour.
-  const [eyedropper, setEyedropper] = useState<null | 'grid' | 'series' | 'trace'>(null);
+  const [eyedropper, setEyedropper] = useState<null | 'grid' | 'series' | 'trace' | 'find-one'>(null);
   // F1 / the Help card's own button both open this. See HelpOverlay.tsx for why
   // it is reachable two ways rather than one.
   const [helpOverlayOpen, setHelpOverlayOpen] = useState(false);
@@ -4119,7 +4119,15 @@ export function Workspace() {
             // must not be forgotten, and it was written out by hand each time.
             // Find lines needs the line's INK, and the pixel under a pipette on a
             // thin line is usually a pale edge - see sampleInkRgb.
-            const rgb = route.target === 'trace' && mode === 'find-lines' ? sampleInkRgb(imageData, px, py) : samplePixelRgb(imageData, px, py);
+            const rgb = (route.target === 'trace' && mode === 'find-lines') || route.target === 'find-one' ? sampleInkRgb(imageData, px, py) : samplePixelRgb(imageData, px, py);
+            if (route.target === 'find-one') {
+              // Find this line (role-play 2026-10-12): the click gives the colour
+              // AND says which line - only that one is kept.
+              setColorTraceColor(rgbToHex(rgb));
+              setEyedropper(null);
+              void findLinesWithRef.current?.(rgbToHex(rgb), { at: [px, py] });
+              return;
+            }
             if (route.target === 'grid') {
               setGridRemovalColor(rgbToHex(rgb));
             } else if (route.target === 'trace') {
@@ -6601,7 +6609,7 @@ export function Workspace() {
   // ⚑ The colour is an argument, and the card's sentence is the answer, so the
   // button and an agent's find_lines (v2.7 M8) are one path: the agent is told
   // what the card says, word for word.
-  const findLinesWith = useCallback(async (colour: string): Promise<{ text: string; error?: boolean }> => {
+  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number] } = {}): Promise<{ text: string; error?: boolean }> => {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = imageCanvasRef.current?.getImageData();
     const target = hexToRGB(colour);
@@ -6631,12 +6639,34 @@ export function Workspace() {
       setFindLinesSummary('error' in found ? found.error : null);
       return { text: 'error' in found ? found.error : 'The figure changed while Find lines ran, so its result was dropped. Call get_state.', error: true };
     }
-    const res = found;
+    let res = found;
     if (!res.lines.length) {
       const t = 'No line of that colour was found inside the plot box. Repick the colour from a line.';
       setFindLinesBusy(null);
       setFindLinesSummary(t);
       return { text: t, error: true };
+    }
+    // ⚑ Find this line: keep only the line through the click, and its places.
+    const at = opts.at;
+    if (at) {
+      let best = -1, bestD = 8;
+      res.lines.forEach((L, k) => {
+        for (const p of L.points) {
+          const d = Math.hypot(p[0] - at[0], p[1] - at[1]);
+          if (d < bestD) { bestD = d; best = k; }
+        }
+      });
+      if (best < 0) {
+        const t = 'No line runs through where you clicked. Press Find this line again and click on the line itself.';
+        setFindLinesBusy(null);
+        setFindLinesSummary(t);
+        return { text: t, error: true };
+      }
+      res = {
+        ...res,
+        lines: [res.lines[best]!],
+        places: res.places.filter((pl) => pl.lines.includes(best)).map((pl) => ({ ...pl, lines: [0] })),
+      };
     }
     // ⚑⚑ READ EVERY LABEL BEFORE CHANGING ANYTHING (audit B2). The reads are
     // slow; the result is applied in ONE step once they are in, so nothing the
@@ -6665,7 +6695,7 @@ export function Workspace() {
     // a second press REPLACES what the last one found (audit C1: by what the
     // lines ARE, not by remembered names); the figure always keeps one series,
     // so the last one is emptied, not removed
-    for (const i of [...session.replaceableFoundLines()].sort((x, y) => y - x)) {
+    for (const i of at ? [] : [...session.replaceableFoundLines()].sort((x, y) => y - x)) {
       if (session.getDatasetInfos().length > 1) session.removeDataset(i);
       else {
         session.setActiveDataset(i);
@@ -6718,7 +6748,7 @@ export function Workspace() {
     setLinePlaces(places);
     setSelectedPointIndices([]); setLineSelection([]);
     const summary =
-      `${res.lines.length} line${res.lines.length === 1 ? '' : 's'} found, ${gaps} gap${gaps === 1 ? '' : 's'} bridged` +
+      (at ? `Found the line you clicked, ${gaps} gap${gaps === 1 ? '' : 's'} bridged` : `${res.lines.length} line${res.lines.length === 1 ? '' : 's'} found, ${gaps} gap${gaps === 1 ? '' : 's'} bridged`) +
         (fromKey ? `; levels read off the colour key on ${fromKey.set} line${fromKey.set === 1 ? '' : 's'}${fromKey.offKey ? `, ${fromKey.offKey} not on the key` : ''}` : '') +
         (kind === 'contours' && !fromKey ? `; labels read on ${read} line${read === 1 ? '' : 's'}, not used on ${notRead} - the read is offered beside each line's Level` : '') +
         (res.labelInk.length ? `; ${res.labelInk.length} small mark${res.labelInk.length === 1 ? '' : 's'} (label text and the like) left out` : '') +
@@ -6730,6 +6760,10 @@ export function Workspace() {
     return { text: `The Find lines card says: "${summary}"${placesText}` };
   }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
+  const findLinesWithRef = useRef(findLinesWith);
+  useEffect(() => {
+    findLinesWithRef.current = findLinesWith;
+  }, [findLinesWith]);
 
   /** C4: unset contour levels filled in from the ones the user has set, in equal
    * steps between them - refused, and saying why, where the levels are uneven. */
@@ -8486,13 +8520,13 @@ export function Workspace() {
     },
     waitingForCalibration: () => { if (agentClient !== null) setAgentWaitingOn({ client: agentClient, session: sessionRef.current }); },
     afterRender: () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-    findLines: async (colour) => {
+    findLines: async (colour, at) => {
       // the card shows what the agent asked for: its mode, its colour, its result
       setMode('find-lines');
       setColorTraceColor(colour);
       const before = history.getPresent();
-      const r = await findLinesWith(colour);
-      if (history.getPresent() !== before) recordAgentStep(`Found lines of colour ${colour}`);
+      const r = await findLinesWith(colour, at ? { at } : {});
+      if (history.getPresent() !== before) recordAgentStep(at ? `Found the line at (${Math.round(at[0])}, ${Math.round(at[1])})` : `Found lines of colour ${colour}`);
       return r;
     },
     inkAt: (x, y) => {
@@ -10543,7 +10577,9 @@ export function Workspace() {
               gap: 10,
             }}
           >
-            {eyedropper === 'grid'
+            {eyedropper === 'find-one'
+              ? 'Find this line - click the line to find on the image; only that line is added'
+              : eyedropper === 'grid'
               ? 'Pipette armed - click a gridline on the image to sample its colour'
               : eyedropper === 'trace'
               ? 'Pipette armed - click the curve on the image to sample the colour to trace'

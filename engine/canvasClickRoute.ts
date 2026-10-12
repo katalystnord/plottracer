@@ -19,7 +19,7 @@ import type { ToolMode } from './toolMode.js';
 
 export type CanvasClickRoute =
   /** One sampler, routed by target (ckpt 90) - it intercepts before any tool. */
-  | { kind: 'sample-colour'; target: 'grid' | 'series' | 'trace' }
+  | { kind: 'sample-colour'; target: 'grid' | 'series' | 'trace' | 'find-one' }
   /** The click does nothing, deliberately. */
   | { kind: 'ignore' }
   /** Select never adds; a click on empty canvas clears instead. */
@@ -49,7 +49,7 @@ export type CanvasClickRoute =
 
 export interface CanvasClickInput {
   /** Armed eyedropper, or null. Outranks every tool. */
-  eyedropper: 'grid' | 'series' | 'trace' | null;
+  eyedropper: 'grid' | 'series' | 'trace' | 'find-one' | null;
   mode: ToolMode;
   /** The figure-of-record has been frozen. */
   figureCaptured: boolean;

@@ -107,7 +107,7 @@ export interface GuidanceTipInput {
   heatmapCellPicked?: boolean;
   mode: ToolMode;
   figureCaptured: boolean;
-  eyedropper: null | 'grid' | 'series' | 'trace';
+  eyedropper: null | 'grid' | 'series' | 'trace' | 'find-one';
   cropMode: boolean;
   /** A crop rectangle has been dragged (its geometry is not read here). */
   hasCropRect: boolean;
@@ -239,6 +239,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
   // rail was renumbered in v1.0.2 and this line, the FIRST one every first-run
   // user reads, kept pointing at the old slot.
   if (!figureCaptured) return 'Frame the whole figure in the window (pan / zoom) - rotate / crop / deskew first if needed (tool 2) - then press Capture. What you see is what you capture.';
+  if (eyedropper === 'find-one') return 'Find this line: click the line on the image - only that line is found and added.';
   if (eyedropper === 'grid') return 'Eyedropper: click a gridline on the image to sample its colour.';
   if (eyedropper === 'series') return 'Eyedropper: click the series’ curve on the image to take its colour.';
   if (mode === 'image-edit') {
