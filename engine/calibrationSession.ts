@@ -344,6 +344,17 @@ export type PointRole = 'anchor' | 'interpolated' | 'bridged' | 'shared';
 /** Series metadata marking a line Find lines traced (v2.6). Pieces split off
  * it carry it too - they are still traced lines. */
 const FOUND_LINE_KEY = 'foundLine';
+/** Set on a series whose name a person typed (renameDataset). A name without
+ * it, of the form "Series N", is one PlotTracer gave and keeps up to date. */
+const TYPED_NAME_KEY = 'typedName';
+
+/** "Series n", or the next number up that no name in `taken` holds - never
+ * "Series 2 (2)", which reads as a count. */
+function freeSeriesNumberName(n: number, taken: readonly string[]): string {
+  const t = new Set(taken.map((x) => x.trim()));
+  while (t.has(`Series ${n}`)) n++;
+  return `Series ${n}`;
+}
 
 const GUIDE_LINE_REFUSAL =
   'This line was captured with guide points - its guide points are its record and the line between them is drawn from them, so it is edited through its guide points (Auto-extract ▸ Guide points), not cut, joined or moved.';
@@ -391,7 +402,6 @@ export interface SessionSnapshot {
   pendingPixel: { px: number; py: number } | null;
   calibrationError: string | null;
   activeDatasetIndex: number;
-  nextDatasetNumber: number;
   globalValues: Record<string, string>;
   /** Per-type calibration settings (checkpoint 68). Part of the snapshot
    * because toggling one re-calibrates and changes every derived value, so an
@@ -678,12 +688,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private calibrationError: string | null = null;
   private datasetEntries: DatasetEntry[];
   private activeDatasetIndex = 0;
-  /** Counter for auto-generated series names ("Series 2", "Series 3", ...) --
-   * the first dataset is "Series 1", created in the constructor. Not reset by
-   * removeDataset, so names stay unique across an add/remove/add sequence
-   * within one session (matches the simplest correct behavior; not worth
-   * hunting for a "smallest unused number" instead). */
-  private nextDatasetNumber = 2;
   /** Values for config.globalFields, keyed by GlobalFieldInfo.key -- entered
    * once after every click-step is placed, not tied to any Calibration point. */
   private globalValues: Record<string, string> = {};
@@ -3005,18 +3009,15 @@ export class CalibrationSession<A extends CalibratedAxes> {
   addDataset(name?: string): number {
     const entry = this.buildDatasetEntry(this.freeDatasetName(name), this.datasetEntries.length);
     this.datasetEntries.push(entry);
+    this.renumberGivenNames();
     this.switchActiveDataset(this.datasetEntries.length - 1);
     return this.activeDatasetIndex;
   }
 
   /** A name no existing series holds.
    *
-   * The auto-namer walks `Series N` until N is free rather than trusting
-   * `nextDatasetNumber` alone -- the counter only tracks names *it* issued, so
-   * renaming a series onto a number it hasn't reached yet used to collide
-   * ("Series 1" -> "Series 2", Add -> a second "Series 2"). Verified by
-   * execution 2026-07-16; the counter's own comment claimed uniqueness it
-   * couldn't hold.
+   * A given name is "Series N" for the place the series takes, made unique
+   * against what is there (a person may have typed "Series 3" for another).
    *
    * A caller-supplied name is disambiguated rather than refused, because
    * addDataset's callers pass names the *user* did not type (the load path,
@@ -3026,13 +3027,37 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private freeDatasetName(requested?: string): string {
     const existing = this.datasetEntries.map((e) => e.dataset.name);
     if (requested !== undefined) return uniqueDatasetName(requested, existing);
-    let name = `Series ${this.nextDatasetNumber}`;
-    while (existing.some((other) => other.trim() === name)) {
-      this.nextDatasetNumber += 1;
-      name = `Series ${this.nextDatasetNumber}`;
-    }
-    this.nextDatasetNumber += 1;
-    return name;
+    // ⚑ The place it will take in the list (role-play 2026-10-12): a given name
+    // is the number the table and an agent use for the series.
+    return freeSeriesNumberName(this.datasetEntries.length + 1, existing);
+  }
+
+  /** A name PlotTracer gave, not one a person typed. "Line N" is the name
+   * found lines had before 2026-10-12, so an older project's lines count too. */
+  private hasGivenName(index: number): boolean {
+    const ds = this.datasetEntries[index]?.dataset;
+    if (!ds) return false;
+    return ds.getMetadata()[TYPED_NAME_KEY] !== true && /^(Series|Line) \d+$/.test(ds.name.trim());
+  }
+
+  /**
+   * Give every series with a given name the number of its place in the list,
+   * so a removal or a merge closes the count up (David 2026-10-12: *"the count
+   * needs to be adjusted when series are merged"*). A typed name is never
+   * touched, and a given name never takes one a person typed.
+   */
+  private renumberGivenNames(): void {
+    const given = this.datasetEntries.map((_, i) => this.hasGivenName(i));
+    const taken = this.datasetEntries.filter((_, i) => !given[i]).map((e) => e.dataset.name);
+    this.datasetEntries.forEach((e, i) => {
+      if (!given[i]) return;
+      const want = freeSeriesNumberName(i + 1, taken);
+      taken.push(want);
+      if (e.dataset.name === want) return;
+      const oldName = e.dataset.name;
+      e.dataset.name = want;
+      retargetErrorRelations(this.getDatasets(), oldName, want);
+    });
   }
 
   /** The names of every series except the one at `index`. */
@@ -3079,6 +3104,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       this.pendingExplodedTuple = null;
       this.pendingApex = null;
     }
+    this.renumberGivenNames();
   }
 
   /** Renames a series, refusing a duplicate or blank name.
@@ -3099,6 +3125,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (error) return error;
     const oldName = entry.dataset.name;
     entry.dataset.name = name.trim();
+    entry.dataset.setMetadata({ ...entry.dataset.getMetadata(), [TYPED_NAME_KEY]: true });
     // The error model relates series BY NAME, so a rename has to carry its own
     // relations with it or the link silently goes stale -- the whisker just
     // stops being drawn (engine/errorRelation.ts).
@@ -3690,20 +3717,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
   addFoundLines(lines: readonly (readonly LinePoint[])[]): number[] {
     if (!this.axes) return [];
     const created: number[] = [];
-    // Named "Line N" - a found line is a line, and a second press would
-    // otherwise carry on the series counter ("Series 32"). An empty active
-    // series still wearing its default name is renamed the same way.
-    let n = 1;
-    const nextLineName = (): string => {
-      const taken = new Set(this.datasetEntries.map((e) => e.dataset.name.trim()));
-      while (taken.has(`Line ${n}`)) n++;
-      return `Line ${n}`;
-    };
+    // ⚑ Named as every series is, "Series N" by its place in the list
+    // (David 2026-10-12: *"they should all be called the same thing, not
+    // line/series"*), so a second press cannot run the count up either.
     lines.forEach((pts, k) => {
       const active = this.activeEntry.dataset;
       const reuse = k === 0 && active.getCount() === 0 && !active.hasSlots();
-      const idx = reuse ? this.activeDatasetIndex : this.addDataset(nextLineName());
-      if (reuse && /^Series \d+$/.test(active.name.trim())) active.name = nextLineName();
+      const idx = reuse ? this.activeDatasetIndex : this.addDataset();
       const ds = this.datasetEntries[idx]!.dataset;
       ds.setMetadata({ ...ds.getMetadata(), [FOUND_LINE_KEY]: true });
       this.writeLinePoints(idx, pts);
@@ -3775,12 +3795,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** The name for a piece split off a line: a found line ("Line 3") gives the
    * next free "Line N", so the series list never shows "Line 3 (2)" - which
    * reads as a point count; any other name is kept and disambiguated. */
-  private pieceName(src: string): string {
-    if (!/^Line \d+$/.test(src.trim())) return src;
-    const taken = new Set(this.datasetEntries.map((e) => e.dataset.name.trim()));
-    let n = 1;
-    while (taken.has(`Line ${n}`)) n++;
-    return `Line ${n}`;
+  private pieceName(index: number): string | undefined {
+    return this.hasGivenName(index) ? undefined : this.datasetEntries[index]!.dataset.name;
   }
 
   /**
@@ -3799,7 +3815,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (parts.length === 2) {
       const src = this.datasetEntries[index]!.dataset;
       const keepActive = this.activeDatasetIndex;
-      const ni = this.addDataset(this.pieceName(src.name));
+      const ni = this.addDataset(this.pieceName(index));
       const nd = this.datasetEntries[ni]!.dataset;
       const [r, g, b] = src.colorRGB.getRGB();
       nd.colorRGB = new Color(r, g, b);
@@ -3825,11 +3841,23 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (la && lb && la.value !== lb.value) {
       return `These lines have different levels (${la.value} and ${lb.value}), so they cannot be one line. Change one of the levels first if one is wrong.`;
     }
-    this.writeLinePoints(index, joinLines(a, b));
-    if (!la && lb) this.setContourLevel(index, lb.value, lb.source);
-    const keep = this.datasetEntries[index]!.dataset;
-    this.removeDataset(other);
+    // ⚑ The joined line is the LOWER-numbered of the two (David 2026-10-12:
+    // *"pick the series with the lowest number merging, if you have not
+    // changed the name"*), and a typed name survives whichever one had it.
+    const lo = Math.min(index, other), hi = Math.max(index, other);
+    const level = la ?? lb;
+    this.writeLinePoints(lo, joinLines(a, b));
+    if (level && !this.getContourLevel(lo)) this.setContourLevel(lo, level.value, level.source);
+    const keep = this.datasetEntries[lo]!.dataset;
+    const carry = !this.hasGivenName(hi) && this.hasGivenName(lo) ? this.datasetEntries[hi]!.dataset.name : null;
+    this.removeDataset(hi);
     const ni = this.datasetEntries.findIndex((e) => e.dataset === keep);
+    if (carry !== null && ni >= 0) {
+      const oldName = keep.name;
+      keep.name = carry;
+      keep.setMetadata({ ...keep.getMetadata(), [TYPED_NAME_KEY]: true });
+      retargetErrorRelations(this.getDatasets(), oldName, carry);
+    }
     if (ni >= 0) this.switchActiveDataset(ni);
     return null;
   }
@@ -3928,7 +3956,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       this.writeLinePoints(index, runs[0]!);
       for (const part of runs.slice(1)) {
         const src = entry.dataset;
-        const ni = this.addDataset(this.pieceName(src.name));
+        const ni = this.addDataset(this.pieceName(index));
         const nd = this.datasetEntries[ni]!.dataset;
         const [r, g, b] = src.colorRGB.getRGB();
         nd.colorRGB = new Color(r, g, b);
@@ -3999,7 +4027,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
       .map((_, i) => i)
       .filter((i) => {
         if (!this.isFoundLine(i)) return false;
-        if (!/^Line \d+$/.test(this.datasetEntries[i]!.dataset.name.trim())) return false;
+        if (!this.hasGivenName(i)) return false;
         const lv = this.getContourLevel(i);
         return !(lv && (lv.source === 'typed' || lv.source === 'label'));
       });
@@ -7860,7 +7888,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.repeatCount = this.config.repeatingStep?.min ?? 0;
     this.datasetEntries = [this.buildDatasetEntry('Series 1', 0)];
     this.activeDatasetIndex = 0;
-    this.nextDatasetNumber = 2;
     // ⚑ THE FOURTH ENTRANCE (same audit recipe, 2026-07-30, alongside
     // restoreState's and loadCalibrated's own fixes). "Reset calibration"
     // (this method's real, direct call site) promises to discard every
@@ -7916,7 +7943,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
       calibrationError: this.calibrationError,
       optionValues: { ...this.optionValues },
       activeDatasetIndex: this.activeDatasetIndex,
-      nextDatasetNumber: this.nextDatasetNumber,
       globalValues: { ...this.globalValues },
       repeatCount: this.repeatCount,
       explodedApexPending: this.explodedApexPending,
@@ -7976,7 +8002,6 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.pendingPixel = snapshot.pendingPixel ? { ...snapshot.pendingPixel } : null;
     this.calibrationError = snapshot.calibrationError;
     this.activeDatasetIndex = Math.min(snapshot.activeDatasetIndex, this.datasetEntries.length - 1);
-    this.nextDatasetNumber = snapshot.nextDatasetNumber;
     this.globalValues = { ...snapshot.globalValues };
     this.optionValues = { ...snapshot.optionValues };
     // ⚑ Found via the pre-v2.0 audit's own recipe applied to itself, 2026-07-30:

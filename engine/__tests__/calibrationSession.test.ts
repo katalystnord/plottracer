@@ -1564,9 +1564,9 @@ describe('CalibrationSession: multi-dataset/series support (checkpoint 30)', () 
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.addDataset('Sample B');
     expect(session.getDatasetInfos()[1]!.name).toBe('Sample B');
-    // An explicitly-named dataset doesn't consume the auto-naming counter.
+    // A given name is the series' place in the list (2026-10-12).
     session.addDataset();
-    expect(session.getDatasetInfos()[2]!.name).toBe('Series 2');
+    expect(session.getDatasetInfos()[2]!.name).toBe('Series 3');
   });
 
   it('addDataPoint only ever adds to the active dataset', () => {

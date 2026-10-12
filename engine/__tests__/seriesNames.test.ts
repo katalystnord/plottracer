@@ -87,7 +87,9 @@ describe('CalibrationSession - the guards (checkpoint 75)', () => {
     s.addDataset(); // Series 3
     s.renameDataset(1, 'Series 4');
     s.addDataset();
-    expect(names(s)).toEqual(['Series 2', 'Series 4', 'Series 5']);
+    // a given name is the series' place in the list (2026-10-12), so the third
+    // series is Series 3 - free, since both typed names hold other numbers
+    expect(names(s)).toEqual(['Series 2', 'Series 4', 'Series 3']);
   });
 
   it('refuses a duplicate rename and leaves the name alone', () => {

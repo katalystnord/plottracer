@@ -101,8 +101,8 @@ describe('M9a: the right series, always named', () => {
     const r = await doAgentTool('place_points', { points: [{ x: 300, y: 200 }] }, h);
     expect(r?.isError).toBe(true);
     expect(textOf(r)).toMatch(/Name the series/);
-    expect(textOf(r)).toMatch(/\[1\] "Line 1" - 3 points, no level, colour #[0-9a-f]{6}/);
-    expect(textOf(r)).toMatch(/\[2\] "Line 2" - 3 points/);
+    expect(textOf(r)).toMatch(/\[1\] "Series 1" - 3 points, no level, colour #[0-9a-f]{6}/);
+    expect(textOf(r)).toMatch(/\[2\] "Series 2" - 3 points/);
   });
 
   it('M9a: an unknown series id is refused, with the list', async () => {
@@ -110,7 +110,7 @@ describe('M9a: the right series, always named', () => {
     const r = await doAgentTool('place_points', { series: 7, points: [{ x: 300, y: 200 }] }, h);
     expect(r?.isError).toBe(true);
     expect(textOf(r)).toMatch(/There is no series 7/);
-    expect(textOf(r)).toMatch(/\[2\] "Line 2"/);
+    expect(textOf(r)).toMatch(/\[2\] "Series 2"/);
   });
 
   it('M9a: a name two series share is refused as ambiguous', () => {
@@ -123,7 +123,7 @@ describe('M9a: the right series, always named', () => {
 
   it('M9a: a series may be named by its exact name when only one has it', () => {
     const { h } = host(two());
-    expect(resolveSeries('Line 2', h.getState().series)).toEqual({ index: 1 });
+    expect(resolveSeries('Series 2', h.getState().series)).toEqual({ index: 1 });
     expect(resolveSeries(2, h.getState().series)).toEqual({ index: 1 });
   });
 
@@ -132,7 +132,7 @@ describe('M9a: the right series, always named', () => {
     const { h, seen } = host(s);
     const r = await doAgentTool('place_points', { series: 2, points: [{ x: 300, y: 150 }] }, h);
     expect(r?.isError).toBeFalsy();
-    expect(textOf(r)).toMatch(/series \[2\] "Line 2" \(now 4 points\)/);
+    expect(textOf(r)).toMatch(/series \[2\] "Series 2" \(now 4 points\)/);
     expect(s.getActiveDatasetIndex()).toBe(1);
     expect(seen.selection?.series).toBe(1);
   });
@@ -149,7 +149,7 @@ describe('M9a: the right series, always named', () => {
     const s = two();
     const { h } = host(s);
     const t = textOf(await doAgentTool('list_points', { series: 1 }, h));
-    expect(t).toMatch(/^\[1\] "Line 1"/);
+    expect(t).toMatch(/^\[1\] "Series 1"/);
     expect(t).toMatch(/\n {2}1: pixel \(120, 200\)/);
     expect(textOf(await doAgentTool('list_points', { series: 0 }, h))).toMatch(/There is no series 0/);
   });
@@ -171,10 +171,10 @@ describe('M9a: the right series, always named', () => {
     const s = calibrate(XY_AXES_CONFIG);
     s.addFoundLines([line([[120, 200], [160, 200]]), line([[120, 150], [160, 150]]), line([[120, 100], [160, 100]])]);
     const { h, seen } = host(s);
-    const r = await doAgentTool('remove_series', { series: [2, 'Line 3'] }, h);
-    expect(textOf(r)).toMatch(/Removed "Line 2", "Line 3"/);
-    expect(textOf(r)).toMatch(/\[1\] "Line 1"/);
-    expect(s.getDatasetInfos().map((d) => d.name)).toEqual(['Line 1']);
+    const r = await doAgentTool('remove_series', { series: [2, 'Series 3'] }, h);
+    expect(textOf(r)).toMatch(/Removed "Series 2", "Series 3"/);
+    expect(textOf(r)).toMatch(/\[1\] "Series 1"/);
+    expect(s.getDatasetInfos().map((d) => d.name)).toEqual(['Series 1']);
     expect(seen.commits).toBe(1);
     const bad = await doAgentTool('remove_series', { series: [1, 9] }, h);
     expect(textOf(bad)).toMatch(/Nothing was removed/);
@@ -330,8 +330,8 @@ describe('M13 / M10 / M8', () => {
     s.setLabelRead(1, { text: '?', value: null, refused: 'it is not a number', at: [140, 150] });
     const { h, seen } = host(s);
     const listed = seriesList(h.getState().series);
-    expect(listed).toMatch(/\[1\] "Line 1" - 2 points, no level, its label reads "3" = 3 \(offered; use_label_read takes it\)/);
-    expect(listed).toMatch(/\[2\] "Line 2" - 2 points, no level, its label read as "\?" was not used - it is not a number/);
+    expect(listed).toMatch(/\[1\] "Series 1" - 2 points, no level, its label reads "3" = 3 \(offered; use_label_read takes it\)/);
+    expect(listed).toMatch(/\[2\] "Series 2" - 2 points, no level, its label read as "\?" was not used - it is not a number/);
     const r = await doAgentTool('use_label_read', { series: 1 }, h);
     expect(textOf(r)).toMatch(/recorded as read from the label/);
     expect(s.getContourLevel(0)).toMatchObject({ value: 3, source: 'label' });
