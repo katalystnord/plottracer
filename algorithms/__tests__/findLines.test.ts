@@ -225,3 +225,46 @@ describe('Find lines with a region marked as not data (N4)', () => {
     }
   });
 });
+
+describe('Find lines takes only the colour asked for (role-play 2026-10-12)', () => {
+  // The bundled four-blend example: red Blend B runs above purple Blend D. A
+  // half-covered edge pixel of the purple line lies close to a paper-to-red
+  // blend, and once read as faint red ink, the purple line's edges came back as
+  // six short "red" lines.
+  const base = join(ROOT, 'samples', 'xy-multiseries-modulus');
+  const t = JSON.parse(readFileSync(base + '.truth.json', 'utf8'));
+  const a = t.calibration.anchors;
+  const toPx = (p: { x: number; y: number }): Pt => [
+    a.x1.px + (p.x - a.x1.value) * (a.x2.px - a.x1.px) / (a.x2.value - a.x1.value),
+    a.y1.py + (p.y - a.y1.value) * (a.y2.py - a.y1.py) / (a.y2.value - a.y1.value),
+  ];
+  const BOX = { x0: a.x1.px, y0: a.y2.py, x1: a.x2.px, y1: a.y1.py };
+  const LEGEND = { x0: 772, y0: 44, x1: 880, y1: 136 };
+  const distToPolyline = (p: Pt, poly: Pt[]): number => {
+    let best = Infinity;
+    for (let i = 1; i < poly.length; i++) {
+      const [ax, ay] = poly[i - 1]!, [bx, by] = poly[i]!;
+      const dx = bx - ax, dy = by - ay;
+      const u = Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / (dx * dx + dy * dy)));
+      best = Math.min(best, Math.hypot(p[0] - ax - u * dx, p[1] - ay - u * dy));
+    }
+    return best;
+  };
+
+  it('Find lines on the red line returns nothing that lies on the purple line', () => {
+    const im = readPng(base + '.png');
+    const red = (t.series as { name: string; points: { x: number; y: number }[] }[]).find((s) => s.name === 'Blend B')!.points.map(toPx);
+    const res = findLines(im.data, im.width, im.height, [0xc0, 0x39, 0x2b], BOX, { contour: false, masks: [LEGEND] });
+    expect(res.lines.length).toBeGreaterThan(0);
+    const off = res.lines.flatMap((L) => L.points.filter((p, i) => L.roles[i] !== 'bridged' && distToPolyline(p, red) > 6));
+    expect(off.length, `measured points away from the red line, e.g. ${JSON.stringify(off.slice(0, 3))}`).toBe(0);
+  });
+
+  it('and the red line comes back whole: one line that passes every one of its markers', () => {
+    const im = readPng(base + '.png');
+    const red = (t.series as { name: string; points: { x: number; y: number }[] }[]).find((s) => s.name === 'Blend B')!.points.map(toPx);
+    const res = findLines(im.data, im.width, im.height, [0xc0, 0x39, 0x2b], BOX, { contour: false, masks: [LEGEND] });
+    expect(res.lines.length).toBe(1);
+    for (const v of red) expect(Math.min(...res.lines[0]!.points.map((p) => Math.hypot(p[0] - v[0], p[1] - v[1])))).toBeLessThan(6);
+  });
+});

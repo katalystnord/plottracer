@@ -77,13 +77,23 @@ export function masked(x: number, y: number, masks: readonly Box[]): boolean {
   return false;
 }
 
-/** The line's ink: coverage above `thr`, a real mix of the line colour, inside the box. */
+/** The line's ink: coverage above `thr`, a real mix of the line colour, inside the box.
+ *
+ * ⚑ The residual allowed shrinks with the coverage. A pixel half covered by
+ * ANOTHER colour is only half as far from a paper-to-colour blend as that
+ * colour's solid pixels, so a fixed tolerance let the anti-aliased edges of a
+ * purple line pass as faint red ink (xy-multiseries-modulus: six "red" lines
+ * along Blend D). A blend of another colour keeps that colour's residual per
+ * unit of coverage at any coverage (purple seen against red: about 154), while
+ * the line's own ink, however degraded, stays near or under the tolerance
+ * (about 71-77 on the held-out k-cross figures). So the full tolerance holds
+ * down to 0.7 coverage and shrinks below it, which puts the cut at 100. */
 export function lineMask(cov: Coverage, w: number, h: number, box: Box, masks: readonly Box[], thr = 0.3, resTol = 70, inset = 3): Uint8Array {
   const m = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
-      if (cov.alpha[i]! > thr && cov.residual[i]! < resTol && cov.contrast[i]! > 40 && insideBox(x, y, box, inset) && !masked(x, y, masks)) m[i] = 1;
+      if (cov.alpha[i]! > thr && cov.residual[i]! < resTol * Math.min(1, cov.alpha[i]! / 0.7) && cov.contrast[i]! > 40 && insideBox(x, y, box, inset) && !masked(x, y, masks)) m[i] = 1;
     }
   }
   return m;
