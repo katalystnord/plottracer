@@ -344,6 +344,9 @@ export type PointRole = 'anchor' | 'interpolated' | 'bridged' | 'shared';
 /** Series metadata marking a line Find lines traced (v2.6). Pieces split off
  * it carry it too - they are still traced lines. */
 const FOUND_LINE_KEY = 'foundLine';
+/** Which found line a series is (a cut piece keeps its line's), so a place to
+ * check can name the line by its CURRENT name - names close up on a remove. */
+const FOUND_LINE_ID_KEY = 'foundLineId';
 /** Set on a series whose name a person typed (renameDataset). A name without
  * it, of the form "Series N", is one PlotTracer gave and keeps up to date. */
 const TYPED_NAME_KEY = 'typedName';
@@ -3749,12 +3752,13 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // ⚑ Named as every series is, "Series N" by its place in the list
     // (David 2026-10-12: *"they should all be called the same thing, not
     // line/series"*), so a second press cannot run the count up either.
+    let nextId = 1 + Math.max(0, ...this.datasetEntries.map((e) => Number(e.dataset.getMetadata()[FOUND_LINE_ID_KEY] ?? 0)));
     lines.forEach((pts, k) => {
       const active = this.activeEntry.dataset;
       const reuse = k === 0 && active.getCount() === 0 && !active.hasSlots();
       const idx = reuse ? this.activeDatasetIndex : this.addDataset();
       const ds = this.datasetEntries[idx]!.dataset;
-      ds.setMetadata({ ...ds.getMetadata(), [FOUND_LINE_KEY]: true });
+      ds.setMetadata({ ...ds.getMetadata(), [FOUND_LINE_KEY]: true, [FOUND_LINE_ID_KEY]: nextId++ });
       this.writeLinePoints(idx, pts);
       this.setDatasetColor(idx, freeSeriesColour(this.datasetEntries.filter((_, i) => i !== idx).map((e) => e.dataset.colorRGB.getRGB() as [number, number, number])));
       created.push(idx);
@@ -3790,6 +3794,18 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const entry = this.datasetEntries[index];
     if (!entry) return false;
     return entry.dataset.getAllPixels().some((p) => p.metadata?.['role'] === 'anchor' || p.metadata?.['role'] === 'interpolated');
+  }
+
+  /** Which found line the series at `index` is, or null. */
+  foundLineId(index: number): number | null {
+    const v = this.datasetEntries[index]?.dataset.getMetadata()[FOUND_LINE_ID_KEY];
+    return typeof v === 'number' ? v : null;
+  }
+
+  /** The current names of the series that are found line `id` (its pieces,
+   * once cut), in list order. */
+  seriesNamesForLine(id: number): string[] {
+    return this.datasetEntries.filter((e) => e.dataset.getMetadata()[FOUND_LINE_ID_KEY] === id).map((e) => e.dataset.name);
   }
 
   /** Was this series made by Find lines (or split off one that was)? */

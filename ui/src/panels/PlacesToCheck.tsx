@@ -14,6 +14,11 @@ export interface LinePlace {
   /** Image pixels. */
   at: [number, number];
   text: string;
+  /** The found lines the place is about, and how to say it given their names
+   * as they are NOW - a name closes up when a series is removed, so a name
+   * written down when the line was found could point at another line. */
+  lineIds?: readonly number[];
+  say?: (names: string) => string;
 }
 
 export function PlacesToCheck(props: {

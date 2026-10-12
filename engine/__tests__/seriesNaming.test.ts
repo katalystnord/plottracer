@@ -88,3 +88,14 @@ describe('every series its own colour (role-play 2026-10-12)', () => {
     expect(new Set(colours(s)).size).toBe(4);
   });
 });
+
+describe('a place to check names its line as it is called now', () => {
+  it('a found line is found by its id after the names close up', () => {
+    const s = calibrated();
+    s.addFoundLines([line(200), line(150), line(100)]);
+    const id = s.foundLineId(2)!;
+    expect(s.seriesNamesForLine(id)).toEqual(['Series 3']);
+    s.removeDataset(0);
+    expect(s.seriesNamesForLine(id)).toEqual(['Series 2']);
+  });
+});

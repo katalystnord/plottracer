@@ -1495,6 +1495,9 @@ export function Workspace() {
   const [findLinesSummary, setFindLinesSummary] = useState<string | null>(null);
   const [fillLevelsNotice, setFillLevelsNotice] = useState<string | null>(null);
   const [linePlaces, setLinePlaces] = useState<readonly LinePlace[]>([]);
+  /** The places as they read NOW: each names its lines by their current names. */
+  const placesShown = (): readonly LinePlace[] =>
+    linePlaces.map((pl) => (pl.say && pl.lineIds ? { ...pl, text: pl.say(pl.lineIds.flatMap((id) => sessionRef.current.seriesNamesForLine(id)).join(', ')) } : pl));
   const [joinNotice, setJoinNotice] = useState<string | null>(null);
   // Live colour-match PREVIEW (checkpoint 121): while the Auto-trace panel is
   // open, an overlay on the canvas shows exactly which pixels the current colour +
@@ -6671,16 +6674,26 @@ export function Workspace() {
     }
     const created = session.addFoundLines(res.lines.map((L) => thinFoundLine(L.points, L.roles)));
     const fromKey = readLevelsFromKey();
-    const nameOf = (k: number): string => session.getDatasetInfos()[created[k]!]?.name ?? `line ${k + 1}`;
-    const places: LinePlace[] = [];
-    const placeText = (pl: (typeof res.places)[number]): string => {
-      const names = pl.lines.map(nameOf).join(', ');
-      if (pl.kind === 'bridge') return `Lines meet here and were joined across it${names ? ` (${names})` : ''} - check each carries on the right way.`;
-      if (pl.kind === 'split') return `Unsure how the lines carry on here, so the pieces were left apart${names ? ` (${names})` : ''} - Join them if they are one line.`;
-      if (pl.kind === 'end') return `${names || 'A line'} stops here, inside the plot - if it carries on, Join it with the next piece.`;
-      return 'Lines run together closer than the pixels can separate - this stretch is not recorded as a line.';
+    const idOf = (k: number): number[] => {
+      const id = session.foundLineId(created[k]!);
+      return id === null ? [] : [id];
     };
-    for (const pl of res.places) places.push({ id: places.length, kind: pl.kind, at: pl.at, text: placeText(pl) });
+    const places: LinePlace[] = [];
+    // ⚑ Said with the lines' names as they are when shown (placesShown), and
+    // naming the control that does it: "Join" alone did not say what or where
+    // (role-play 2026-10-12: "get two lines to merge, whatever that meant").
+    const sayFor = (kind: (typeof res.places)[number]['kind']): ((names: string) => string) => {
+      if (kind === 'bridge') return (names) => `Lines meet here and were joined across it${names ? ` (${names})` : ''} - check each carries on the right way.`;
+      if (kind === 'split') return (names) => `Unsure how the lines carry on here, so the pieces were left apart${names ? ` (${names})` : ''} - if they are one line, pick one in the series list and choose the other in Join with.`;
+      if (kind === 'end') return (names) => `${names || 'A line'} stops here, inside the plot - if it carries on, pick it in the series list and choose the next piece in Join with.`;
+      return () => 'Lines run together closer than the pixels can separate - this stretch is not recorded as a line.';
+    };
+    const namesNow = (ids: readonly number[]): string => ids.flatMap((id) => session.seriesNamesForLine(id)).join(', ');
+    for (const pl of res.places) {
+      const lineIds = pl.lines.flatMap(idOf);
+      const say = sayFor(pl.kind);
+      places.push({ id: places.length, kind: pl.kind, at: pl.at, lineIds, say, text: say(namesNow(lineIds)) });
+    }
     let read = 0, notRead = 0;
     res.lines.forEach((_, k) => {
       const mine = slots.map((sl, i) => ({ sl, r: reads[i]! })).filter((x) => x.sl.line === k);
@@ -6696,7 +6709,9 @@ export function Workspace() {
       if (lr.value !== null) read++;
       else {
         notRead++;
-        places.push({ id: places.length, kind: 'label', at: lr.at, text: `${nameOf(k)}: the label ${lr.text ? `read as “${lr.text}”` : 'could not be read'} was not used${lr.refused ? ` - ${lr.refused}` : ''}. Type its level.` });
+        const said = lr;
+        const say = (names: string) => `${names || 'A line'}: the label ${said.text ? `read as “${said.text}”` : 'could not be read'} was not used${said.refused ? ` - ${said.refused}` : ''}. Type its level.`;
+        places.push({ id: places.length, kind: 'label', at: lr.at, lineIds: idOf(k), say, text: say(namesNow(idOf(k))) });
       }
     });
     const gaps = res.lines.reduce((n, L) => n + L.gaps.length, 0);
@@ -6924,9 +6939,19 @@ export function Workspace() {
    * drawn only in Select, so that is where it lands, as the agent's does.
    */
   const selectWholeSeries = useCallback(
-    (index: number) => {
+    (index: number, add = false) => {
       const n = session.getDatasets()[index]?.getCount() ?? 0;
       const whole = Array.from({ length: n }, (_, i) => i);
+      // ⚑ Shift ADDS the line to what is picked, as Shift adds everywhere in
+      // Select - so several wrong pieces go with one Del, the way an agent's
+      // remove_series takes a list (role-play 2026-10-12).
+      const lineType = findLinesKind(session.getConfig().id) !== null;
+      if (add && lineType && mode === 'select' && lineSelection.length && session.getLinePoints(index) && !session.isGuidePointLine(index)) {
+        const others = lineSelection.filter((x) => x.index !== index);
+        const had = others.length !== lineSelection.length;
+        setLineSelection(had ? others : [...others, ...whole.map((point) => ({ index, point }))]);
+        return;
+      }
       const already =
         mode === 'select' &&
         session.getActiveDatasetIndex() === index &&
@@ -6939,12 +6964,16 @@ export function Workspace() {
       }
       if (session.getActiveDatasetIndex() !== index) handleSelectDataset(index);
       setMode('select');
-      setLineSelection([]);
+      // On a lines type the pick is also a selection ACROSS LINES, so Del takes
+      // the line away rather than leaving an empty series in the list - the
+      // way a line erased down to nothing goes.
+      const asLine = findLinesKind(session.getConfig().id) && session.getLinePoints(index) && !session.isGuidePointLine(index);
+      setLineSelection(asLine ? whole.map((point) => ({ index, point })) : []);
       setSelectedPointIndices(whole);
       setActivePointIndex(null);
       bump();
     },
-    [session, mode, selectedPointIndices, handleSelectDataset, bump]
+    [session, mode, selectedPointIndices, lineSelection, handleSelectDataset, bump]
   );
   const selectWholeSeriesRef = useRef(selectWholeSeries);
   useEffect(() => {
@@ -8425,7 +8454,7 @@ export function Workspace() {
           })(),
         };
       }),
-      places: linePlaces,
+      places: placesShown(),
       working: agentRounds()?.describe() ?? null,
     }),
     renderRegion: (r) => imageCanvasRef.current?.getRegionPngDataURL(r) ?? null,
@@ -11200,7 +11229,7 @@ export function Workspace() {
           2026-10-10, on the built app: "should the warnings not sit below the
           data out?"). */}
       <PlacesToCheck
-        places={linePlaces}
+        places={placesShown()}
         onGo={goToPlace}
         onDone={(id) => setLinePlaces((ps) => ps.filter((p) => p.id !== id))}
         onClear={() => setLinePlaces([])}

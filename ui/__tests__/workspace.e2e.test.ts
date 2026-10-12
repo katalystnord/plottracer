@@ -12163,6 +12163,28 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(async () => (await textOf('tips-bar')).startsWith(`💡${count1} points selected`), { timeout: 5000 }).toBe(true);
     await page.getByTestId('series-col-1').click();
     await expect.poll(() => textOf('tips-bar'), { timeout: 5000 }).not.toMatch(/points selected/);
+
+    // a place to check says where Join is, and names lines as they are called NOW:
+    // pick a whole line, Delete it, and the names close up - the places follow
+    expect(await textOf('places-to-check')).toMatch(/choose the next piece in Join with/);
+    const seriesBefore = await page.getByTestId('series-select').locator('option').count();
+    await page.getByTestId('series-col-1').click();
+    await page.keyboard.press('Delete');
+    await expect.poll(() => page.getByTestId('series-select').locator('option').count(), { timeout: 5000 }).toBe(seriesBefore - 1);
+    const listed = new Set((await page.getByTestId('series-select').locator('option').allTextContents()).map((o) => o.replace(/\s*\(\d+\)\s*$/, '').trim()));
+    const named = (await textOf('places-to-check')).match(/Series \d+/g) ?? [];
+    expect(named.length).toBeGreaterThan(0);
+    for (const n of named) expect(listed.has(n), `${n} is named by a place but is not in the series list`).toBe(true);
+
+    // several pieces in one go: Shift-click a second name (its header says so), then Del
+    expect(await page.getByTestId('series-col-2').getAttribute('title')).toMatch(/Shift-click adds it to what is selected/);
+    const twoBefore = await page.getByTestId('series-select').locator('option').count();
+    await page.getByTestId('series-col-1').click();
+    await page.getByTestId('series-col-2').click({ modifiers: ['Shift'] });
+    const both = (await countOf(1)) + (await countOf(2));
+    await expect.poll(async () => (await textOf('tips-bar')).startsWith(`💡${both} points selected`), { timeout: 5000 }).toBe(true);
+    await page.keyboard.press('Delete');
+    await expect.poll(() => page.getByTestId('series-select').locator('option').count(), { timeout: 5000 }).toBe(twoBefore - 2);
   }, 120000);
 
   it('F1/F9/K1-K3 one press finds every contour line, says what it did, and a found line can be cut and joined again', async () => {
