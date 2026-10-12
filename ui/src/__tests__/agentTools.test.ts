@@ -61,6 +61,25 @@ describe('what the agent sees (M4, M5)', () => {
     expect(describeState({ ...base, figure: null, series: [], places: [] })).toMatch(/No figure is open/);
   });
 
+  it('role-play 2026-10-12: the state says where each calibration point was placed and what was typed for it, so a typo can be caught', () => {
+    const text = describeState({
+      ...base,
+      calibrated: true,
+      calibration: [
+        { label: 'X1', px: 87.28, py: 636.72, values: [{ label: 'X', value: '0' }] },
+        { label: 'X2', px: 885, py: 636.72, values: [{ label: 'X', value: '1.2' }] },
+        { label: 'Y1', px: 87.28, py: 636.72, values: [{ label: 'Y', value: '0' }] },
+        { label: 'Y2', px: 87.28, py: 39.33, values: [{ label: 'Y', value: '100' }] },
+      ],
+    });
+    expect(text).toContain('Calibration: done (by the user). The points they placed: X1 at pixel (87.3, 636.7), X = 0; X2 at pixel (885, 636.7), X = 1.2; Y1 at pixel (87.3, 636.7), Y = 0; Y2 at pixel (87.3, 39.3), Y = 100.');
+  });
+
+  it('and while the walk is under way, the points placed so far', () => {
+    const text = describeState({ ...base, calibrated: false, step: { index: 1, count: 4, label: 'X2' }, calibration: [{ label: 'X1', px: 10, py: 20, values: [{ label: 'X', value: '0' }] }] });
+    expect(text).toContain('Placed so far: X1 at pixel (10, 20), X = 0.');
+  });
+
   it('M4: view_figure shows the whole figure when no region is asked for, at no more than its own size', () => {
     expect(planView({ imageWidth: 800, imageHeight: 600 })).toMatchObject({ x: 0, y: 0, width: 800, height: 600, scale: 1, outWidth: 800, outHeight: 600 });
   });

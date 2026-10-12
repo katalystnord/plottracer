@@ -12606,6 +12606,8 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
     await page.getByTestId('agent-strip-waiting').waitFor({ state: 'detached' });
+    // the agent can read back what the person typed, to catch a typo (role-play 2026-10-12)
+    expect((await call('get_state')).text).toMatch(/Calibration: done \(by the user\)\. The points they placed: X1 at pixel \([\d.]+, [\d.]+\), X = 0; X2 at pixel \([\d.]+, [\d.]+\), X = 110; .*Y2 at pixel \([\d.]+, [\d.]+\), Y = 3600\./);
 
     // M9 / M9a: name the series, place Blend A's markers as clicks, see them ringed
     expect((await call('rename_series', { series: 1, name: 'Blend A' })).text).toMatch(/Renamed "Series 1" to series \[1\] "Blend A"/);

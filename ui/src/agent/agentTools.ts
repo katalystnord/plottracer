@@ -71,6 +71,23 @@ export interface AgentStateInput {
   places: readonly { kind: string; at: readonly [number, number]; text: string }[];
   /** M14 (R9): how the agent is working - in rounds or automatic, and whether it waits. */
   working?: string | null;
+  /** The calibration points the user has placed, in walk order, with what they
+   * typed for each - so an agent can catch a typo such as 1.2 for 12. */
+  calibration?: readonly AgentCalibPoint[];
+}
+
+export interface AgentCalibPoint {
+  label: string;
+  px: number;
+  py: number;
+  values: readonly { label: string; value: string }[];
+}
+
+const r1 = (v: number) => Math.round(v * 10) / 10;
+function describeCalibPoints(points: readonly AgentCalibPoint[]): string {
+  return points
+    .map((p) => `${p.label} at pixel (${r1(p.px)}, ${r1(p.py)})${p.values.map((v) => `, ${v.label} = ${v.value}`).join('')}`)
+    .join('; ');
 }
 
 export const NOT_CALIBRATED =
@@ -100,11 +117,13 @@ export function describeState(st: AgentStateInput): string {
   const page = st.figure.page ? `, page ${st.figure.page.page} of ${st.figure.page.count}` : '';
   lines.push(`Figure: ${st.figure.fileName ?? 'unnamed'}${page}, ${st.figure.width} × ${st.figure.height} pixels.`);
   lines.push(`Graph type: ${st.graphType}.`);
+  const placed = st.calibration ?? [];
   if (st.calibrated) {
-    lines.push('Calibration: done (by the user).');
+    lines.push(`Calibration: done (by the user).${placed.length ? ` The points they placed: ${describeCalibPoints(placed)}.` : ''}`);
   } else {
     const step = st.step ? ` The walk is on step ${st.step.index + 1} of ${st.step.count}: "${st.step.label}".` : '';
-    lines.push(`Calibration: not done.${step} ${NOT_CALIBRATED}`);
+    const sofar = placed.length ? ` Placed so far: ${describeCalibPoints(placed)}.` : '';
+    lines.push(`Calibration: not done.${step}${sofar} ${NOT_CALIBRATED}`);
   }
   if (st.working) lines.push(st.working);
   if (st.tip) lines.push(`On screen now: "${st.tip}"`);

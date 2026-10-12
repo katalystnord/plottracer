@@ -8342,6 +8342,14 @@ export function Workspace() {
         : null,
       graphType: sessionRef.current.getConfig().label,
       calibrated: sessionRef.current.getAxes() !== null,
+      calibration: (() => {
+        const placed = sessionRef.current.getPlacedPoints();
+        return sessionRef.current.getSteps().flatMap((st) => {
+          const p = placed[st.key];
+          if (!p) return [];
+          return [{ label: st.label, px: p.px, py: p.py, values: st.valueFields.map((f, i) => ({ label: f.label, value: p.values[i] ?? '' })).filter((v) => v.value !== '') }];
+        });
+      })(),
       step: axes === null && currentStep ? { index: session.getStepIndex(), count: steps.length, label: currentStep.label } : null,
       tip: ocrError ?? guidanceTip,
       // ⚑ LIVE, from the session: a result written right after a step must
