@@ -101,6 +101,15 @@ export interface AutoExtractCardProps {
  * click in the card's footprint silently did nothing, which is the recurring
  * "I clicked and nothing happened" failure this project keeps rediscovering.
  */
+/** The card's mechanisms, in the order it shows them - also what an agent is
+ * told the card offers (v2.7), so the two can never name them differently. */
+export const AUTO_EXTRACT_CHOICES: readonly { m: ToolMode; id: string; label: string; hint: string }[] = [
+  { m: 'find-lines', id: 'find', label: 'Find lines', hint: 'every line of a colour' },
+  { m: 'segment-fill', id: 'flood', label: 'Flood-fill', hint: 'solid line' },
+  { m: 'color-trace', id: 'colour', label: 'By colour', hint: 'dashed / coloured' },
+  { m: 'interpolate', id: 'guide', label: 'Guide points', hint: 'by eye' },
+];
+
 export function AutoExtractCard(props: AutoExtractCardProps) {
   const {
     mode,
@@ -185,12 +194,7 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
           drawn (not the graph type -- the app can't tell solid from
           dashed). */}
       <div style={{ display: 'flex', gap: 4 }}>
-        {([
-          { m: 'find-lines' as ToolMode, id: 'find', label: 'Find lines', hint: 'every line of a colour' },
-          { m: 'segment-fill' as ToolMode, id: 'flood', label: 'Flood-fill', hint: 'solid line' },
-          { m: 'color-trace' as ToolMode, id: 'colour', label: 'By colour', hint: 'dashed / coloured' },
-          { m: 'interpolate' as ToolMode, id: 'guide', label: 'Guide points', hint: 'by eye' },
-        ])
+        {AUTO_EXTRACT_CHOICES
           // ⚑ A spider or a bar gets ONE mechanism (autoExtractModesFor). The
           // other two are curve tools that produce ordinary points, and neither
           // a spider's axis slots nor a bar's two-corner slots have anywhere to

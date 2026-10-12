@@ -81,6 +81,18 @@ describe('what the agent sees (M4, M5)', () => {
     expect(describeState({ ...base, series: [{ ...one, pointCount: 0, record: "no points: a heatmap's record is its cells, 20 read (export gives them)" }] })).toContain("no points: a heatmap's record is its cells, 20 read");
   });
 
+  it('role-play 2026-10-12: the state names the tools the user has on screen, and why a greyed one is greyed, so an agent can point the user to them', () => {
+    const text = describeState({
+      ...base,
+      screenTools: [
+        { name: 'Add points', greyed: null },
+        { name: 'Auto-extract (find lines / flood-fill / by colour / guide points)', greyed: null, choices: ['Find lines', 'Flood-fill', 'By colour', 'Guide points'] },
+        { name: 'Error bars (add to a traced series)', greyed: 'Add data points first' },
+      ],
+    });
+    expect(text).toContain('The user\'s tools on screen (the left rail, top to bottom): Add points; Auto-extract (find lines / flood-fill / by colour / guide points), whose card offers Find lines, Flood-fill, By colour, Guide points; Error bars (add to a traced series), greyed: "Add data points first".');
+  });
+
   it('and while the walk is under way, the points placed so far', () => {
     const text = describeState({ ...base, calibrated: false, step: { index: 1, count: 4, label: 'X2' }, calibration: [{ label: 'X1', px: 10, py: 20, values: [{ label: 'X', value: '0' }] }] });
     expect(text).toContain('Placed so far: X1 at pixel (10, 20), X = 0.');

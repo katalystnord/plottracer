@@ -134,7 +134,7 @@ import { BarTable } from './panels/BarTable.js';
 import { SpiderTable } from './panels/SpiderTable.js';
 import { SpreadsheetTable } from './panels/SpreadsheetTable.js';
 import { HeatmapCellsTable } from './panels/HeatmapCellsTable.js';
-import { AutoExtractCard, COLOR_TRACE_PREVIEW_RGBA } from './panels/AutoExtractCard.js';
+import { AUTO_EXTRACT_CHOICES, AutoExtractCard, COLOR_TRACE_PREVIEW_RGBA } from './panels/AutoExtractCard.js';
 import { SeriesPanel } from './panels/SeriesPanel.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
@@ -8342,6 +8342,15 @@ export function Workspace() {
         : null,
       graphType: sessionRef.current.getConfig().label,
       calibrated: sessionRef.current.getAxes() !== null,
+      // ⚑ Read off the rail as drawn, so the agent is told what the user sees,
+      // greyed tools with the reason the screen gives.
+      screenTools: [...(railColRef.current?.querySelectorAll<HTMLButtonElement>('button[data-testid^="mode-"]') ?? [])].map((b) => {
+        const cfgNow = sessionRef.current.getConfig();
+        const choices = b.dataset['testid'] === 'mode-auto-extract'
+          ? AUTO_EXTRACT_CHOICES.filter((c) => autoExtractModesFor(cfgNow.autoExtractKind, cfgNow.id).includes(c.m)).map((c) => c.label)
+          : undefined;
+        return { name: b.dataset['label'] ?? b.getAttribute('aria-label') ?? '', greyed: b.disabled ? b.getAttribute('aria-label') : null, ...(choices && !b.disabled ? { choices } : {}) };
+      }),
       calibration: (() => {
         const placed = sessionRef.current.getPlacedPoints();
         return sessionRef.current.getSteps().flatMap((st) => {
@@ -9746,7 +9755,9 @@ export function Workspace() {
           <IconButton
             testId="mode-auto-extract"
             icon={<AutoTraceIcon />}
-            label="Auto-extract (flood-fill / by colour / guide points)"
+            // ⚑ Named from the card's own list for this type, so the tooltip
+            // cannot leave out a mechanism the card offers (it once omitted Find lines).
+            label={`Auto-extract (${AUTO_EXTRACT_CHOICES.filter((c) => autoExtractModesFor(config.autoExtractKind, config.id).includes(c.m)).map((c) => c.label.toLowerCase()).join(' / ') || 'flood-fill / by colour / guide points'})`}
             shortcut="4"
             pressed={AUTO_EXTRACT_MODES.includes(mode)}
             // ⚑ Bar-family types are excluded, and this is a CORRECTNESS gate, not a

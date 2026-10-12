@@ -149,6 +149,9 @@ export function IconButton({
     <StyledButton
       type="button"
       data-testid={testId}
+      // The tool's name whatever its state, for an agent told what the rail
+      // offers (v2.7): aria-label becomes the reason while it is greyed.
+      data-label={label}
       // A disabled <button> suppresses its own tooltip in Chromium, so when
       // disabled the wrapping span carries the title instead -- omit it here to
       // avoid a dead attribute. aria-label stays for assistive tech either way.

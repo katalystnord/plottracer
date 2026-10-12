@@ -12606,6 +12606,9 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
     await page.getByTestId('agent-strip-waiting').waitFor({ state: 'detached' });
+    // the agent can point the person to the tools the screen offers (role-play 2026-10-12)
+    expect((await call('get_state')).text).toContain("The user's tools on screen (the left rail, top to bottom): Pan; Calibrate; ");
+    expect((await call('get_state')).text).toContain('Auto-extract (find lines / flood-fill / by colour / guide points), whose card offers Find lines, Flood-fill, By colour, Guide points;');
     // the agent can read back what the person typed, to catch a typo (role-play 2026-10-12)
     expect((await call('get_state')).text).toMatch(/Calibration: done \(by the user\)\. The points they placed: X1 at pixel \([\d.]+, [\d.]+\), X = 0; X2 at pixel \([\d.]+, [\d.]+\), X = 110; .*Y2 at pixel \([\d.]+, [\d.]+\), Y = 3600\./);
 

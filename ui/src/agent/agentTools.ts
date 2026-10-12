@@ -77,6 +77,9 @@ export interface AgentStateInput {
   /** The calibration points the user has placed, in walk order, with what they
    * typed for each - so an agent can catch a typo such as 1.2 for 12. */
   calibration?: readonly AgentCalibPoint[];
+  /** The tools the user has on screen, read off the left rail in its order,
+   * so an agent can point the user to one (role-play 2026-10-12). */
+  screenTools?: readonly { name: string; greyed: string | null; choices?: readonly string[] }[];
 }
 
 export interface AgentCalibPoint {
@@ -131,6 +134,10 @@ export function describeState(st: AgentStateInput): string {
   }
   if (st.working) lines.push(st.working);
   if (st.tip) lines.push(`On screen now: "${st.tip}"`);
+  if (st.screenTools?.length) {
+    const tools = st.screenTools.map((t) => `${t.name}${t.choices?.length ? `, whose card offers ${t.choices.join(', ')}` : ''}${t.greyed ? `, greyed: "${t.greyed}"` : ''}`);
+    lines.push(`The user's tools on screen (the left rail, top to bottom): ${tools.join('; ')}.`);
+  }
   lines.push(`Series (${st.series.length}):`);
   for (const s of st.series) lines.push(`  ${describeSeries(s)}`);
   if (st.places.length) {
