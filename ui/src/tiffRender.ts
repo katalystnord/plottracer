@@ -23,7 +23,7 @@ export function loadTiff(bytes: Uint8Array): LoadedDocument {
   if (ifds.length === 0) throw new Error('No images found in this TIFF.');
   return {
     pageCount: ifds.length,
-    async renderPage(n: number): Promise<string> {
+    async renderPage(n: number): Promise<{ src: string }> {
       const ifd = ifds[n - 1];
       if (!ifd) throw new Error(`TIFF has no page ${n}.`);
       UTIF.decodeImage(buffer, ifd); // fills ifd.width/height/data
@@ -36,7 +36,7 @@ export function loadTiff(bytes: Uint8Array): LoadedDocument {
       const img = ctx.createImageData(ifd.width, ifd.height);
       img.data.set(rgba);
       ctx.putImageData(img, 0, 0);
-      return canvas.toDataURL('image/png');
+      return { src: canvas.toDataURL('image/png') };
     },
     destroy() {
       // UTIF holds no external resources (unlike pdf.js's worker); the decoded IFDs

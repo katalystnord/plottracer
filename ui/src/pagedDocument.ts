@@ -17,8 +17,10 @@ export interface LoadedDocument {
   /** Number of pages (1 for a single-page TIFF; N for a PDF / multipage TIFF). */
   pageCount: number;
   /** Render page `n` (1-based) to a `data:image/png` URL. Lazy - only the pages
-   * a user actually visits are rasterized. */
-  renderPage(n: number): Promise<string>;
+   * a user actually visits are rasterized. A PDF also gives the matrix from its
+   * page space to the rendered pixels (v2.7 V19), so what is read from the
+   * page's drawing can be placed on the picture. */
+  renderPage(n: number): Promise<{ src: string; pageTransform?: [number, number, number, number, number, number] }>;
   /** Release the decoder's resources. */
   destroy(): void;
 }

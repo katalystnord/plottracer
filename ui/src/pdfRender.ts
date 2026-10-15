@@ -70,7 +70,7 @@ export async function loadPdf(bytes: Uint8Array): Promise<LoadedDocument> {
   const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
   return {
     pageCount: doc.numPages,
-    async renderPage(n: number): Promise<string> {
+    async renderPage(n: number) {
       const page = await doc.getPage(n);
       const unit = page.getViewport({ scale: 1 });
       const longest = Math.max(unit.width, unit.height);
@@ -86,7 +86,8 @@ export async function loadPdf(bytes: Uint8Array): Promise<LoadedDocument> {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: ctx, viewport }).promise;
-      return canvas.toDataURL('image/png');
+      const t = viewport.transform;
+      return { src: canvas.toDataURL('image/png'), pageTransform: [t[0]!, t[1]!, t[2]!, t[3]!, t[4]!, t[5]!] as [number, number, number, number, number, number] };
     },
     destroy() {
       void doc.destroy();

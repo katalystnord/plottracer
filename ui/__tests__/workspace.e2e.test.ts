@@ -2663,7 +2663,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(300);
     // The saved project.json carries the crop record.
     const written = readSavedProjectJson(savePath);
-    expect((written.provenance as { crops: unknown[] }).crops).toHaveLength(1);
+    expect((written.provenance as { edits: { kind: string }[] }).edits.map((e) => e.kind)).toEqual(['crop']);
 
     // A fresh workspace clears provenance; reopening the project restores it.
     await resetWorkspace('xy');
@@ -2774,6 +2774,55 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     fs.unlinkSync(pdfPath);
     fs.unlinkSync(savePath);
+  });
+
+  it('V19: a PDF page records how it was drawn, and every image edit after it, in order; Undo takes the last one away', async () => {
+    await resetWorkspace('xy');
+    const pdfPath = tempFilePath('pdf');
+    fs.writeFileSync(pdfPath, makePdf(1));
+    await stubOpenProjectDialog(pdfPath);
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(100);
+    await calibrateXYStandard();
+
+    // The Image card's own buttons, as its hint says: rotate, flip, straighten.
+    await page.getByTestId('mode-image-edit').click();
+    await page.getByTestId('image-edit-rotate-cw').click();
+    await page.waitForTimeout(200);
+    await page.getByTestId('image-edit-flip-h').click();
+    await page.waitForTimeout(200);
+    await page.getByTestId('deskew-slider').focus();
+    for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight'); // +2.0°
+    await page.getByTestId('deskew-apply').click();
+    await page.waitForTimeout(400);
+
+    const save = async () => {
+      const savePath = tempFilePath('zip');
+      await stubSaveDialog(savePath);
+      await page.getByTestId('save-project').click();
+      await page.waitForTimeout(300);
+      const json = readSavedProjectJson(savePath);
+      fs.unlinkSync(savePath);
+      return json.provenance as { source: { page: number; pageTransform?: number[] }; edits?: { kind: string; deg?: number }[] };
+    };
+    const prov = await save();
+    // How pdf.js drew the page: a matrix, so the drawing can be placed on the picture.
+    expect(prov.source.pageTransform).toHaveLength(6);
+    expect(prov.source.pageTransform!.every((v) => Number.isFinite(v))).toBe(true);
+    // Every edit, in the order made (the capture is the first crop, when it cropped).
+    const kinds = (prov.edits ?? []).map((e) => e.kind).filter((k) => k !== 'crop');
+    expect(kinds).toEqual(['rotate-cw', 'flip-h', 'rotate']);
+    expect(prov.edits![prov.edits!.length - 1]!.deg).toBeCloseTo(2, 5);
+
+    // Undo the straighten: its entry leaves the record with it.
+    await page.getByTestId('undo').click();
+    await page.waitForTimeout(400);
+    const afterUndo = await save();
+    expect((afterUndo.edits ?? []).map((e) => e.kind).filter((k) => k !== 'crop')).toEqual(['rotate-cw', 'flip-h']);
+
+    fs.unlinkSync(pdfPath);
   });
 
   it('bundles the source PDF into the saved project, and restores it (checkpoint 104)', async () => {

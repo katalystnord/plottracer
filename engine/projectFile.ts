@@ -42,6 +42,7 @@
  * second axes entry, or measurements -- still out of scope here).
  */
 
+import type { ImageEdit } from './imageEdit.js';
 import { PlotData, type SerializedPlotData, type AnyAxes, type SerializedHeatmapLayer, type NotDataRegion } from '../core/plotData.js';
 import { CategoryAxis } from '../core/categoryAxis.js';
 import { RECORDED_MEASURE_TOOLS } from '../core/measurementValues.js';
@@ -93,19 +94,15 @@ export interface SerializedMeasureScale {
   unit: string;
 }
 
-/** One baked crop, recorded as provenance (checkpoint 95).
- * `from{Width,Height}` are the image's
- * dimensions BEFORE this crop and `rect` is the region kept, in that pre-crop
- * image's own pixels. Crops are baked (checkpoint 63 shifts the whole document
- * by the crop origin and discards the outside), so this is a *citation* of
- * where the figure came from - "the top-left panel of the source" - not a
- * recipe to re-crop, which would need the original bytes we no longer keep.
+/** One baked crop (checkpoint 95), now one kind of recorded image edit (v2.7
+ * V19). `from{Width,Height}` are the image's dimensions BEFORE this crop and
+ * `rect` is the region kept, in that pre-crop image's own pixels. Crops are
+ * baked (checkpoint 63 shifts the whole document by the crop origin and
+ * discards the outside), so it is a citation of where the figure came from -
+ * "the top-left panel of the source" - and, with the other edits, the record
+ * that places a point of the PDF's drawing in the picture.
  * Recorded, not inferred: every field is measured off the drag the user made. */
-export interface ProvenanceCrop {
-  fromWidth: number;
-  fromHeight: number;
-  rect: { x: number; y: number; width: number; height: number };
-}
+export type ProvenanceCrop = Extract<ImageEdit, { kind: 'crop' }>;
 
 /** The document a figure was extracted from, when that is not simply the image
  * file itself (checkpoint 97). For a PDF, `name` is the PDF's file name and
@@ -116,6 +113,10 @@ export interface ProvenanceCrop {
 export interface ProvenanceSource {
   name?: string;
   page?: number;
+  /** pdf.js's viewport matrix for the render the picture was made from (v2.7
+   * V19): PDF page space -> the rendered page's pixels. Recorded, because the
+   * render scale is chosen per page and nothing else could recover it. */
+  pageTransform?: [number, number, number, number, number, number];
 }
 
 /** Where a figure came from. Deliberately our own top-level project field
@@ -123,18 +124,19 @@ export interface ProvenanceSource {
  * structure - that models "which of N loaded files does dataset D belong to",
  * the wrong shape for single-figure origin, and forcing it in would be *more*
  * modeling, not less (tenet 10). A container: the `source` document (checkpoint
- * 97) and the `crops` applied (checkpoint 95). Absent in pre-95 files; `source`
- * absent in pre-97 files and for image-sourced figures. */
+ * 97) and the image `edits` made, in order (v2.7 V19: crop, rotate, flip and
+ * deskew; before v2.7 only crops were recorded, as `crops`). `source` is absent
+ * for image-sourced figures. */
 export interface Provenance {
   source?: ProvenanceSource;
-  crops?: ProvenanceCrop[];
+  edits?: ImageEdit[];
 }
 
 /** True when a Provenance actually records something -- used to decide whether
  * to write the key at all (omit-when-empty, like measurements). */
 function hasProvenance(p: Provenance): boolean {
   const sourced = !!p.source && (p.source.name != null || p.source.page != null);
-  return sourced || (!!p.crops && p.crops.length > 0);
+  return sourced || (!!p.edits && p.edits.length > 0);
 }
 
 /** Which build wrote a project file, and when.
@@ -820,27 +822,45 @@ function readMeasureScale(raw: unknown): SerializedMeasureScale | null {
 
 function readProvenance(raw: unknown): Provenance {
   if (!raw || typeof raw !== 'object') return {};
-  const p = raw as { source?: unknown; crops?: unknown };
+  const p = raw as { source?: unknown; crops?: unknown; edits?: unknown };
   const out: Provenance = {};
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
   if (p.source && typeof p.source === 'object') {
-    const s = p.source as { name?: unknown; page?: unknown };
+    const s = p.source as { name?: unknown; page?: unknown; pageTransform?: unknown };
     const source: ProvenanceSource = {};
     if (typeof s.name === 'string') source.name = s.name;
-    if (typeof s.page === 'number' && Number.isFinite(s.page)) source.page = s.page;
+    if (num(s.page)) source.page = s.page;
+    if (Array.isArray(s.pageTransform) && s.pageTransform.length === 6 && s.pageTransform.every(num)) {
+      source.pageTransform = s.pageTransform as [number, number, number, number, number, number];
+    }
     if (source.name != null || source.page != null) out.source = source;
   }
-  // Validate each crop element (checkpoint 100, audit T5): a shallow
-  // Array.isArray was letting `[null]` / `["x"]` through, then the status-bar
-  // render read `.fromWidth` off a non-object and threw -- breaking this
-  // function's own "never throws" contract. Drop malformed entries.
-  if (Array.isArray(p.crops)) {
-    const crops = p.crops.filter(isValidCrop);
-    if (crops.length > 0) out.crops = crops;
-  }
+  // Validate each element (checkpoint 100, audit T5): a shallow Array.isArray
+  // was letting `[null]` / `["x"]` through, then the status-bar render read
+  // `.fromWidth` off a non-object and threw - breaking this function's own
+  // "never throws" contract. Drop malformed entries. A pre-v2.7 file's `crops`
+  // are crop edits; it recorded no other kind.
+  const edits = Array.isArray(p.edits)
+    ? p.edits.filter(isValidEdit)
+    : Array.isArray(p.crops)
+      ? p.crops.filter(isValidCrop).map((c): ProvenanceCrop => ({ kind: 'crop', fromWidth: c.fromWidth, fromHeight: c.fromHeight, rect: c.rect }))
+      : [];
+  if (edits.length > 0) out.edits = edits;
   return out;
 }
 
-function isValidCrop(c: unknown): c is ProvenanceCrop {
+function isValidEdit(e: unknown): e is ImageEdit {
+  if (!e || typeof e !== 'object') return false;
+  const k = (e as { kind?: unknown }).kind;
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const sized = num((e as { fromWidth?: unknown }).fromWidth) && num((e as { fromHeight?: unknown }).fromHeight);
+  if (k === 'crop') return isValidCrop(e);
+  if (k === 'rotate-cw' || k === 'rotate-ccw' || k === 'flip-h' || k === 'flip-v') return sized;
+  if (k === 'rotate') return sized && num((e as { deg?: unknown }).deg);
+  return false;
+}
+
+function isValidCrop(c: unknown): c is Omit<ProvenanceCrop, 'kind'> {
   const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
   if (!c || typeof c !== 'object') return false;
   const crop = c as { fromWidth?: unknown; fromHeight?: unknown; rect?: unknown };

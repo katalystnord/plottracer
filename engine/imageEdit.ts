@@ -52,7 +52,7 @@ export function cropImage(src: Uint8ClampedArray, w: number, h: number, rect: Cr
       dst[d + 3] = src[s + 3]!;
     }
   }
-  return { data: dst, width: c.width, height: c.height, mapPoint: (px, py) => ({ x: px - c.x, y: py - c.y }) };
+  return { data: dst, width: c.width, height: c.height, mapPoint: editPointMap({ kind: 'crop', fromWidth: w, fromHeight: h, rect: c }) };
 }
 
 export interface ImageEditResult {
@@ -92,9 +92,7 @@ export function rotateImageByAngle(src: Uint8ClampedArray, w: number, h: number,
   // Subtracting a sub-pixel epsilon before the ceil absorbs the float noise
   // while leaving every genuine fraction alone: 5.0000000000000006 -> 5, but
   // a real 5.0000001 still ceils to 6, and 45 degrees still grows by root two.
-  const CEIL_EPS = 1e-9;
-  const nw = Math.max(1, Math.ceil(Math.abs(w * cos) + Math.abs(h * sin) - CEIL_EPS));
-  const nh = Math.max(1, Math.ceil(Math.abs(w * sin) + Math.abs(h * cos) - CEIL_EPS));
+  const { width: nw, height: nh } = rotatedSize(w, h, deg);
   const cx = w / 2;
   const cy = h / 2;
   const ncx = nw / 2;
@@ -147,13 +145,66 @@ export function rotateImageByAngle(src: Uint8ClampedArray, w: number, h: number,
     }
   }
 
-  const mapPoint = (px: number, py: number): { x: number; y: number } => {
-    const dx = px - cx;
-    const dy = py - cy;
-    return { x: dx * cos - dy * sin + ncx, y: dx * sin + dy * cos + ncy };
-  };
+  return { data: dst, width: nw, height: nh, mapPoint: editPointMap({ kind: 'rotate', deg, fromWidth: w, fromHeight: h }) };
+}
 
-  return { data: dst, width: nw, height: nh, mapPoint };
+/** The canvas a rotation by `deg` grows to (the rotated bounding box). */
+export function rotatedSize(w: number, h: number, deg: number): { width: number; height: number } {
+  const phi = (deg * Math.PI) / 180;
+  const cos = Math.cos(phi);
+  const sin = Math.sin(phi);
+  const CEIL_EPS = 1e-9; // see rotateImageByAngle: a rounding error must not ceil into an extra pixel
+  return {
+    width: Math.max(1, Math.ceil(Math.abs(w * cos) + Math.abs(h * sin) - CEIL_EPS)),
+    height: Math.max(1, Math.ceil(Math.abs(w * sin) + Math.abs(h * cos) - CEIL_EPS)),
+  };
+}
+
+/** One image edit as the project records it (v2.7 V19): enough, with nothing
+ * else, to carry a point from the image before the edit to the image after. */
+export type ImageEdit =
+  | { kind: 'crop'; fromWidth: number; fromHeight: number; rect: CropRect }
+  | { kind: ImageEditOp; fromWidth: number; fromHeight: number }
+  | { kind: 'rotate'; deg: number; fromWidth: number; fromHeight: number };
+
+/**
+ * Old-image point -> new-image point for one recorded edit. ⚑ THE ONLY PLACE
+ * THIS ARITHMETIC LIVES: every op's `mapPoint` is this function, and so is the
+ * placement of anything read from a PDF's drawing (engine/drawingPlacement.ts),
+ * so the record can never describe a different edit from the one that ran.
+ *
+ * Coordinates are CONTINUOUS: pixel i spans [i, i+1) (see imageEditRaster.test).
+ * ⚑ FIXED 2026-10-15: the 90° ops and the flips used to map with the pixel-INDEX
+ * formulas (h-1-y), which is right for an index and one pixel wrong for a
+ * continuous point, so after a rotate or flip every handle and point sat a
+ * pixel off its ink on one axis. Found by V19's tests, which follow the ink.
+ */
+export function editPointMap(e: ImageEdit): (px: number, py: number) => { x: number; y: number } {
+  const w = e.fromWidth;
+  const h = e.fromHeight;
+  switch (e.kind) {
+    case 'crop':
+      return (px, py) => ({ x: px - e.rect.x, y: py - e.rect.y });
+    case 'rotate-cw':
+      return (px, py) => ({ x: h - py, y: px });
+    case 'rotate-ccw':
+      return (px, py) => ({ x: py, y: w - px });
+    case 'flip-h':
+      return (px, py) => ({ x: w - px, y: py });
+    case 'flip-v':
+      return (px, py) => ({ x: px, y: h - py });
+    case 'rotate': {
+      const phi = (e.deg * Math.PI) / 180;
+      const cos = Math.cos(phi);
+      const sin = Math.sin(phi);
+      const { width: nw, height: nh } = rotatedSize(w, h, e.deg);
+      return (px, py) => {
+        const dx = px - w / 2;
+        const dy = py - h / 2;
+        return { x: dx * cos - dy * sin + nw / 2, y: dx * sin + dy * cos + nh / 2 };
+      };
+    }
+  }
 }
 
 /**
@@ -200,12 +251,7 @@ export function applyImageEditOp(op: ImageEditOp, src: Uint8ClampedArray, w: num
     }
   }
 
-  const mapPoint = (px: number, py: number): { x: number; y: number } => {
-    const { nx, ny } = dest(px, py);
-    return { x: nx, y: ny };
-  };
-
-  return { data: dst, width: nw, height: nh, mapPoint };
+  return { data: dst, width: nw, height: nh, mapPoint: editPointMap({ kind: op, fromWidth: w, fromHeight: h }) };
 }
 
 /**

@@ -94,14 +94,14 @@ describe('serializeProject', () => {
     session.runCalibration();
 
     const withCrop = serializeProject(session, FAKE_IMAGE_DATA_URL, undefined, undefined, {
-      crops: [{ fromWidth: 1200, fromHeight: 800, rect: { x: 100, y: 50, width: 400, height: 300 } }],
+      edits: [{ kind: 'crop', fromWidth: 1200, fromHeight: 800, rect: { x: 100, y: 50, width: 400, height: 300 } }],
     });
     if ('error' in withCrop) throw new Error(withCrop.error);
-    expect(withCrop.provenance?.crops).toHaveLength(1);
-    expect(withCrop.provenance?.crops?.[0]?.fromWidth).toBe(1200);
+    expect(withCrop.provenance?.edits).toHaveLength(1);
+    expect(withCrop.provenance?.edits?.[0]?.fromWidth).toBe(1200);
 
     // No crops -> no provenance key at all (same omit-when-empty rule as measures).
-    const noCrop = serializeProject(session, FAKE_IMAGE_DATA_URL, undefined, undefined, { crops: [] });
+    const noCrop = serializeProject(session, FAKE_IMAGE_DATA_URL, undefined, undefined, { edits: [] });
     if ('error' in noCrop) throw new Error(noCrop.error);
     expect('provenance' in noCrop).toBe(false);
   });
@@ -453,13 +453,19 @@ describe('deserializeProject', () => {
     session.runCalibration();
 
     const file = serializeProject(session, FAKE_IMAGE_DATA_URL, undefined, undefined, {
-      crops: [{ fromWidth: 640, fromHeight: 480, rect: { x: 0, y: 0, width: 320, height: 240 } }],
+      edits: [{ kind: 'crop', fromWidth: 640, fromHeight: 480, rect: { x: 0, y: 0, width: 320, height: 240 } }],
     });
     if ('error' in file) throw new Error(file.error);
     const back = deserializeProject(file);
     if ('error' in back) throw new Error(back.error);
-    expect(back.provenance.crops).toHaveLength(1);
-    expect(back.provenance.crops![0]!.rect.width).toBe(320);
+    expect(back.provenance.edits).toHaveLength(1);
+    const e = back.provenance.edits![0]!;
+    expect(e.kind === 'crop' && e.rect.width).toBe(320);
+
+    // A pre-v2.7 file recorded its crops as `crops`: they read back as crop edits.
+    const older = deserializeProject({ ...file, provenance: { crops: [{ fromWidth: 640, fromHeight: 480, rect: { x: 0, y: 0, width: 320, height: 240 } }] } });
+    if ('error' in older) throw new Error(older.error);
+    expect(older.provenance.edits).toEqual([{ kind: 'crop', fromWidth: 640, fromHeight: 480, rect: { x: 0, y: 0, width: 320, height: 240 } }]);
 
     // A pre-95 file (no provenance key) reads back as {}, never undefined/throw.
     const legacy = serializeProject(session, FAKE_IMAGE_DATA_URL);
@@ -476,13 +482,13 @@ describe('deserializeProject', () => {
 
     const file = serializeProject(session, FAKE_IMAGE_DATA_URL, undefined, undefined, {
       source: { name: 'paper.pdf', page: 4 },
-      crops: [{ fromWidth: 800, fromHeight: 600, rect: { x: 10, y: 20, width: 100, height: 80 } }],
+      edits: [{ kind: 'crop', fromWidth: 800, fromHeight: 600, rect: { x: 10, y: 20, width: 100, height: 80 } }],
     });
     if ('error' in file) throw new Error(file.error);
     const back = deserializeProject(file);
     if ('error' in back) throw new Error(back.error);
     expect(back.provenance.source).toEqual({ name: 'paper.pdf', page: 4 });
-    expect(back.provenance.crops).toHaveLength(1);
+    expect(back.provenance.edits).toHaveLength(1);
 
     // Garbage in the source is dropped, not trusted or thrown on.
     const garbled = deserializeProject({
@@ -514,7 +520,7 @@ describe('deserializeProject', () => {
     // All-garbage crops -> dropped entirely.
     const junk = deserializeProject({ ...base, provenance: { crops: [null, 'x', {}, { fromWidth: 1 }] } });
     if ('error' in junk) throw new Error(junk.error);
-    expect(junk.provenance.crops).toBeUndefined();
+    expect(junk.provenance.edits).toBeUndefined();
 
     // A mix keeps only the well-formed entry.
     const mixed = deserializeProject({
@@ -522,8 +528,16 @@ describe('deserializeProject', () => {
       provenance: { crops: [null, { fromWidth: 800, fromHeight: 600, rect: { x: 1, y: 2, width: 3, height: 4 } }] },
     });
     if ('error' in mixed) throw new Error(mixed.error);
-    expect(mixed.provenance.crops).toHaveLength(1);
-    expect(mixed.provenance.crops![0]!.fromWidth).toBe(800);
+    expect(mixed.provenance.edits).toHaveLength(1);
+    expect(mixed.provenance.edits![0]!.fromWidth).toBe(800);
+
+    // The same for v2.7's edits: junk is dropped, a good edit of each kind kept.
+    const edits = deserializeProject({
+      ...base,
+      provenance: { edits: [null, { kind: 'warp' }, { kind: 'rotate', fromWidth: 5, fromHeight: 5 }, { kind: 'flip-h', fromWidth: 5, fromHeight: 4 }, { kind: 'rotate', deg: 3, fromWidth: 5, fromHeight: 4 }] },
+    });
+    if ('error' in edits) throw new Error(edits.error);
+    expect(edits.provenance.edits?.map((e) => e.kind)).toEqual(['flip-h', 'rotate']);
   });
 });
 

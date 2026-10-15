@@ -149,6 +149,7 @@ import {
   clampCropRect,
   rotateImageByAngle,
   straightenAngleFromPoints,
+  type ImageEdit,
   type ImageEditOp,
   type ImageEditResult,
   type CropRect,
@@ -163,7 +164,6 @@ import {
   deserializeProject,
   serializeMultiFigureProject,
   type Provenance,
-  type ProvenanceCrop,
   type SerializedMeasurement,
   type DeserializedFigure,
 } from '../../engine/projectFile.js';
@@ -1703,6 +1703,12 @@ export function Workspace() {
     provenanceRef.current = next;
     setProvenance(next);
   }, []);
+  /** v2.7 V19: append one image edit to the record, in the order made. Called
+   * BEFORE the edit's applyPixelTransform, whose undoable snapshot must carry it
+   * (so Undo takes the entry away with the edit, and Redo restores it). */
+  const recordEdit = useCallback((edit: ImageEdit) => {
+    applyProvenance({ ...provenanceRef.current, edits: [...(provenanceRef.current.edits ?? []), edit] });
+  }, [applyProvenance]);
 
   // PDF state (checkpoint 96): non-null only while a live PDF is open and one of
   // its rendered pages is the current image. The parsed document lives in a ref
@@ -2049,9 +2055,10 @@ export function Workspace() {
       if (!img) return;
       setCropMode(false); // a rotate/flip cancels any in-progress crop
       setCropRect(null);
+      recordEdit({ kind: op, fromWidth: img.width, fromHeight: img.height });
       applyPixelTransform(applyImageEditOp(op, img.data, img.width, img.height), op === 'rotate-cw' || op === 'rotate-ccw');
     },
-    [applyPixelTransform]
+    [applyPixelTransform, recordEdit]
   );
 
   // Crop (checkpoint 63): a canvas drag-rectangle (reported via handleCropRect)
@@ -2117,11 +2124,10 @@ export function Workspace() {
       // snapshot, so the crop entry must already be in provenanceRef for the
       // post-crop snapshot to carry it (and for redo to restore it). Spread the
       // existing provenance so cropping a PDF page keeps its source (checkpoint 97).
-      const entry: ProvenanceCrop = { fromWidth: img.width, fromHeight: img.height, rect: clamped };
-      applyProvenance({ ...provenanceRef.current, crops: [...(provenanceRef.current.crops ?? []), entry] });
+      recordEdit({ kind: 'crop', fromWidth: img.width, fromHeight: img.height, rect: clamped });
       applyPixelTransform(result, true);
     }
-  }, [cropRect, cropIntent, applyPixelTransform, applyProvenance, maskArea]);
+  }, [cropRect, cropIntent, applyPixelTransform, recordEdit, maskArea]);
 
   // Capture figure (checkpoint 102) -- the first step of the calibration
   // pipeline, and the design's keystone. The
@@ -2165,8 +2171,7 @@ export function Workspace() {
       // start of the session (its figureCaptured gate is React state, not in the
       // snapshot), so it resets rather than adding an undoable step -- unlike the
       // Image Edit card's rotate/flip/crop/deskew.
-      const entry: ProvenanceCrop = { fromWidth: img.width, fromHeight: img.height, rect: clamped };
-      applyProvenance({ ...provenanceRef.current, crops: [...(provenanceRef.current.crops ?? []), entry] });
+      recordEdit({ kind: 'crop', fromWidth: img.width, fromHeight: img.height, rect: clamped });
       applyPixelTransform(result, true, false);
     }
     setFigureCaptured(true);
@@ -2176,7 +2181,7 @@ export function Workspace() {
     // Calibrate mirrors how a finished calibration auto-advances to Place Point.
     setMode('calibrate');
     setProjectError(null);
-  }, [applyPixelTransform, applyProvenance]);
+  }, [applyPixelTransform, recordEdit]);
 
   // Deskew (checkpoint 64): the fine-angle slider previews live via previewAngle;
   // Apply bakes an arbitrary-angle rotation (grows the canvas to the rotated
@@ -2217,9 +2222,10 @@ export function Workspace() {
       if (!deg) return; // nothing to bake at 0°
       const img = imageCanvasRef.current?.getImageData();
       if (!img) return;
+      recordEdit({ kind: 'rotate', deg, fromWidth: img.width, fromHeight: img.height });
       applyPixelTransform(rotateImageByAngle(img.data, img.width, img.height, deg), true);
     },
-    [applyPixelTransform]
+    [applyPixelTransform, recordEdit]
   );
 
   // "Auto-straighten" (XY): the two X-axis calibration handles (X1, X2) are meant
@@ -3865,13 +3871,14 @@ export function Workspace() {
   // it AFTER (both synchronous).
   const loadPdfPageAsImage = useCallback(
     async (doc: LoadedDocument, page: number, name?: string) => {
-      const png = await doc.renderPage(page);
+      const { src: png, pageTransform } = await doc.renderPage(page);
       imageCanvasRef.current?.loadImageFromSrc(png, name);
       resetForNewImage(); // clears provenance/pdfState; we re-set both below
       applyPdfState({ name, pageCount: doc.pageCount, page });
       // Record where this figure came from: the PDF + its page (checkpoint 97).
       // The rendered page's image name would otherwise lose the page number.
-      applyProvenance({ source: name != null ? { name, page } : { page } });
+      // v2.7 V19: and the matrix pdf.js drew it with, so the drawing can be placed.
+      applyProvenance({ source: { ...(name != null ? { name } : {}), page, ...(pageTransform ? { pageTransform } : {}) } });
       setProjectError(null);
     },
     [resetForNewImage, applyPdfState, applyProvenance]
@@ -11449,10 +11456,10 @@ export function Workspace() {
               : s?.page != null
               ? `p.${s.page}`
               : '';
-            const nCrops = provenance.crops?.length ?? 0;
+            const crops = (provenance.edits ?? []).filter((e) => e.kind === 'crop');
             const cropLabel =
-              nCrops > 0
-                ? `cropped from ${provenance.crops![0]!.fromWidth}×${provenance.crops![0]!.fromHeight}${nCrops > 1 ? ` (${nCrops} crops)` : ''}`
+              crops.length > 0
+                ? `cropped from ${crops[0]!.fromWidth}×${crops[0]!.fromHeight}${crops.length > 1 ? ` (${crops.length} crops)` : ''}`
                 : '';
             const text = [sourceLabel, cropLabel].filter(Boolean).join(' · ');
             return text ? (

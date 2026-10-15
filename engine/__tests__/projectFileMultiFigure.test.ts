@@ -257,7 +257,7 @@ describe('telling a multi-figure project from a single one', () => {
 });
 
 describe('the provenance crop validator', () => {
-  const good: ProvenanceCrop = { fromWidth: 100, fromHeight: 80, rect: { x: 1, y: 2, width: 30, height: 40 } };
+  const good: ProvenanceCrop = { kind: 'crop', fromWidth: 100, fromHeight: 80, rect: { x: 1, y: 2, width: 30, height: 40 } };
 
   /**
    * The validator runs on the READ path (`readProvenance`), which is the door
@@ -268,9 +268,9 @@ describe('the provenance crop validator', () => {
     const session = calibratedSession();
     const written = serializeProject(session, PNG);
     if ('error' in written) throw new Error(written.error);
-    const back = deserializeProject({ ...written, provenance: { crops: [crop] } });
+    const back = deserializeProject({ ...written, provenance: { edits: [crop] } });
     if ('error' in back) throw new Error(back.error);
-    return Array.isArray(back.provenance.crops) && back.provenance.crops.length === 1;
+    return Array.isArray(back.provenance.edits) && back.provenance.edits.length === 1;
   }
 
   it('keeps a well-formed crop', () => {

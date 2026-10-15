@@ -177,7 +177,7 @@ describe('deserializeProjectZip', () => {
     session.runCalibration();
     session.addDataPoint(250, 175);
     const file = serializeProject(session, PNG_DATA_URL, 'figure3.png', undefined, {
-      crops: [{ fromWidth: 1200, fromHeight: 800, rect: { x: 100, y: 50, width: 400, height: 300 } }],
+      edits: [{ kind: 'crop', fromWidth: 1200, fromHeight: 800, rect: { x: 100, y: 50, width: 400, height: 300 } }],
     });
     if ('error' in file) throw new Error(file.error);
 
@@ -185,9 +185,7 @@ describe('deserializeProjectZip', () => {
     if ('error' in zip) throw new Error(zip.error);
     const result = deserializeProjectZip(zip);
     if ('error' in result) throw new Error(result.error);
-    expect(result.provenance.crops).toHaveLength(1);
-    expect(result.provenance.crops![0]!.fromWidth).toBe(1200);
-    expect(result.provenance.crops![0]!.rect).toEqual({ x: 100, y: 50, width: 400, height: 300 });
+    expect(result.provenance.edits).toEqual([{ kind: 'crop', fromWidth: 1200, fromHeight: 800, rect: { x: 100, y: 50, width: 400, height: 300 } }]);
   });
 
   it('bundles and restores a source document (checkpoint 104)', () => {

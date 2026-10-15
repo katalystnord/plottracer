@@ -25,22 +25,23 @@ function px(d: Uint8ClampedArray, w: number, x: number, y: number): [number, num
 }
 
 describe('applyImageEditOp', () => {
-  it('rotate-cw swaps dimensions and maps (x,y) -> (h-1-y, x)', () => {
+  it('rotate-cw swaps dimensions and carries a pixel centre (x,y) to (h-y, x)', () => {
     const w = 3;
     const h = 2;
     const r = applyImageEditOp('rotate-cw', makeImg(w, h), w, h);
     expect([r.width, r.height]).toEqual([2, 3]);
-    // Old pixel (2,0) carries [R=2,G=0]; it lands at (h-1-0, 2) = (1, 2).
-    expect(r.mapPoint(2, 0)).toEqual({ x: 1, y: 2 });
+    // Old pixel (2,0) carries [R=2,G=0]; it lands at pixel (1, 2), so its centre
+    // (2.5, 0.5) maps to that pixel's centre (1.5, 2.5) - points are continuous.
+    expect(r.mapPoint(2.5, 0.5)).toEqual({ x: 1.5, y: 2.5 });
     expect(px(r.data, r.width, 1, 2)).toEqual([2, 0]);
   });
 
-  it('rotate-ccw swaps dimensions and maps (x,y) -> (y, w-1-x)', () => {
+  it('rotate-ccw swaps dimensions and carries a pixel centre (x,y) to (y, w-x)', () => {
     const w = 3;
     const h = 2;
     const r = applyImageEditOp('rotate-ccw', makeImg(w, h), w, h);
     expect([r.width, r.height]).toEqual([2, 3]);
-    expect(r.mapPoint(2, 1)).toEqual({ x: 1, y: 0 });
+    expect(r.mapPoint(2.5, 1.5)).toEqual({ x: 1.5, y: 0.5 });
     expect(px(r.data, r.width, 1, 0)).toEqual([2, 1]);
   });
 
@@ -49,7 +50,7 @@ describe('applyImageEditOp', () => {
     const h = 2;
     const r = applyImageEditOp('flip-h', makeImg(w, h), w, h);
     expect([r.width, r.height]).toEqual([3, 2]);
-    expect(r.mapPoint(0, 1)).toEqual({ x: 2, y: 1 });
+    expect(r.mapPoint(0.5, 1.5)).toEqual({ x: 2.5, y: 1.5 });
     expect(px(r.data, 3, 2, 1)).toEqual([0, 1]); // old (0,1) now at (2,1)
   });
 
@@ -58,7 +59,7 @@ describe('applyImageEditOp', () => {
     const h = 3;
     const r = applyImageEditOp('flip-v', makeImg(w, h), w, h);
     expect([r.width, r.height]).toEqual([2, 3]);
-    expect(r.mapPoint(1, 0)).toEqual({ x: 1, y: 2 });
+    expect(r.mapPoint(1.5, 0.5)).toEqual({ x: 1.5, y: 2.5 });
     expect(px(r.data, 2, 1, 2)).toEqual([1, 0]);
   });
 
