@@ -2825,6 +2825,56 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(pdfPath);
   });
 
+  it('V1-V4a: the calibration card says whether the captured figure is drawn, a picture, or partly each', async () => {
+    const fixture = (n: string) => path.join(__dirname, '../../engine/__tests__/fixtures/vector', n + '.pdf');
+    const openAndCapture = async (file: string) => {
+      await resetWorkspace('xy');
+      await stubOpenProjectDialog(file);
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+      // Before capture the card is the capture step: it says nothing about the figure yet.
+      expect(await page.getByTestId('figure-kind').count()).toBe(0);
+      await page.getByTestId('capture-figure').click();
+      await page.waitForTimeout(100);
+    };
+    const kindText = async () => {
+      await page.getByTestId('figure-kind').waitFor({ timeout: 5000 });
+      return textOf('figure-kind');
+    };
+
+    await openAndCapture(fixture('drawn'));
+    expect(await kindText()).toBe('Drawn as vectors in the PDF.');
+
+    await openAndCapture(fixture('picture'));
+    expect(await kindText()).toBe('A picture inside the PDF: read from its pixels, as any image.');
+
+    await openAndCapture(fixture('partly-inset'));
+    expect(await kindText()).toMatch(/^Partly a picture: a picture covers about \d0% of the figure; the rest is drawn\.$/);
+
+    // V4: a PNG says nothing.
+    await stubOpenProjectDialog(SAMPLE_IMAGE);
+    await resetWorkspace('xy');
+    expect(await page.getByTestId('figure-kind').count()).toBe(0);
+
+    // V4a: saved and reopened, the line is still there (the PDF is kept in the project).
+    await openAndCapture(fixture('drawn'));
+    await calibrateXYStandard();
+    // The card folds once calibrated; its fold arrow unfolds it again.
+    if ((await page.getByTestId('figure-kind').count()) === 0) await page.getByTestId('calib-fold').click();
+    expect(await kindText()).toBe('Drawn as vectors in the PDF.');
+    const savePath = tempFilePath('zip');
+    await stubSaveDialog(savePath);
+    await page.getByTestId('save-project').click();
+    await page.waitForTimeout(300);
+    await resetWorkspace('xy');
+    await stubOpenProjectDialog(savePath);
+    await page.getByTestId('open-project').click();
+    await page.waitForTimeout(400);
+    if ((await page.getByTestId('figure-kind').count()) === 0) await page.getByTestId('calib-fold').click();
+    expect(await kindText()).toBe('Drawn as vectors in the PDF.');
+    fs.unlinkSync(savePath);
+  });
+
   it('bundles the source PDF into the saved project, and restores it (checkpoint 104)', async () => {
     await resetWorkspace('xy'); // establishes wiring
     const pdfPath = tempFilePath('pdf');

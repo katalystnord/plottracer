@@ -174,6 +174,8 @@ import {
 // LoadedDocument is the shared shape for PDF and TIFF alike (ui/src/pagedDocument.ts).
 import type { LoadedDocument } from './pagedDocument.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
+import { figureKind, figureKindLine, type PageDrawing } from '../../engine/pdfDrawing.js';
+import { pageToImage } from '../../engine/drawingPlacement.js';
 import {
   serializeProjectZip,
   deserializeProjectZip,
@@ -1736,6 +1738,35 @@ export function Workspace() {
     sourcePdfRef.current = src;
     setSourcePdfBundled(src !== null);
   }, []);
+  // v2.7 V1-V4: what the captured figure is - drawn, a picture, or partly each -
+  // measured on the PDF's own drawing (engine/pdfDrawing.ts) and said on the
+  // calibration card. Re-measured whenever the record changes (an edit, a new
+  // page, a reopened project); the page's drawing is read once per PDF page.
+  const [figureKindText, setFigureKindText] = useState<string | null>(null);
+  const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; pageArea: number }> } | null>(null);
+  useEffect(() => {
+    const src = sourcePdfRef.current;
+    const page = provenance.source?.page;
+    if (!figureCaptured || !src || page == null || !provenance.source?.pageTransform || pagedDocumentFormat(src.bytes) !== 'pdf') {
+      setFigureKindText(null);
+      return;
+    }
+    let live = true;
+    if (!pageDrawingRef.current || pageDrawingRef.current.bytes !== src.bytes || pageDrawingRef.current.page !== page) {
+      pageDrawingRef.current = { bytes: src.bytes, page, read: import('./pdfRender.js').then((m) => m.readPdfPageDrawing(src.bytes, page)) };
+    }
+    const prov = provenance;
+    pageDrawingRef.current.read.then(({ drawing, pageArea }) => {
+      const img = imageCanvasRef.current?.getImageData();
+      if (!live || !img) return;
+      setFigureKindText(figureKindLine(figureKind(drawing, (q) => pageToImage(prov, q), img.width, img.height, pageArea)));
+    }).catch(() => {
+      if (live) setFigureKindText(null);
+    });
+    return () => {
+      live = false;
+    };
+  }, [figureCaptured, provenance, sourcePdfBundled]);
   const applyPdfState = useCallback((next: { name?: string; pageCount: number; page: number } | null) => {
     pdfStateRef.current = next;
     setPdfState(next);
@@ -9066,6 +9097,11 @@ export function Workspace() {
               reads as one row per axis (X1 X2 / Y1 Y2). Values are entered right
               here in the card, not the right panel -- the active point (after
               its pixel is clicked) shows an inline input. */}
+          {figureCaptured && calibExpanded && figureKindText && (
+            <span data-testid="figure-kind" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+              {figureKindText}
+            </span>
+          )}
           {figureCaptured && calibExpanded && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>
               {steps.map((step, i) => {
