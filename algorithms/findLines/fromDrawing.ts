@@ -260,6 +260,27 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
     const [short, long] = A.length <= B.length ? [A, B] : [B, A];
     if (lies(short, long) >= 0.8) places.push({ kind: 'overlap', at: short[short.length >> 1]!, lines: [i, j] });
   }
+  // V14: a line with markers of its colour on it, fewer than its corners -
+  // a smoothed curve through its data points, or a marker every few points.
+  // Which are the data the drawing cannot say, so the place says so and names
+  // the reader that takes the markers (V15); the line stays as read.
+  const markers = markersFromDrawing(d, colour, box, masks);
+  // each marker belongs to the ONE line it sits closest to (where two lines
+  // cross, the other line's marker is near this one too)
+  const owner = markers.map((m) => {
+    let best = -1, bd = k;
+    lines.forEach((L, i) => {
+      const dd = nearestOn(m, L.points);
+      if (dd <= bd) { bd = dd; best = i; }
+    });
+    return best;
+  });
+  lines.forEach((L, i) => {
+    const on = markers.filter((_, j) => owner[j] === i);
+    if (on.length >= 2 && on.length < L.points.length) {
+      places.push({ kind: 'markers', at: on[0]!, lines: [i], counts: { corners: L.points.length, markers: on.length } });
+    }
+  });
   widths.sort((a, b) => a - b);
   return { lines, labelInk: [], unresolved: [], places, lineWidth: widths.length ? widths[widths.length >> 1]! : 1 };
 }

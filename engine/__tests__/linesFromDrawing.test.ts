@@ -26,7 +26,7 @@ interface Case {
   truth: Pt[][];
 }
 const cases: Record<string, Case> = {};
-const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled', 'markers-scatter'];
+const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled', 'markers-scatter', 'lines-smoothed'];
 
 beforeAll(async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -213,6 +213,27 @@ describe('V12: Find lines on a drawn figure reads the drawing', () => {
         expect(Math.min(...truth.map((T) => distTo(p as Pt, T)))).toBeLessThan(0.5);
       }
     }
+  });
+});
+
+describe('V14: a line with markers on it is listed, and left as read', () => {
+  it('a smoothed line through 6 markers: one line, and a place saying 101 corners and 6 markers', () => {
+    const res = read('lines-smoothed');
+    expect(res.lines).toHaveLength(1);
+    const pl = res.places.filter((p) => p.kind === 'markers');
+    expect(pl).toHaveLength(1);
+    expect(pl[0]!.lines).toEqual([0]);
+    expect(pl[0]!.counts).toEqual({ corners: 101, markers: 6 });
+  });
+
+  it('a line with a marker every few points is listed too: the markers may be the data', () => {
+    const pl = read('lines-markers').places.filter((p) => p.kind === 'markers');
+    expect(pl).toHaveLength(2);
+    for (const p of pl) expect(p.counts!.markers).toBe(10);
+  });
+
+  it('a line with no markers on it gets no such place', () => {
+    expect(read('lines-cross').places.filter((p) => p.kind === 'markers')).toHaveLength(0);
   });
 });
 

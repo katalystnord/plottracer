@@ -128,6 +128,18 @@ ax.set_xlim(0, 10); ax.set_ylim(0, 10)
 leg = ax.legend(loc='upper right')
 save(fig, ax, 'markers-scatter', [pa, pb, pc], legend=leg)
 
+# V14: a smoothed line through 6 data points, drawn as ~100 corners, with
+# a marker at each data point in the same colour (as LibreOffice draws a
+# smoothed chart series)
+from scipy.interpolate import CubicSpline
+fig, ax = plt.subplots(figsize=(4, 3))
+dx = np.array([0.5, 2.0, 3.5, 5.5, 7.5, 9.5]); dyv = np.array([2.0, 6.5, 4.0, 8.0, 3.5, 7.0])
+xs = np.linspace(dx[0], dx[-1], 101)
+ax.plot(xs, CubicSpline(dx, dyv)(xs), color=INK)
+ax.plot(dx, dyv, linestyle='none', marker='o', color=INK)
+ax.set_xlim(0, 10); ax.set_ylim(0, 10)
+save(fig, ax, 'lines-smoothed', [np.c_[xs, CubicSpline(dx, dyv)(xs)], np.c_[dx, dyv]])
+
 # V12a: a picture inside the PDF (nothing drawn to read)
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 fig, ax = plt.subplots(figsize=(4, 3))

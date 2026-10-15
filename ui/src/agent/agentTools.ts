@@ -20,7 +20,7 @@ export const SEEING_TOOLS: readonly AgentTool[] = [
   {
     name: 'get_state',
     description:
-      'Where the work in PlotTracer stands: the open figure, its graph type, whether the user has calibrated it (and if not, which calibration step is on screen), the prompt shown to the user, every series with its id, name, colour, point count and level, and the places to check. Call this first, and again whenever a tool tells you the figure has changed.',
+      'Where the work in PlotTracer stands: the open figure (and, for a PDF figure, whether it is drawn or a picture, which decides whether Find lines reads its drawing), its graph type, whether the user has calibrated it (and if not, which calibration step is on screen), the prompt shown to the user, every series with its id, name, colour, point count and level, and the places to check. Call this first, and again whenever a tool tells you the figure has changed.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -80,6 +80,9 @@ export interface AgentStateInput {
   /** The tools the user has on screen, read off the left rail in its order,
    * so an agent can point the user to one (role-play 2026-10-12). */
   screenTools?: readonly { name: string; greyed: string | null; choices?: readonly string[] }[];
+  /** v2.7 V21: the calibration card's line on what the figure is (drawn, a
+   * picture, partly each), in its own words; absent for a plain picture. */
+  figureKind?: string | null;
 }
 
 export interface AgentCalibPoint {
@@ -123,6 +126,7 @@ export function describeState(st: AgentStateInput): string {
   const lines: string[] = [];
   const page = st.figure.page ? `, page ${st.figure.page.page} of ${st.figure.page.count}` : '';
   lines.push(`Figure: ${st.figure.fileName ?? 'unnamed'}${page}, ${st.figure.width} × ${st.figure.height} pixels.`);
+  if (st.figureKind) lines.push(`The calibration card says: "${st.figureKind}"`);
   lines.push(`Graph type: ${st.graphType}.`);
   const placed = st.calibration ?? [];
   if (st.calibrated) {

@@ -10,7 +10,7 @@ import { SidebarSection, SidebarHeading } from '../layout.js';
  */
 export interface LinePlace {
   id: number;
-  kind: 'bridge' | 'split' | 'end' | 'unresolved' | 'overlap' | 'label';
+  kind: 'bridge' | 'split' | 'end' | 'unresolved' | 'overlap' | 'markers' | 'label';
   /** Image pixels. */
   at: [number, number];
   text: string;

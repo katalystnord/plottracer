@@ -30,6 +30,12 @@ describe('what the agent sees (M4, M5)', () => {
     expect(describeState({ ...base, figure: { fileName: 'paper.pdf', width: 800, height: 600, page: { page: 2, count: 3 } } })).toContain('Figure: paper.pdf, page 2 of 3, 800 × 600 pixels.');
   });
 
+  it('V21: says what the figure is in the calibration card\'s own words, and nothing for a plain picture', () => {
+    const kind = 'Drawn as vectors in the PDF: Find lines reads its lines from the drawing.';
+    expect(describeState({ ...base, figureKind: kind })).toContain(`The calibration card says: "${kind}"`);
+    expect(describeState(base)).not.toContain('The calibration card says');
+  });
+
   it('M5: get_state gives the prompt on screen, in the same words', () => {
     expect(describeState(base)).toContain('"Pick a line on the canvas, or press Find lines."');
   });

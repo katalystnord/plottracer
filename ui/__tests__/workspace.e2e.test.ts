@@ -12077,6 +12077,19 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('find-lines-summary')).not.toMatch(/drawing/);
   }, 180000);
 
+  it('V14: a drawn line with markers on it is listed under Places to check, naming the reader that takes the markers', async () => {
+    await openDrawnFigure('lines-smoothed');
+    const L = vTruth('lines-smoothed').lines[0]!.points;
+    const p = vImg(L[25]!); // between two markers, on the line
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(p[0], p[1]);
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: 1 line found.*1 place to check/);
+    expect(await textOf('places-to-check')).toMatch(/Series 1 has 101 corners and 6 markers on it: the markers may be the data\. To take them as their own series, use By colour ▸ Scattered points on their colour\./);
+    // the reader it names is right there in the card
+    expect(await page.getByTestId('auto-extract-colour').count()).toBe(1);
+  }, 120000);
+
   it('V15: By colour, Scattered points, on a drawn figure places one point per marker, read from the drawing', async () => {
     await openDrawnFigure('markers-scatter');
     const red = vTruth('markers-scatter').lines[0]!.points;
@@ -12851,6 +12864,71 @@ describe('Workspace: Settings (v2.7)', () => {
     await expect(rpc(url, token, { jsonrpc: '2.0', id: 9, method: 'initialize', params: {} })).rejects.toThrow();
     await page.getByTestId('agent-strip').waitFor({ state: 'detached', timeout: 5000 });
   }, 90000);
+
+  it('V21: an agent hears what the figure is, in the card\'s words, and its find_lines reads the drawing as the user\'s does', async () => {
+    const VF = path.join(REPO_ROOT, 'engine', '__tests__', 'fixtures', 'vector');
+    const vt = JSON.parse(fs.readFileSync(path.join(VF, 'lines-cross.truth.json'), 'utf8')) as { box: number[]; lines: { points: [number, number][] }[] };
+    const img = (p: readonly number[]) => [p[0]! * 6, (216 - p[1]!) * 6] as const; // the app renders this page at 6x
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'plottracer-agent-vector-'));
+    fs.copyFileSync(path.join(VF, 'lines-cross.pdf'), path.join(folder, 'lines-cross.pdf'));
+    const imageToLocal = async (x: number, y: number) => {
+      const m = /scale: ([\d.]+), offset: \(([-\d.]+), ([-\d.]+)\)/.exec((await textOf('view-state')) ?? '')!;
+      return { lx: Number(m[2]) + x * Number(m[1]), ly: Number(m[3]) + y * Number(m[1]) };
+    };
+    const clickImagePixel = async (x: number, y: number) => {
+      const { lx, ly } = await imageToLocal(x, y);
+      await clickAt(lx, ly);
+    };
+    await resetWorkspace('xy');
+    await openSettings();
+    await page.getByTestId('setting-agentsEnabled').check();
+    await page.getByTestId('setting-agents-address').waitFor({ state: 'visible', timeout: 10000 });
+    const url = (await textOf('setting-agents-address')).trim();
+    const token = /Bearer ([0-9a-f]+)/.exec(await textOf('setting-agents-config'))![1]!;
+    try {
+      await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, folder);
+      await page.getByTestId('setting-agentFolder-choose').click();
+      await expect.poll(() => textOf('setting-agentFolder')).toBe(folder);
+    } finally {
+      await app.evaluate(({ dialog }, p) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] }); }, SAMPLE_IMAGE);
+    }
+    await closeSettings();
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    const init = await rpc(url, token, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e-agent', version: '1' } } });
+    const session = init.headers.get('mcp-session-id')!;
+    let id = 10;
+    const call = async (name: string, args: unknown = {}) => {
+      const j = await (await rpc(url, token, { jsonrpc: '2.0', id: id++, method: 'tools/call', params: { name, arguments: args } }, session)).json();
+      const r = j.result as { isError?: boolean; content: { type: string; text?: string }[] };
+      return { isError: !!r.isError, text: r.content.filter((c) => c.type === 'text').map((c) => c.text).join('\n') };
+    };
+    expect((await call('open_figure', { path: 'lines-cross.pdf' })).isError).toBe(false);
+    await waitForImageFitted();
+    // the person captures and calibrates where the prompts say (gate 4)
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const [bx0, by0, bx1, by1] = vt.box as [number, number, number, number];
+    const o = img([bx0, by0]), xr = img([bx1, by0]), yt = img([bx0, by1]);
+    await clickImagePixel(o[0], o[1]);
+    await confirmValue('0');
+    await clickImagePixel(xr[0], xr[1]);
+    await confirmValue('10');
+    await confirmValue('0');
+    await clickImagePixel(yt[0], yt[1]);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    // V21: get_state carries the card's own line
+    await expect.poll(async () => (await call('get_state')).text, { timeout: 10000 }).toContain('The calibration card says: "Drawn as vectors in the PDF: Find lines reads its lines from the drawing."');
+    // and the agent's find_lines reads the drawing, exactly as the person's would
+    const found = await call('find_lines', { colour: '#000000' });
+    expect(found.isError).toBe(false);
+    expect(found.text).toMatch(/The Find lines card says: "Read from the figure’s drawing: 3 lines found, 0 gaps bridged/);
+    await openSettings();
+    await page.getByTestId('setting-agentsEnabled').uncheck();
+    await closeSettings();
+  }, 120000);
 
   it('M6-M11 an agent opens a figure from the chosen folder, waits while the person calibrates, then places, finds, corrects, undoes and exports - each step on screen and one Undo entry', async () => {
     const FIG = 'xy-multiseries-modulus';

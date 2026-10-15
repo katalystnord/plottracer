@@ -1743,7 +1743,13 @@ export function Workspace() {
   // measured on the PDF's own drawing (engine/pdfDrawing.ts) and said on the
   // calibration card. Re-measured whenever the record changes (an edit, a new
   // page, a reopened project); the page's drawing is read once per PDF page.
-  const [figureKindText, setFigureKindText] = useState<string | null>(null);
+  const [figureKindText, setFigureKindTextState] = useState<string | null>(null);
+  // mirrored in a ref for the agent's get_state, which reads without re-rendering
+  const figureKindTextRef = useRef<string | null>(null);
+  const setFigureKindText = useCallback((t: string | null) => {
+    figureKindTextRef.current = t;
+    setFigureKindTextState(t);
+  }, []);
   const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; pageArea: number }> } | null>(null);
   /** The kind as last measured, for Find lines to choose its source by (V12). */
   const figureKindRef = useRef<FigureKind | null>(null);
@@ -1778,7 +1784,7 @@ export function Workspace() {
     return () => {
       live = false;
     };
-  }, [figureCaptured, provenance, sourcePdfBundled]);
+  }, [figureCaptured, provenance, sourcePdfBundled, setFigureKindText]);
   const applyPdfState = useCallback((next: { name?: string; pageCount: number; page: number } | null) => {
     pdfStateRef.current = next;
     setPdfState(next);
@@ -6798,7 +6804,12 @@ export function Workspace() {
     // ⚑ Said with the lines' names as they are when shown (placesShown), and
     // naming the control that does it: "Join" alone did not say what or where
     // (role-play 2026-10-12: "get two lines to merge, whatever that meant").
-    const sayFor = (kind: (typeof res.places)[number]['kind']): ((names: string) => string) => {
+    const sayFor = (pl: (typeof res.places)[number]): ((names: string) => string) => {
+      const kind = pl.kind;
+      if (kind === 'markers' && pl.counts) {
+        const { corners, markers } = pl.counts;
+        return (names) => `${names || 'This line'} has ${corners} corners and ${markers} markers on it: the markers may be the data. To take them as their own series, use By colour ▸ Scattered points on their colour.`;
+      }
       if (kind === 'bridge') return (names) => `Lines meet here and were joined across it${names ? ` (${names})` : ''} - check each carries on the right way.`;
       if (kind === 'split') return (names) => `Unsure how the lines carry on here, so the pieces were left apart${names ? ` (${names})` : ''} - if they are one line, pick one in the series list and choose the other in Join with.`;
       if (kind === 'overlap') return (names) => `These lines lie on top of each other${names ? ` (${names})` : ''}: the figure draws both. If they are one series, pick the one to drop in the series list and press Delete.`;
@@ -6808,7 +6819,7 @@ export function Workspace() {
     const namesNow = (ids: readonly number[]): string => ids.flatMap((id) => session.seriesNamesForLine(id)).join(', ');
     for (const pl of res.places) {
       const lineIds = pl.lines.flatMap(idOf);
-      const say = sayFor(pl.kind);
+      const say = sayFor(pl);
       places.push({ id: places.length, kind: pl.kind, at: pl.at, lineIds, say, text: say(namesNow(lineIds)) });
     }
     let read = 0, notRead = 0;
@@ -8538,6 +8549,7 @@ export function Workspace() {
       calibrated: sessionRef.current.getAxes() !== null,
       // ⚑ Read off the rail as drawn, so the agent is told what the user sees,
       // greyed tools with the reason the screen gives.
+      figureKind: figureKindTextRef.current,
       screenTools: [...(railColRef.current?.querySelectorAll<HTMLButtonElement>('button[data-testid^="mode-"]') ?? [])].map((b) => {
         const cfgNow = sessionRef.current.getConfig();
         const choices = b.dataset['testid'] === 'mode-auto-extract'
