@@ -6778,6 +6778,7 @@ export function Workspace() {
     const sayFor = (kind: (typeof res.places)[number]['kind']): ((names: string) => string) => {
       if (kind === 'bridge') return (names) => `Lines meet here and were joined across it${names ? ` (${names})` : ''} - check each carries on the right way.`;
       if (kind === 'split') return (names) => `Unsure how the lines carry on here, so the pieces were left apart${names ? ` (${names})` : ''} - if they are one line, pick one in the series list and choose the other in Join with.`;
+      if (kind === 'overlap') return (names) => `These lines lie on top of each other${names ? ` (${names})` : ''}: the figure draws both. If they are one series, pick the one to drop in the series list and press Delete.`;
       if (kind === 'end') return (names) => `${names || 'A line'} stops here, inside the plot - if it carries on, pick it in the series list and choose the next piece in Join with.`;
       return () => 'Lines run together closer than the pixels can separate - this stretch is not recorded as a line.';
     };

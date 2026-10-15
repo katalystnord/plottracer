@@ -23,7 +23,7 @@
  *     stays a gap. Pieces of different styles are never joined (V25).
  */
 import type { Box, RGB } from './ink.js';
-import type { FindLinesResult, FoundLine, PointRole } from './lines.js';
+import type { FindLinesResult, FoundLine, Place, PointRole } from './lines.js';
 import type { Pt } from './geom.js';
 
 /** One painted path of the drawing, already placed in the picture's pixels. */
@@ -70,8 +70,21 @@ const RULE = {
   slack: 3 * PT,
   /** Ends closer than this simply meet. */
   meet: 2 * PT,
+  /** Lines closer than this along most of their length lie on top of each other. */
+  overlap: 1.5,
 };
 
+/** Distance from p to the polyline L. */
+function nearestOn(p: Pt, L: readonly Pt[]): number {
+  let best = Infinity;
+  for (let i = 1; i < L.length; i++) {
+    const a = L[i - 1]!, b = L[i]!;
+    const vx = b[0] - a[0], vy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / (vx * vx + vy * vy || 1)));
+    best = Math.min(best, Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vy));
+  }
+  return best;
+}
 const isClosed = (p: readonly Pt[]) => p.length > 2 && Math.hypot(p[0]![0] - p[p.length - 1]![0], p[0]![1] - p[p.length - 1]![1]) < 1e-6;
 const near = (a: RGB, b: RGB) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 40;
 const inBox = (p: Pt, b: Box) => p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1;
@@ -236,6 +249,17 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
     const f = p.points[0]!, l = p.points[p.points.length - 1]!;
     return { points: p.points, roles: p.roles, closed: p.points.length > 2 && Math.hypot(f[0] - l[0], f[1] - l[1]) < 0.5 * PT * k, gaps: p.gaps };
   });
+  // V28: two drawn lines lying on top of each other (a series drawn twice, a
+  // dotted path under a solid one) both come back, as drawn, and the place
+  // says so - the drawing cannot say which one the figure means.
+  const places: Place[] = [];
+  const within = RULE.overlap * k;
+  const lies = (a: readonly Pt[], b: readonly Pt[]) => a.filter((p) => nearestOn(p, b) <= within).length / a.length;
+  for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+    const A = lines[i]!.points, B = lines[j]!.points;
+    const [short, long] = A.length <= B.length ? [A, B] : [B, A];
+    if (lies(short, long) >= 0.8) places.push({ kind: 'overlap', at: short[short.length >> 1]!, lines: [i, j] });
+  }
   widths.sort((a, b) => a - b);
-  return { lines, labelInk: [], unresolved: [], places: [], lineWidth: widths.length ? widths[widths.length >> 1]! : 1 };
+  return { lines, labelInk: [], unresolved: [], places, lineWidth: widths.length ? widths[widths.length >> 1]! : 1 };
 }

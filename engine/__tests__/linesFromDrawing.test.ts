@@ -26,7 +26,7 @@ interface Case {
   truth: Pt[][];
 }
 const cases: Record<string, Case> = {};
-const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend'];
+const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled'];
 
 beforeAll(async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -186,6 +186,24 @@ describe('V12: Find lines on a drawn figure reads the drawing', () => {
     expect(masked.lines).toHaveLength(2);
     const unmasked = read('lines-legend');
     expect(unmasked.lines).toHaveLength(4);
+  });
+
+  it('V28: a series drawn twice comes back as drawn, and Places to check says the lines lie on top of each other', () => {
+    const res = read('lines-doubled');
+    // the dotted and the solid path are two drawn lines; the path painted twice exactly is one
+    expect(res.lines).toHaveLength(3);
+    expectWhole('lines-doubled', res);
+    const over = res.places.filter((p) => p.kind === 'overlap');
+    expect(over).toHaveLength(1);
+    const [a, b] = over[0]!.lines;
+    const truth = cases['lines-doubled']!.truth;
+    const which = (i: number) => truth.findIndex((T) => share(T, res.lines[i]!.points) >= 0.9 && share(res.lines[i]!.points, T) >= 0.9);
+    expect([which(a!), which(b!)].sort()).toEqual([0, 1]);
+  });
+
+  it('V28: lines that only cross or touch are not said to lie on top of each other', () => {
+    expect(read('lines-cross').places.filter((p) => p.kind === 'overlap')).toHaveLength(0);
+    expect(read('lines-dashed').places.filter((p) => p.kind === 'overlap')).toHaveLength(0);
   });
 
   it('V29: every point read lies on the drawn ink (within half a pixel of the true line)', () => {

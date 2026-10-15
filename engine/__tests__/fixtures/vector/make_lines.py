@@ -100,6 +100,19 @@ for k, y in enumerate(ys):
 leg = ax.legend(loc='upper left')
 save(fig, ax, 'lines-legend', [np.c_[x, y] for y in ys], legend=leg)
 
+# V28: one series drawn twice, a dotted path and a solid one about a point
+# apart (as arXiv 2610.13680 p43 does), plus a series painted twice exactly
+fig, ax = plt.subplots(figsize=(4, 3))
+y = 0.5 * x + 2
+ax.set_ylim(0, 10)
+dy = 0.6 * 10 / (ax.get_window_extent().height * 72 / fig.dpi)
+ax.plot(x, y, color=INK, linestyle=':')
+ax.plot(x, y + dy, color=INK)
+z = 8 - 0.4 * x
+ax.plot(x, z, color=INK)
+ax.plot(x, z, color=INK)
+save(fig, ax, 'lines-doubled', [np.c_[x, y], np.c_[x, y + dy], np.c_[x, z]])
+
 # V12a: a picture inside the PDF (nothing drawn to read)
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 fig, ax = plt.subplots(figsize=(4, 3))

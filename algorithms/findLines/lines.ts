@@ -53,7 +53,7 @@ export interface Place {
   /** bridge: lines met and were joined; split: pieces left apart where unsure;
    * end: a line stops inside the plot, where it may well carry on; unresolved:
    * merged ink not recorded as a line. */
-  kind: 'bridge' | 'split' | 'end' | 'unresolved';
+  kind: 'bridge' | 'split' | 'end' | 'unresolved' | 'overlap';
   at: Pt;
   /** Indices into `lines` this place touches. */
   lines: number[];

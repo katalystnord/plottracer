@@ -12006,42 +12006,47 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
   }
   const seriesCount = () => page.getByTestId('series-select').locator('option').count();
 
+  // v2.7: the vector fixtures (engine/__tests__/fixtures/vector/make_lines.py).
+  // The app renders their 288 x 216 pt page at 6x (pdfRender: 3000 px target, capped at 6).
+  const VFIX = path.join(__dirname, '..', '..', 'engine', '__tests__', 'fixtures', 'vector');
+  const vTruth = (name: string) => JSON.parse(fs.readFileSync(path.join(VFIX, name + '.truth.json'), 'utf8')) as { box: number[]; lines: { points: [number, number][] }[] };
+  const vImg = (p: readonly number[]) => [p[0]! * 6, (216 - p[1]!) * 6] as const;
+  /** Open a fixture PDF, capture it, calibrate on its plot box's corners as the prompts ask, and open Find lines. */
+  async function openDrawnFigure(name: string, boxFrom = name) {
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(VFIX, name + '.pdf'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-xy').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const [bx0, by0, bx1, by1] = vTruth(boxFrom).box as [number, number, number, number];
+    const o = vImg([bx0, by0]), xr = vImg([bx1, by0]), yt = vImg([bx0, by1]);
+    await clickImagePixel(o[0], o[1]);
+    await confirmValue('0');
+    await clickImagePixel(xr[0], xr[1]);
+    await confirmValue('10');
+    await confirmValue('0');
+    await clickImagePixel(yt[0], yt[1]);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+  }
+
   it('V12, V12a, V13: on a drawn PDF figure Find lines reads the drawing and says so; on a picture it reads pixels', async () => {
-    const FIX = path.join(__dirname, '..', '..', 'engine', '__tests__', 'fixtures', 'vector');
-    const truth = JSON.parse(fs.readFileSync(path.join(FIX, 'lines-cross.truth.json'), 'utf8')) as { box: number[]; lines: { points: [number, number][] }[] };
-    // the app renders a 288 x 216 pt page at 6x (pdfRender: 3000 px target, capped at 6)
-    const img = (p: readonly number[]) => [p[0]! * 6, (216 - p[1]!) * 6] as const;
-    const openAndCalibrate = async (name: string) => {
-      try {
-        await app.evaluate(({ dialog }, f) => {
-          dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-        }, path.join(FIX, name + '.pdf'));
-        await page.getByTestId('open-image-button').click();
-        await waitForImageFitted();
-      } finally {
-        await app.evaluate(({ dialog }, f) => {
-          dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-        }, SAMPLE_IMAGE);
-      }
-      await page.getByTestId('axes-type-trigger').click();
-      await page.getByTestId('axes-option-xy').click();
-      await page.getByTestId('capture-figure').click();
-      await page.waitForTimeout(150);
-      // the walk the prompts ask for, on the plot box's corners
-      const [bx0, by0, bx1, by1] = truth.box as [number, number, number, number];
-      const o = img([bx0, by0]), xr = img([bx1, by0]), yt = img([bx0, by1]);
-      await clickImagePixel(o[0], o[1]);
-      await confirmValue('0');
-      await clickImagePixel(xr[0], xr[1]);
-      await confirmValue('10');
-      await confirmValue('0');
-      await clickImagePixel(yt[0], yt[1]);
-      await confirmValue('10');
-      await page.getByTestId('run-calibration').click();
-      await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
-      await page.getByTestId('mode-auto-extract').click();
-      await page.getByTestId('auto-extract-find').click();
-    };
+    const truth = vTruth('lines-cross');
+    const img = vImg;
+    const openAndCalibrate = (name: string) => openDrawnFigure(name, 'lines-cross');
     const L0 = truth.lines[0]!.points;
     const onLine0 = img(L0[Math.floor(L0.length * 0.3)]!);
 
@@ -12071,6 +12076,17 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 60000 }).not.toBe('');
     expect(await textOf('find-lines-summary')).not.toMatch(/drawing/);
   }, 180000);
+
+  it('V28: a series drawn twice shows under Places to check as lines lying on top of each other', async () => {
+    await openDrawnFigure('lines-doubled');
+    const L = vTruth('lines-doubled').lines[2]!.points;
+    const p = vImg(L[Math.floor(L.length * 0.4)]!);
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(p[0], p[1]);
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: 3 lines found.*1 place to check/);
+    expect(await textOf('places-to-check')).toMatch(/These lines lie on top of each other \(Series \d, Series \d\): the figure draws both/);
+  }, 120000);
 
   it('L3 a coloured contour plot\'s colour key gives each found line its level', async () => {
     const FIG = path.join(__dirname, '..', '..', 'algorithms', '__tests__', 'fixtures', 'findLines', 'contour-coloured-key');
