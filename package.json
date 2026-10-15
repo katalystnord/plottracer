@@ -60,6 +60,7 @@
     "fast-xml-parser": "^5.10.1",
     "fflate": "^0.8.3",
     "konva": "^10.3.0",
+    "onnxruntime-web": "^1.30.0",
     "pdfjs-dist": "^4.10.38",
     "react-konva": "^19.2.5",
     "tesseract.js": "^7.0.0",

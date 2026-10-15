@@ -1,214 +1,106 @@
-// Reading TEXT off a figure, in the main process (v2.4).
+// Reading TEXT off a figure, in the main process (v2.4; PaddleOCR since v2.7).
 //
 // ⚑⚑ THIS FILE IS ONE FUNCTION WIDE ON PURPOSE: bytes in, text and confidence
 // out. Everything about WHICH pixels get read - the box the user drew, the
-// quarter turn the axis is written at - is geometry, and geometry lives in
+// angle the axis is written at - is geometry, and geometry lives in
 // engine/ocrRegion.ts where it can be tested without an OCR engine, an Electron
 // process or a figure. The renderer crops, turns and encodes; this reads.
 //
-// ⚑ WHY THE MAIN PROCESS. The measured spike ran exactly this worker
-// (tesseract.js/src/worker-script/node), so the 12-of-12 that decided the
-// feature is the configuration being shipped rather than a cousin of it. The
-// renderer would have to bundle a wasm core and a web worker through Vite; here
-// `require` finds them as plain files, which is also why `asar: false` in
-// build/electron-builder-ui.yml makes this the cheap option.
+// ⚑⚑ WHY PADDLEOCR (v2.7, docs/v2.7-paddle-ocr.md). Measured on 12,751 tick
+// labels from 887 published charts (CHART-Info 2022 PMC), PP-OCRv6 tiny read
+// 89.6% exactly where the Tesseract it replaces read 79.8%, and it carries the
+// characters a science label needs (å ä ö, Greek, µ, °, superscripts). The models
+// are PP-OCRv6 tiny detection and recognition (Apache-2.0, PaddlePaddle),
+// converted to ONNX by tools/ocr-model/build.sh and run by onnxruntime-web's wasm
+// build (MIT), so one set of files serves every platform. The engine runs in its
+// own thread, `electron-ocr-worker.cjs`, which says why.
 //
-// ⚑⚑ OFFLINE IS A PRODUCT CONSTRAINT, NOT A SETTING. tesseract.js fetches its
-// core and language data from a CDN unless told otherwise, which in a tool whose
-// promise is that a figure never leaves the machine would be a cloud dependency
-// smuggled in by a default. All three paths below are local files. ▶ And that
-// was PROVEN rather than configured: the spike removed `fetch`, `http.request`
-// and `https.request` outright and read 6 of 6 category labels anyway
-// (2026-08-30, in this repo, with the versions installed here).
+// ⚑⚑ OFFLINE IS A PRODUCT CONSTRAINT, NOT A SETTING. The models are read from
+// ui/ocr-model/ and the wasm runtime from its own package directory; nothing is
+// fetched and nothing is written. engine/__tests__/ocrOffline.test.ts proves it
+// with the network removed.
 'use strict'
 
 const path = require('path')
-
-// ⚑ LSTM only - the accurate engine, and what every measurement here was taken
-// with.
-//
-// ⚠️ IT DOES NOT DECIDE WHICH WASM BUILD IS LOADED, and a comment here once said
-// it did. In tesseract.js 7.0.0 `worker-script/index.js` hands
-// `getCore(lstmOnly, ...)` a BOOLEAN while `getCore` branches on
-// `[OEM.DEFAULT, OEM.LSTM_ONLY].includes(oem)`, so that test is always false and
-// the node worker always loads a NON-LSTM core. Which builds the package must
-// therefore carry is worked out in build/electron-builder-ui.yml, where the
-// evidence for it lives.
-const OEM_LSTM_ONLY = 1
+const { Worker } = require('worker_threads')
 
 /**
- * ⚠️⚑⚑ A READER THAT NEVER ANSWERS MUST BECOME A REFUSAL, and without this it
- * could hang for ever.
- *
- * `tesseract.js` reports a worker-level failure by assigning `worker.onerror` -
- * which is the BROWSER Worker API. A node `worker_threads` Worker has no such
- * property, so the assignment does nothing, the error is never delivered, and
- * the promise `createWorker` returned is never settled either way.
- *
- * ▶ MEASURED, not deduced: a packaged build missing one transitive module made
- * its worker die with `Cannot find module 'bmp-js'` - the raw worker emitted
- * `error` and `exit 1`, and `createWorker`'s promise stayed pending for as long
- * as the app was left running. The missing module is fixed in the packaging
- * rules; this exists so that the NEXT cause of a dead worker is a sentence on
- * screen instead of a control that never comes back.
+ * ⚠️⚑⚑ A READER THAT NEVER ANSWERS MUST BECOME A REFUSAL. The Tesseract worker
+ * once hung for ever on a missing module (v2.4); the bound stays because the next
+ * dead engine should be a sentence on screen, not a control that never comes back.
+ * With the engine in a thread, running out of time now really stops the read.
  */
 const READ_TIMEOUT_MS = 30000
 
-let workerPromise = null
+let worker = null
+let nextId = 1
+const pending = new Map()
 
-/**
- * The language data we ship is the COMPACT set (2.95MB), not the package's own
- * default (10.9MB), which is what `@tesseract.js-data/eng`'s index.js points at.
- * Both read English; the compact one is what the size budget was measured with.
- */
-function langPath() {
-  return path.join(path.dirname(require.resolve('@tesseract.js-data/eng/package.json')), '4.0.0_best_int')
+function dropWorker(reason) {
+  const w = worker
+  worker = null
+  for (const [, settle] of pending) settle({ error: reason })
+  pending.clear()
+  if (w) void w.terminate()
 }
 
-function startWorker() {
-  const { createWorker } = require('tesseract.js')
-  return createWorker('eng', OEM_LSTM_ONLY, {
-    workerPath: require.resolve('tesseract.js/src/worker-script/node/index.js'),
-    corePath: path.dirname(require.resolve('tesseract.js-core/package.json')),
-    langPath: langPath(),
-    gzip: true,
-    // ⚠️⚑⚑ NO DISK CACHE, AND THIS IS NOT A TUNING CHOICE. tesseract.js
-    // decompresses the language data and writes it to
-    // `${cachePath || '.'}/eng.traineddata` - the CURRENT WORKING DIRECTORY -
-    // unless told otherwise. A 5MB file appeared in the repo root the first time
-    // the tests ran, which is the harmless version; in the packaged app the
-    // working directory is the INSTALL directory, which on a `.deb` install is
-    // root-owned and read-only, and on Windows sits under Program Files. So the
-    // default quietly turns "read a label" into a write to a place the app has
-    // no business writing to, and may not be able to.
-    // ▶ `'none'` removes the read AND the write. The cost is one gunzip of
-    // 2.95MB per app session, inside the ~250ms the worker already takes to
-    // start, which is not a cost worth a file anywhere.
-    // ⚑ It also keeps the promise the feature is sold on exactly true: reading a
-    // label leaves nothing behind and sends nothing anywhere.
-    cacheMethod: 'none',
-    // ⚑ Silent. Progress belongs on screen next to the region being read, not in
-    // a terminal nobody running the packaged app can see.
-    logger: () => {},
-    // ⚠️⚑⚑ WITHOUT THIS, AN UNREADABLE REGION KILLS THE APP. `createWorker.js`
-    // rejects the caller's promise and THEN, if nobody supplied an
-    // `errorHandler`, does `throw Error(data)` from inside the worker's message
-    // callback - an uncaught exception on the main thread, which in Electron
-    // takes the whole process down and the user's unsaved work with it. So the
-    // `try/catch` below is necessary and NOT sufficient: it catches the
-    // rejection while the throw escapes past it on its own path.
-    // ▶ Found by driving it, not by reading it: a probe fed the shipped path
-    // garbage bytes and the process died between one console line and the next.
-    // The rejection still arrives, so `readText` still answers `{ error }`;
-    // this only stops the second, fatal copy of the same failure.
-    errorHandler: () => {},
+function getWorker() {
+  if (worker) return worker
+  const w = new Worker(path.join(__dirname, 'electron-ocr-worker.cjs'))
+  w.on('message', ({ id, answer, error }) => {
+    const settle = pending.get(id)
+    if (!settle) return
+    pending.delete(id)
+    settle(error !== undefined ? { error: `Could not read the text: ${error}` } : answer)
   })
-}
-
-/**
- * ⚑⚑ HOW THE ENGINE IS TOLD TO READ A LABEL, and both settings were MEASURED on
- * 887 real published charts (ICPR 2022 CHART-Infographics UB-UNITEC PMC), not
- * chosen from the documentation.
- *
- * `tessedit_pageseg_mode` 6 is "assume a single uniform block of text". The
- * default assumes a whole PAGE, which a 20x14 pixel crop of `8` plainly is not:
- * short numeric labels came back EMPTY, at confidence 0, and they are the
- * commonest label on a chart.
- *
- * ⚠️⚑⚑ WHY 6 AND NOT 7, WHICH SCORED HIGHER. Measured on 876 labels, `7`
- * (single line) read 78.8% against `6`'s 78.1% - a difference of eight labels,
- * inside the noise. On the 70 labels that span TWO LINES, `7` read **0 of 70**
- * and `6` read **46 of 70**. A mode that forces one line cannot read a
- * two-line label at all, and the aggregate hid it because such labels are 1.2%
- * of the corpus. ▶ The same trap as choosing an angle from four short probe
- * labels: the average agreed with the wrong choice.
- */
-async function applyReadingMode(worker) {
-  await worker.setParameters({ tessedit_pageseg_mode: '6' })
+  // ⚑ A thread that dies takes its reads with it as refusals, never as silence.
+  w.on('error', (e) => dropWorker(`Could not read the text: ${e && e.message ? e.message : String(e)}`))
+  w.on('exit', () => {
+    if (worker === w) dropWorker('Could not read the text: the reader stopped unexpectedly.')
+  })
+  w.unref()
+  worker = w
+  return w
 }
 
 /**
  * Read one already-cropped, already-turned region.
  *
- * Returns `{ text, confidence }`, or `{ error }` with a sentence the panel can
+ * Returns `{ text, confidence, words }` (confidence 0 to 100, each word with its
+ * own box in the region's pixels), or `{ error }` with a sentence the panel can
  * show. ⚑ A REFUSAL IS A VALUE HERE, not a thrown stack: the one thing the user
  * must never see is a region that silently produced nothing, because an absent
  * proposal is indistinguishable from a label that genuinely read as blank.
  */
-async function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
-  let timer = null
-  try {
-    if (!workerPromise) {
-      workerPromise = startWorker().then(async (w) => {
-        await applyReadingMode(w)
-        return w
-      })
+function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const id = nextId++
+    let timer = null
+    pending.set(id, (answer) => {
+      if (timer) clearTimeout(timer)
+      resolve(answer)
+    })
+    timer = setTimeout(() => {
+      if (!pending.has(id)) return
+      // ⚑ The thread is ended, so a later attempt starts a fresh one.
+      dropWorker(
+        `The text reader did not answer within ${Math.round(timeoutMs / 1000)} seconds, so it was stopped. Try again, and if it keeps happening the OCR engine did not start.`
+      )
+    }, timeoutMs)
+    try {
+      getWorker().postMessage({ id, pngBase64: String(pngBase64) })
+    } catch (e) {
+      dropWorker(`Could not read the text: ${e && e.message ? e.message : String(e)}`)
     }
-    // ⚑ The bound covers the WHOLE operation - starting the engine and reading -
-    // because both halves are promises from the same library and either can be
-    // left pending by the mechanism described above.
-    const read = (async () => {
-      const worker = await workerPromise
-      // ⚑⚑ WORD BOXES, ASKED FOR EXPLICITLY (v2.5). tesseract.js v5 dropped the
-      // flat `data.words`; the geometry now arrives only when `blocks` is
-      // requested, as `blocks -> paragraphs -> lines -> words`, each word
-      // carrying { text, bbox, confidence }. Measured 2026-09-08 against the
-      // installed v7 before any of this was written.
-      //
-      // ⚑ It is what lets the band be read ONCE and the results related to the
-      // ticks afterwards, instead of cutting one crop per label - which cannot
-      // work at all for rotated text, because an axis-aligned box does not
-      // contain a diagonal label.
-      const { data } = await worker.recognize(Buffer.from(pngBase64, 'base64'), {}, { blocks: true, text: true })
-      const words = []
-      for (const block of data.blocks ?? []) {
-        for (const paragraph of block.paragraphs ?? []) {
-          for (const line of paragraph.lines ?? []) {
-            for (const word of line.words ?? []) {
-              words.push({ text: word.text, confidence: word.confidence, bbox: word.bbox })
-            }
-          }
-        }
-      }
-      return { text: data.text, confidence: data.confidence, words }
-    })()
-    const answer = await Promise.race([
-      read,
-      new Promise((resolve) => {
-        timer = setTimeout(() => resolve({ timedOut: true }), timeoutMs)
-      }),
-    ])
-    if (answer.timedOut) {
-      // ⚑ The worker is dropped, so a later attempt starts a fresh one rather
-      // than joining the dead one for ever.
-      workerPromise = null
-      return {
-        error: `The text reader did not answer within ${Math.round(timeoutMs / 1000)} seconds, so it was stopped. Try again, and if it keeps happening the OCR engine did not start.`,
-      }
-    }
-    return answer
-  } catch (e) {
-    // ⚑ The worker is dropped so the NEXT read starts one cleanly. A half-built
-    // worker cached here would turn one bad start into a permanently dead
-    // feature with nothing on screen saying why.
-    workerPromise = null
-    return { error: `Could not read the text: ${e && e.message ? e.message : String(e)}` }
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
+  })
 }
 
-/** Let the OCR worker thread go when the app is quitting. */
+/** Let the reader's thread go when the app is quitting. */
 async function shutdownOcr() {
-  const pending = workerPromise
-  workerPromise = null
-  if (!pending) return
-  try {
-    const worker = await pending
-    await worker.terminate()
-  } catch {
-    // Quitting anyway - a worker that never started has nothing to release.
-  }
+  const w = worker
+  worker = null
+  pending.clear()
+  if (w) await w.terminate()
 }
 
 module.exports = { readText, shutdownOcr }
