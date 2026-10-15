@@ -12077,6 +12077,21 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('find-lines-summary')).not.toMatch(/drawing/);
   }, 180000);
 
+  it('V15: By colour, Scattered points, on a drawn figure places one point per marker, read from the drawing', async () => {
+    await openDrawnFigure('markers-scatter');
+    const red = vTruth('markers-scatter').lines[0]!.points;
+    // the leftmost red marker: well clear of the legend in the upper right
+    const p = vImg([...red].sort((a, b) => a[0] - b[0])[0]!);
+    // the card's own By colour mechanism, its eyedropper, its Shape choice, then Trace
+    await page.getByTestId('auto-extract-colour').click();
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(p[0], p[1]);
+    await page.getByTestId('color-trace-shape').selectOption('scatter');
+    await page.getByTestId('color-trace-run').click();
+    // 25 red markers drawn, plus the legend's one sample (no mask set): 26
+    await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 26 points (one per marker).');
+  }, 120000);
+
   it('V28: a series drawn twice shows under Places to check as lines lying on top of each other', async () => {
     await openDrawnFigure('lines-doubled');
     const L = vTruth('lines-doubled').lines[2]!.points;

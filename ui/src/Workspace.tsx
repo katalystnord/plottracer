@@ -176,7 +176,7 @@ import type { LoadedDocument } from './pagedDocument.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
 import { figureKind, figureKindLine, type FigureKind, type PageDrawing } from '../../engine/pdfDrawing.js';
 import { pageToImage, placeDrawing } from '../../engine/drawingPlacement.js';
-import { findLinesFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
+import { findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import {
   serializeProjectZip,
   deserializeProjectZip,
@@ -1747,11 +1747,14 @@ export function Workspace() {
   const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; pageArea: number }> } | null>(null);
   /** The kind as last measured, for Find lines to choose its source by (V12). */
   const figureKindRef = useRef<FigureKind | null>(null);
+  /** The page's drawing once read, for the readers that run synchronously (V15). */
+  const pageDrawingReadRef = useRef<{ drawing: PageDrawing; text: [number, number, number, number][] } | null>(null);
   useEffect(() => {
     const src = sourcePdfRef.current;
     const page = provenance.source?.page;
     if (!figureCaptured || !src || page == null || !provenance.source?.pageTransform || pagedDocumentFormat(src.bytes) !== 'pdf') {
       figureKindRef.current = null;
+      pageDrawingReadRef.current = null;
       setFigureKindText(null);
       return;
     }
@@ -1760,11 +1763,12 @@ export function Workspace() {
       pageDrawingRef.current = { bytes: src.bytes, page, read: import('./pdfRender.js').then((m) => m.readPdfPageDrawing(src.bytes, page)) };
     }
     const prov = provenance;
-    pageDrawingRef.current.read.then(({ drawing, pageArea }) => {
+    pageDrawingRef.current.read.then(({ drawing, text, pageArea }) => {
       const img = imageCanvasRef.current?.getImageData();
       if (!live || !img) return;
       const k = figureKind(drawing, (q) => pageToImage(prov, q), img.width, img.height, pageArea);
       figureKindRef.current = k;
+      pageDrawingReadRef.current = { drawing, text };
       setFigureKindText(figureKindLine(k));
     }).catch(() => {
       if (!live) return;
@@ -6552,6 +6556,25 @@ export function Workspace() {
       return;
     }
     if (colorTraceShape === 'scatter') {
+      // ⚑ v2.7 V15: on a drawn figure the markers are read from the DRAWING -
+      // one point at each marker's centre - when it holds any of that colour
+      // in the region (or the figure); otherwise from the pixels, as always.
+      const k = figureKindRef.current;
+      const read = pageDrawingReadRef.current;
+      if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
+        const placed = placeDrawing(provenanceRef.current, read.drawing, read.text);
+        const r = colorTraceRegion;
+        const region = r ? { x0: r.x, y0: r.y, x1: r.x + r.width, y1: r.y + r.height } : { x0: 0, y0: 0, x1: width, y1: height };
+        const masks = session.getNotDataRegions().map((m) => ({ x0: m.x, y0: m.y, x1: m.x + m.width, y1: m.y + m.height }));
+        const markers = placed ? markersFromDrawing(placed, target, region, masks) : [];
+        if (markers.length) {
+          session.addSegmentFillPoints(markers.map(([x, y]) => ({ x, y })));
+          adoptTracedColour();
+          setColorTraceInfo(`Read from the figure’s drawing: placed ${markers.length} point${markers.length === 1 ? '' : 's'} (one per marker).`);
+          commit();
+          return;
+        }
+      }
       const result = runBlobDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob });
       if ('error' in result) {
         setColorTraceInfo(result.error);

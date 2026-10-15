@@ -263,3 +263,41 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
   widths.sort((a, b) => a - b);
   return { lines, labelInk: [], unresolved: [], places, lineWidth: widths.length ? widths[widths.length >> 1]! : 1 };
 }
+
+/**
+ * v2.7 V15 - the drawing's MARKERS of a colour: one point at each marker's
+ * centre, for Auto-extract ▸ By colour ▸ Scattered points on a drawn figure.
+ *
+ * A marker is a small CLOSED shape (smaller across than RULE.marker), filled in
+ * the colour or outlined in it; its centre is the middle of its box, which is
+ * the marker's own position for every symmetric marker. One painted twice -
+ * filled then outlined, or the same scatter drawn again - lands on the same
+ * centre and counts once. Open marks (+, x) are not closed shapes and stay
+ * with the pixel reader for now. Markers in a masked area are left out.
+ */
+export function markersFromDrawing(d: PlacedDrawing, colour: RGB, region: Box, masks: readonly Box[] = []): Pt[] {
+  const k = d.pxPerPt;
+  const out: Pt[] = [];
+  // ⚑ A marker painted twice lands on the SAME centre, to a hundredth of a
+  // pixel. Two different markers can be a pixel apart (where two lines cross),
+  // so "the same" is kept tight - a 1.3 px allowance merged them.
+  const same = 0.05 * k;
+  const closedWithin = 0.5 * PT * k;
+  for (const s of d.shapes) {
+    const inkMatches = (s.filled && near(s.fill, colour)) || (s.stroked && near(s.stroke, colour));
+    if (!inkMatches) continue;
+    for (const sp of s.subs) {
+      if (sp.length < 3) continue;
+      const first = sp[0]!, last = sp[sp.length - 1]!;
+      if (Math.hypot(first[0] - last[0], first[1] - last[1]) > closedWithin) continue; // not closed
+      const xs = sp.map((p) => p[0]), ys = sp.map((p) => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      if (Math.hypot(x1 - x0, y1 - y0) >= RULE.marker * k) continue; // too big to be a marker
+      const c: Pt = [(x0 + x1) / 2, (y0 + y1) / 2];
+      if (!inBox(c, region) || masks.some((m) => inBox(c, m))) continue;
+      if (out.some((q) => Math.hypot(q[0] - c[0], q[1] - c[1]) < same)) continue; // painted twice
+      out.push(c);
+    }
+  }
+  return out;
+}

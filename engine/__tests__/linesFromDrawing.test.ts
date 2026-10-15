@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { readDrawing, readTextBoxes, type PdfTextItem } from '../pdfDrawing.js';
 import { pageToImage, placeDrawing } from '../drawingPlacement.js';
 import type { Provenance } from '../projectFile.js';
-import { findLinesFromDrawing, type PlacedDrawing } from '../../algorithms/findLines/fromDrawing.js';
+import { findLinesFromDrawing, markersFromDrawing, type PlacedDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import type { Box } from '../../algorithms/findLines/ink.js';
 import type { FindLinesResult } from '../../algorithms/findLines/lines.js';
 
@@ -26,7 +26,7 @@ interface Case {
   truth: Pt[][];
 }
 const cases: Record<string, Case> = {};
-const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled'];
+const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled', 'markers-scatter'];
 
 beforeAll(async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -213,5 +213,49 @@ describe('V12: Find lines on a drawn figure reads the drawing', () => {
         expect(Math.min(...truth.map((T) => distTo(p as Pt, T)))).toBeLessThan(0.5);
       }
     }
+  });
+});
+
+describe('V15: By colour, Scattered points, on a drawn figure reads one point per marker', () => {
+  const hex = (h: string) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)] as const;
+  /** Every true marker centre has exactly one point within half a pixel, and there is nothing else. */
+  function expectOnePerMarker(points: readonly Pt[], truth: readonly Pt[]) {
+    expect(points).toHaveLength(truth.length);
+    for (const t of truth) {
+      expect(points.filter((p) => Math.hypot(p[0] - t[0], p[1] - t[1]) < 0.5)).toHaveLength(1);
+    }
+  }
+
+  /** The true markers not under the legend: the legend is opaque, so those are hidden in the figure itself. */
+  const visible = (c: Case, k: number) => c.truth[k]!.filter((t) => !(t[0] >= c.legend!.x0 && t[0] <= c.legend!.x1 && t[1] >= c.legend!.y0 && t[1] <= c.legend!.y1));
+
+  it('filled markers: one point at each centre; the legend sample is left out once the legend is masked', () => {
+    const c = cases['markers-scatter']!;
+    expectOnePerMarker(markersFromDrawing(c.drawing, hex('#d62728'), c.box, [c.legend!]), visible(c, 0));
+    expectOnePerMarker(markersFromDrawing(c.drawing, hex('#1f77b4'), c.box, [c.legend!]), visible(c, 1));
+  });
+
+  it('unmasked, the legend\'s marker sample is read too, as on pixels', () => {
+    const c = cases['markers-scatter']!;
+    // every red marker, the two under the legend among them, plus the legend's own sample
+    expect(markersFromDrawing(c.drawing, hex('#d62728'), c.box)).toHaveLength(c.truth[0]!.length + 1);
+  });
+
+  it('hollow markers (outline only) are read by their outline colour', () => {
+    const c = cases['markers-scatter']!;
+    expectOnePerMarker(markersFromDrawing(c.drawing, hex('#2ca02c'), c.box, [c.legend!]), visible(c, 2));
+  });
+
+  it('a marker painted twice counts once', () => {
+    const c = cases['markers-scatter']!;
+    const twice: PlacedDrawing = { ...c.drawing, shapes: [...c.drawing.shapes, ...c.drawing.shapes] };
+    expectOnePerMarker(markersFromDrawing(twice, hex('#d62728'), c.box, [c.legend!]), visible(c, 0));
+  });
+
+  it('markers on a line are read, and the line itself is not a marker', () => {
+    const c = cases['lines-markers']!;
+    const pts = markersFromDrawing(c.drawing, BLACK, c.box);
+    const centres = c.truth.flatMap((T) => T.filter((_, i) => i % 8 === 0));
+    expectOnePerMarker(pts, centres);
   });
 });

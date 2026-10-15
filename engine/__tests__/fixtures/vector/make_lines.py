@@ -113,6 +113,21 @@ ax.plot(x, z, color=INK)
 ax.plot(x, z, color=INK)
 save(fig, ax, 'lines-doubled', [np.c_[x, y], np.c_[x, y + dy], np.c_[x, z]])
 
+# V15: two scatter series in their own colours, filled and outlined
+# markers, with a legend holding a marker sample of each; and a hollow marker
+# series (outline only)
+fig, ax = plt.subplots(figsize=(4, 3))
+rng = np.random.default_rng(15)
+pa = np.c_[rng.uniform(0.5, 9.5, 25), rng.uniform(0.5, 9.5, 25)]
+pb = np.c_[rng.uniform(0.5, 9.5, 25), rng.uniform(0.5, 9.5, 25)]
+pc = np.c_[rng.uniform(0.5, 9.5, 12), rng.uniform(0.5, 9.5, 12)]
+ax.scatter(pa[:, 0], pa[:, 1], color='#d62728', edgecolors='#d62728', s=30, label='red')
+ax.scatter(pb[:, 0], pb[:, 1], color='#1f77b4', s=30, marker='s', label='blue')
+ax.scatter(pc[:, 0], pc[:, 1], facecolors='none', edgecolors='#2ca02c', s=40, label='hollow')
+ax.set_xlim(0, 10); ax.set_ylim(0, 10)
+leg = ax.legend(loc='upper right')
+save(fig, ax, 'markers-scatter', [pa, pb, pc], legend=leg)
+
 # V12a: a picture inside the PDF (nothing drawn to read)
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 fig, ax = plt.subplots(figsize=(4, 3))
