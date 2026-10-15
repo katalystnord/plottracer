@@ -34,6 +34,8 @@ import * as pdfjs from 'pdfjs-dist';
 // Vite `?worker` virtual module: bundles pdf.worker as a classic (IIFE) worker.
 import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
 import type { LoadedDocument } from './pagedDocument.js';
+import { sharpRenderTransform } from '../../engine/drawingPlacement.js';
+import type { Provenance } from '../../engine/projectFile.js';
 import { readDrawing, readTextBoxes, type PageDrawing, type PdfOps, type PdfTextItem } from '../../engine/pdfDrawing.js';
 
 pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
@@ -72,6 +74,37 @@ export async function readPdfPageDrawing(bytes: Uint8Array, n: number): Promise<
   } finally {
     void doc.destroy();
   }
+}
+
+/** v2.7 V30: redraw `region` of the picture from the PDF page, at `scale`
+ * canvas pixels per picture pixel, placed through the figure's record. The
+ * parsed document is kept per PDF, so a zoom does not re-parse it. */
+let regionDoc: { bytes: Uint8Array; doc: Promise<pdfjs.PDFDocumentProxy> } | null = null;
+export async function renderPdfRegion(
+  bytes: Uint8Array,
+  n: number,
+  prov: Provenance,
+  region: { x: number; y: number; width: number; height: number },
+  scale: number,
+): Promise<HTMLCanvasElement | null> {
+  if (!regionDoc || regionDoc.bytes !== bytes) {
+    if (regionDoc) void regionDoc.doc.then((d) => d.destroy());
+    regionDoc = { bytes, doc: pdfjs.getDocument({ data: bytes.slice() }).promise };
+  }
+  const page = await (await regionDoc.doc).getPage(n);
+  const unit = page.getViewport({ scale: 1 });
+  const t = unit.transform;
+  const m = sharpRenderTransform(prov, [t[0]!, t[1]!, t[2]!, t[3]!, t[4]!, t[5]!], region, scale);
+  if (!m) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.ceil(region.width * scale));
+  canvas.height = Math.max(1, Math.ceil(region.height * scale));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport: unit, transform: m }).promise;
+  return canvas;
 }
 
 // PDF detection lives in engine/pdfDetect.ts (isPdfBytes) -- kept out of this

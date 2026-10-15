@@ -219,6 +219,10 @@ export type SelectGesture = 'rectangle' | 'lasso' | 'point' | 'series';
 const GRID_OVERLAY_COLOR = CATEGORY_TICK_COLOR;
 
 interface ImageCanvasProps {
+  /** v2.7 V30: the part of a drawn PDF figure in view, redrawn sharp from the
+   * PDF, and the region of the picture it covers. Painted over the picture
+   * only; every reader keeps reading the picture's own pixels. */
+  sharpLayer?: { canvas: HTMLCanvasElement; region: { x: number; y: number; width: number; height: number } } | null;
   /** Markers to overlay, in image-pixel space (not screen space). */
   points?: CanvasMarker[];
   /** Per-series connecting polylines drawn beneath the markers (checkpoint 131). */
@@ -639,7 +643,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, extraSelected, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { sharpLayer, points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, extraSelected, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1324,8 +1328,14 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     if (image) {
       ctx.setTransform(view.scale * dpr, 0, 0, view.scale * dpr, view.offsetX * dpr, view.offsetY * dpr);
       ctx.drawImage(image, 0, 0);
+      if (sharpLayer) {
+        // drawn at the screen's own resolution, so no smoothing is needed or wanted
+        const r = sharpLayer.region;
+        ctx.drawImage(sharpLayer.canvas, r.x, r.y, r.width, r.height);
+      }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
+    canvas.dataset['sharp'] = sharpLayer ? '1' : '0';
 
     // CSS-pixel size, NOT the (now devicePixelRatio-scaled) backing buffer --
     // this feeds Konva's <Stage> width/height, which are CSS-pixel dimensions
@@ -1333,7 +1343,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     // getViewImageRect's screenToImage calls, which expect CSS-pixel mouse
     // coordinates (getBoundingClientRect() is always CSS pixels).
     setStageSize({ width: cssWidth, height: cssHeight });
-  }, [image, view]);
+  }, [image, view, sharpLayer]);
 
   const onWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();

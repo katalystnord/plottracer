@@ -6685,6 +6685,46 @@ export function Workspace() {
   // ⚑ The colour is an argument, and the card's sentence is the answer, so the
   // button and an agent's find_lines (v2.7 M8) are one path: the agent is told
   // what the card says, word for word.
+  // ⚑ v2.7 V30: sharp zoom. Past 100% on a drawn (or partly drawn) figure, the
+  // part in view is redrawn from the PDF at the screen's resolution, a moment
+  // after the view settles, and painted over the picture - placed through the
+  // same record as everything read from the drawing (V19). Only the screen
+  // sees it: every reader keeps reading the picture's own pixels.
+  const sharpProvRef = useRef<Provenance | null>(null);
+  const [sharpLayer, setSharpLayer] = useState<{ canvas: HTMLCanvasElement; region: { x: number; y: number; width: number; height: number } } | null>(null);
+  useEffect(() => {
+    const k = figureKindRef.current;
+    const src = sourcePdfRef.current;
+    const page = provenance.source?.page;
+    if (!figureKindText || !k || (k.kind !== 'drawn' && k.kind !== 'partly') || !src || page == null || canvasView.scale <= 1) {
+      setSharpLayer(null);
+      return;
+    }
+    // a pan or zoom keeps the last sharp layer until the new one is in (it is
+    // placed in picture pixels, so it stays right); an edit drops it at once
+    if (sharpProvRef.current !== provenance) setSharpLayer(null);
+    sharpProvRef.current = provenance;
+    let live = true;
+    const timer = setTimeout(() => {
+      const region = imageCanvasRef.current?.getViewImageRect();
+      if (!region) return;
+      const scale = canvasView.scale * (window.devicePixelRatio || 1);
+      const prov = provenanceRef.current;
+      void import('./pdfRender.js')
+        .then((m) => m.renderPdfRegion(src.bytes, page, prov, region, scale))
+        .then((canvas) => {
+          if (live && canvas) setSharpLayer({ canvas, region });
+        })
+        .catch(() => {
+          if (live) setSharpLayer(null);
+        });
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [canvasView, figureKindText, provenance]);
+
   const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number] } = {}): Promise<{ text: string; error?: boolean }> => {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = imageCanvasRef.current?.getImageData();
@@ -10431,6 +10471,7 @@ export function Workspace() {
           // wrong. (v2.0 audit, round 2.)
           previewRotationDeg={mode === 'image-edit' ? previewAngle : 0}
           onStatusChange={handleCanvasStatus}
+          sharpLayer={sharpLayer}
           beforeOpenImage={confirmDiscardIfDirty}
           onImageOpened={handleImageOpened}
           // ⚑⚑ NOT WRAPPED, AND NOT AN INLINE ARROW (v2.3 re-audit). F6 wrapped

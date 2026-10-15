@@ -73,3 +73,34 @@ export function placeDrawing(prov: Provenance, drawing: PageDrawing, text: reado
     pxPerPt,
   };
 }
+
+/**
+ * v2.7 V30 - the matrix for pdf.js to redraw a region of the picture SHARP.
+ *
+ * pdf.js draws page point q at T(unit(q)), where `unit` is its scale-1
+ * viewport matrix and T the `transform` passed to render. The picture shows q
+ * at pageToImage(prov, q); the sharp canvas covers `region` of the picture at
+ * `scale` canvas pixels per picture pixel. So T must send unit(q) to
+ * scale * (pageToImage(prov, q) - region.origin). Every recorded edit is
+ * affine, so T is too, and three points fix it.
+ */
+export function sharpRenderTransform(
+  prov: Provenance,
+  unit: readonly [number, number, number, number, number, number],
+  region: { x: number; y: number; width: number; height: number },
+  scale: number,
+): [number, number, number, number, number, number] | null {
+  if (!prov.source?.pageTransform) return null;
+  const [a, b, c, d, e, f] = unit;
+  const det = a * d - b * c;
+  if (!det) return null;
+  // unit space -> page point -> picture -> sharp canvas
+  const toCanvas = (u: readonly [number, number]): [number, number] => {
+    const x = u[0] - e, y = u[1] - f;
+    const q: [number, number] = [(d * x - c * y) / det, (-b * x + a * y) / det];
+    const p = pageToImage(prov, q)!;
+    return [scale * (p.x - region.x), scale * (p.y - region.y)];
+  };
+  const o = toCanvas([0, 0]), ux = toCanvas([1, 0]), uy = toCanvas([0, 1]);
+  return [ux[0] - o[0], ux[1] - o[1], uy[0] - o[0], uy[1] - o[1], o[0], o[1]];
+}

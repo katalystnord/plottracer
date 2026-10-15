@@ -12105,6 +12105,45 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 26 points (one per marker).');
   }, 120000);
 
+  it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
+    const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');
+    await openDrawnFigure('lines-cross');
+    // fitted, the picture is shown smaller than its pixels: nothing to sharpen
+    expect(await sharp()).toBe('0');
+    // the zoom control in the top bar, as the user zooms
+    await page.getByTestId('zoom-controls-button').click();
+    await page.getByTestId('zoom-100').click();
+    await page.getByTestId('zoom-in').click();
+    await page.getByTestId('zoom-in').click();
+    await page.keyboard.press('Escape');
+    await expect.poll(sharp, { timeout: 10000 }).toBe('1');
+    await page.screenshot({ path: path.join(os.tmpdir(), 'plottracer-v30-sharp.png') });
+    // every reader keeps reading the drawing, not the sharp render
+    const L0 = vTruth('lines-cross').lines[0]!.points;
+    const p = vImg(L0[Math.floor(L0.length * 0.5)]!);
+    await page.getByTestId('zoom-controls-button').click();
+    await page.getByTestId('zoom-fit').click();
+    await page.keyboard.press('Escape');
+    await expect.poll(sharp, { timeout: 10000 }).toBe('0');
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(p[0], p[1]);
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: 3 lines found, 0 gaps bridged/);
+  }, 120000);
+
+  it('V30: a PNG zoomed in is never redrawn', async () => {
+    await app.evaluate(({ dialog }, f) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+    }, SAMPLE_IMAGE);
+    await resetWorkspace('xy');
+    await page.getByTestId('zoom-controls-button').click();
+    await page.getByTestId('zoom-100').click();
+    await page.getByTestId('zoom-in').click();
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(800);
+    expect(await page.getByTestId('base-canvas').getAttribute('data-sharp')).toBe('0');
+  });
+
   it('V28: a series drawn twice shows under Places to check as lines lying on top of each other', async () => {
     await openDrawnFigure('lines-doubled');
     const L = vTruth('lines-doubled').lines[2]!.points;

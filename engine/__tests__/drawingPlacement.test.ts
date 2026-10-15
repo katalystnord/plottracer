@@ -13,7 +13,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { applyImageEditOp, cropImage, rotateImageByAngle, type ImageEditResult } from '../imageEdit.js';
-import { pageToImage, placeThroughEdits, type ImageEdit } from '../drawingPlacement.js';
+import { pageToImage, placeThroughEdits, sharpRenderTransform, type ImageEdit } from '../drawingPlacement.js';
 import { serializeProject, deserializeProject, type Provenance } from '../projectFile.js';
 import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
 
@@ -161,5 +161,48 @@ describe('V19: a point of the PDF page lands where pdf.js drew it', () => {
 
   it('is not offered for a picture that did not come from a PDF', () => {
     expect(pageToImage({}, [10, 10])).toBeNull();
+  });
+});
+
+describe('V30: the sharp redraw of a zoomed region lands exactly on the picture', () => {
+  type VP = { width: number; height: number; transform: number[] };
+  let unit: [number, number, number, number, number, number];
+  let render: VP;
+  beforeAll(async () => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(join(__dirname, '../../samples/multipage-figures.pdf'))), verbosity: 0 }).promise;
+    const page = await doc.getPage(1);
+    unit = page.getViewport({ scale: 1 }).transform as typeof unit;
+    render = page.getViewport({ scale: 3.7 }) as unknown as VP;
+  });
+  const apply = (m: readonly number[], p: readonly [number, number]) => [m[0]! * p[0] + m[2]! * p[1] + m[4]!, m[1]! * p[0] + m[3]! * p[1] + m[5]!] as const;
+
+  for (const [name, edits] of [
+    ['as rendered', []],
+    ['after a crop, a rotate, a flip and a straighten', null],
+  ] as const) {
+    it(name, () => {
+      const W = Math.ceil(render.width), H = Math.ceil(render.height);
+      const chain: ImageEdit[] = edits ? [...edits] : [
+        { kind: 'crop', fromWidth: W, fromHeight: H, rect: { x: 100, y: 150, width: 1500, height: 1200 } },
+        { kind: 'rotate-cw', fromWidth: 1500, fromHeight: 1200 },
+        { kind: 'flip-h', fromWidth: 1200, fromHeight: 1500 },
+        { kind: 'rotate', deg: 3, fromWidth: 1200, fromHeight: 1500 },
+      ];
+      const prov: Provenance = { source: { pageTransform: render.transform as [number, number, number, number, number, number] }, edits: chain };
+      const region = { x: 300, y: 400, width: 200, height: 150 };
+      const s = 8; // screen pixels per picture pixel
+      const m = sharpRenderTransform(prov, unit, region, s)!;
+      for (const q of [[50, 60], [300, 400], [500, 100]] as [number, number][]) {
+        const want = pageToImage(prov, q)!;
+        // pdf.js draws page point q at m(unit(q)) on the sharp canvas, which sits at the region
+        const got = apply(m, apply(unit, q));
+        expect(Math.hypot(got[0] - s * (want.x - region.x), got[1] - s * (want.y - region.y))).toBeLessThan(1e-6);
+      }
+    });
+  }
+
+  it('is not offered for a figure whose page render was not recorded', () => {
+    expect(sharpRenderTransform({}, [1, 0, 0, -1, 0, 792], { x: 0, y: 0, width: 10, height: 10 }, 4)).toBeNull();
   });
 });
