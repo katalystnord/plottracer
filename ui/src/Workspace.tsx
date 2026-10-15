@@ -174,8 +174,9 @@ import {
 // LoadedDocument is the shared shape for PDF and TIFF alike (ui/src/pagedDocument.ts).
 import type { LoadedDocument } from './pagedDocument.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
-import { figureKind, figureKindLine, type PageDrawing } from '../../engine/pdfDrawing.js';
-import { pageToImage } from '../../engine/drawingPlacement.js';
+import { figureKind, figureKindLine, type FigureKind, type PageDrawing } from '../../engine/pdfDrawing.js';
+import { pageToImage, placeDrawing } from '../../engine/drawingPlacement.js';
+import { findLinesFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import {
   serializeProjectZip,
   deserializeProjectZip,
@@ -1743,11 +1744,14 @@ export function Workspace() {
   // calibration card. Re-measured whenever the record changes (an edit, a new
   // page, a reopened project); the page's drawing is read once per PDF page.
   const [figureKindText, setFigureKindText] = useState<string | null>(null);
-  const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; pageArea: number }> } | null>(null);
+  const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; pageArea: number }> } | null>(null);
+  /** The kind as last measured, for Find lines to choose its source by (V12). */
+  const figureKindRef = useRef<FigureKind | null>(null);
   useEffect(() => {
     const src = sourcePdfRef.current;
     const page = provenance.source?.page;
     if (!figureCaptured || !src || page == null || !provenance.source?.pageTransform || pagedDocumentFormat(src.bytes) !== 'pdf') {
+      figureKindRef.current = null;
       setFigureKindText(null);
       return;
     }
@@ -1759,9 +1763,13 @@ export function Workspace() {
     pageDrawingRef.current.read.then(({ drawing, pageArea }) => {
       const img = imageCanvasRef.current?.getImageData();
       if (!live || !img) return;
-      setFigureKindText(figureKindLine(figureKind(drawing, (q) => pageToImage(prov, q), img.width, img.height, pageArea)));
+      const k = figureKind(drawing, (q) => pageToImage(prov, q), img.width, img.height, pageArea);
+      figureKindRef.current = k;
+      setFigureKindText(figureKindLine(k));
     }).catch(() => {
-      if (live) setFigureKindText(null);
+      if (!live) return;
+      figureKindRef.current = null;
+      setFigureKindText(null);
     });
     return () => {
       live = false;
@@ -6670,8 +6678,24 @@ export function Workspace() {
     const masks = session.getNotDataRegions().map((r) => ({ x0: r.x - 4, y0: r.y - 4, x1: r.x + r.width + 4, y1: r.y + r.height + 4 }));
     // off the UI thread (audit B7); undo waits until the whole result is in (B2)
     findLinesBusyRef.current = true;
-    const found = await findLinesInWorker(imageData.data, imageData.width, imageData.height, target,
-      { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height }, { contour: kind === 'contours', masks, coloursAreLevels: kind === 'contours' && session.getOptions()['hasColourKey'] === 'true' });
+    const plotBox = { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
+    // ⚑ v2.7 V12: a figure drawn in the PDF (drawn, or partly a picture) is read
+    // from its DRAWING when the drawing holds a line of that colour in the plot
+    // box; otherwise from its pixels, as always. The summary says which.
+    let fromDrawing: Awaited<ReturnType<typeof findLinesInWorker>> | null = null;
+    const k = figureKindRef.current;
+    if (k && (k.kind === 'drawn' || k.kind === 'partly') && pageDrawingRef.current) {
+      try {
+        const { drawing, text } = await pageDrawingRef.current.read;
+        const placed = placeDrawing(provenanceRef.current, drawing, text);
+        const r = placed && findLinesFromDrawing(placed, target, plotBox, { masks });
+        if (r && r.lines.length) fromDrawing = r;
+      } catch {
+        fromDrawing = null;
+      }
+    }
+    const found = fromDrawing ?? await findLinesInWorker(imageData.data, imageData.width, imageData.height, target,
+      plotBox, { contour: kind === 'contours', masks, coloursAreLevels: kind === 'contours' && session.getOptions()['hasColourKey'] === 'true' });
     findLinesBusyRef.current = false;
     if ('error' in found || sessionRef.current !== session) {
       setFindLinesBusy(null);
@@ -6787,6 +6811,7 @@ export function Workspace() {
     setLinePlaces(places);
     setSelectedPointIndices([]); setLineSelection([]);
     const summary =
+      (fromDrawing ? 'Read from the figure’s drawing: ' : '') +
       (at ? `Found the line you clicked, ${gaps} gap${gaps === 1 ? '' : 's'} bridged` : `${res.lines.length} line${res.lines.length === 1 ? '' : 's'} found, ${gaps} gap${gaps === 1 ? '' : 's'} bridged`) +
         (fromKey ? `; levels read off the colour key on ${fromKey.set} line${fromKey.set === 1 ? '' : 's'}${fromKey.offKey ? `, ${fromKey.offKey} not on the key` : ''}` : '') +
         (kind === 'contours' && !fromKey ? `; labels read on ${read} line${read === 1 ? '' : 's'}, not used on ${notRead} - the read is offered beside each line's Level` : '') +

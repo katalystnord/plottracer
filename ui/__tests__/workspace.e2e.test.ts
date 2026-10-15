@@ -2843,7 +2843,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     };
 
     await openAndCapture(fixture('drawn'));
-    expect(await kindText()).toBe('Drawn as vectors in the PDF.');
+    expect(await kindText()).toBe('Drawn as vectors in the PDF: Find lines reads its lines from the drawing.');
 
     await openAndCapture(fixture('picture'));
     expect(await kindText()).toBe('A picture inside the PDF: read from its pixels, as any image.');
@@ -2861,7 +2861,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await calibrateXYStandard();
     // The card folds once calibrated; its fold arrow unfolds it again.
     if ((await page.getByTestId('figure-kind').count()) === 0) await page.getByTestId('calib-fold').click();
-    expect(await kindText()).toBe('Drawn as vectors in the PDF.');
+    expect(await kindText()).toBe('Drawn as vectors in the PDF: Find lines reads its lines from the drawing.');
     const savePath = tempFilePath('zip');
     await stubSaveDialog(savePath);
     await page.getByTestId('save-project').click();
@@ -2871,9 +2871,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('open-project').click();
     await page.waitForTimeout(400);
     if ((await page.getByTestId('figure-kind').count()) === 0) await page.getByTestId('calib-fold').click();
-    expect(await kindText()).toBe('Drawn as vectors in the PDF.');
+    expect(await kindText()).toBe('Drawn as vectors in the PDF: Find lines reads its lines from the drawing.');
     fs.unlinkSync(savePath);
-  });
+  }, 60000);
 
   it('bundles the source PDF into the saved project, and restores it (checkpoint 104)', async () => {
     await resetWorkspace('xy'); // establishes wiring
@@ -12005,6 +12005,72 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await clickAt(lx, ly);
   }
   const seriesCount = () => page.getByTestId('series-select').locator('option').count();
+
+  it('V12, V12a, V13: on a drawn PDF figure Find lines reads the drawing and says so; on a picture it reads pixels', async () => {
+    const FIX = path.join(__dirname, '..', '..', 'engine', '__tests__', 'fixtures', 'vector');
+    const truth = JSON.parse(fs.readFileSync(path.join(FIX, 'lines-cross.truth.json'), 'utf8')) as { box: number[]; lines: { points: [number, number][] }[] };
+    // the app renders a 288 x 216 pt page at 6x (pdfRender: 3000 px target, capped at 6)
+    const img = (p: readonly number[]) => [p[0]! * 6, (216 - p[1]!) * 6] as const;
+    const openAndCalibrate = async (name: string) => {
+      try {
+        await app.evaluate(({ dialog }, f) => {
+          dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+        }, path.join(FIX, name + '.pdf'));
+        await page.getByTestId('open-image-button').click();
+        await waitForImageFitted();
+      } finally {
+        await app.evaluate(({ dialog }, f) => {
+          dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+        }, SAMPLE_IMAGE);
+      }
+      await page.getByTestId('axes-type-trigger').click();
+      await page.getByTestId('axes-option-xy').click();
+      await page.getByTestId('capture-figure').click();
+      await page.waitForTimeout(150);
+      // the walk the prompts ask for, on the plot box's corners
+      const [bx0, by0, bx1, by1] = truth.box as [number, number, number, number];
+      const o = img([bx0, by0]), xr = img([bx1, by0]), yt = img([bx0, by1]);
+      await clickImagePixel(o[0], o[1]);
+      await confirmValue('0');
+      await clickImagePixel(xr[0], xr[1]);
+      await confirmValue('10');
+      await confirmValue('0');
+      await clickImagePixel(yt[0], yt[1]);
+      await confirmValue('10');
+      await page.getByTestId('run-calibration').click();
+      await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+      await page.getByTestId('mode-auto-extract').click();
+      await page.getByTestId('auto-extract-find').click();
+    };
+    const L0 = truth.lines[0]!.points;
+    const onLine0 = img(L0[Math.floor(L0.length * 0.3)]!);
+
+    // V12: the drawing, three whole lines, and the summary says where it read them
+    await openAndCalibrate('lines-cross');
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(onLine0[0], onLine0[1]);
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: 3 lines found, 0 gaps bridged/);
+    expect(await seriesCount()).toBe(3);
+
+    // V13: Find this line takes the drawn line under the click, and only it.
+    // The summary says Undo removes the whole result; then one line is asked for.
+    await page.getByTestId('undo').click();
+    await expect.poll(seriesCount, { timeout: 5000 }).toBe(1);
+    await page.getByTestId('find-lines-one').click();
+    await clickImagePixel(onLine0[0], onLine0[1]);
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: Found the line you clicked/);
+    const firstSeries = (await page.getByTestId('series-select').locator('option').allTextContents()).join(' | ');
+    expect(firstSeries).toMatch(/\(80\)/); // the whole clicked line, all 80 of its drawn points
+
+    // V12a: a picture inside a PDF is read from its pixels, as always
+    await openAndCalibrate('lines-picture');
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(onLine0[0], onLine0[1]);
+    await page.getByTestId('find-lines-run').click();
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 60000 }).not.toBe('');
+    expect(await textOf('find-lines-summary')).not.toMatch(/drawing/);
+  }, 180000);
 
   it('L3 a coloured contour plot\'s colour key gives each found line its level', async () => {
     const FIG = path.join(__dirname, '..', '..', 'algorithms', '__tests__', 'fixtures', 'findLines', 'contour-coloured-key');

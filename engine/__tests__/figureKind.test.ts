@@ -48,7 +48,7 @@ describe('V1-V4: the calibration card says what the captured figure is', () => {
   it('V1: a figure drawn as vectors says so', () => {
     const k = kindOf('drawn');
     expect(k.kind).toBe('drawn');
-    expect(figureKindLine(k)).toBe('Drawn as vectors in the PDF.');
+    expect(figureKindLine(k)).toBe('Drawn as vectors in the PDF: Find lines reads its lines from the drawing.');
   });
 
   it('V2: a picture inside the PDF says it is read from its pixels', () => {

@@ -1,0 +1,115 @@
+"""Fixtures for v2.7 V12-V27 (engine/__tests__/linesFromDrawing.test.ts): one
+small matplotlib PDF per case, each with a truth file of what was drawn, in PDF
+page points (y up): the plot box, the legend box, the text, and each line.
+
+  python3 make_lines.py
+"""
+import json
+import matplotlib
+matplotlib.use('pdf')
+import matplotlib.pyplot as plt
+import numpy as np
+
+matplotlib.rcParams['pdf.fonttype'] = 42
+INK = 'k'
+
+
+def page_pts(fig, ax, xy):
+    # display pixels (fig.dpi) -> PDF points; PDF y is up, as is display
+    d = ax.transData.transform(np.asarray(xy, float))
+    return (d * 72.0 / fig.dpi).round(3).tolist()
+
+
+def box_of(fig, bb):
+    return [round(v * 72.0 / fig.dpi, 3) for v in (bb.x0, bb.y0, bb.x1, bb.y1)]
+
+
+def save(fig, ax, name, lines, legend=None):
+    fig.canvas.draw()
+    truth = {
+        'box': box_of(fig, ax.get_window_extent()),
+        'legend_box': box_of(fig, legend.get_window_extent()) if legend else None,
+        'lines': [{'points': page_pts(fig, ax, l)} for l in lines],
+    }
+    fig.savefig(name + '.pdf')
+    json.dump(truth, open(name + '.truth.json', 'w'))
+    plt.close(fig)
+
+
+x = np.linspace(0, 10, 80)
+
+# V25: three same-ink curves that cross, plus V26's frame (the spines are black too)
+fig, ax = plt.subplots(figsize=(4, 3))
+ys = [np.sin(x / 1.5) * 2 + 5, 0.6 * x + 2, 8 - 0.5 * x + 0.5 * np.cos(x)]
+for y in ys:
+    ax.plot(x, y, color=INK)
+save(fig, ax, 'lines-cross', [np.c_[x, y] for y in ys])
+
+# V23: dashed and dotted lines, same ink, crossing
+fig, ax = plt.subplots(figsize=(4, 3))
+ys = [np.sin(x / 2) * 3 + 5, 0.7 * x + 1.5, 9 - 0.6 * x]
+for y, st in zip(ys, ['--', ':', '-.']):
+    ax.plot(x, y, color=INK, linestyle=st)
+save(fig, ax, 'lines-dashed', [np.c_[x, y] for y in ys])
+
+# V15 (the line half): lines through markers come back whole
+fig, ax = plt.subplots(figsize=(4, 3))
+ys = [np.sqrt(x + 1) * 2, 9 - np.sqrt(x + 1) * 2]
+for y in ys:
+    ax.plot(x, y, color=INK, marker='o', markevery=8)
+save(fig, ax, 'lines-markers', [np.c_[x, y] for y in ys])
+
+# V24: contours cut by their inline text labels, and a line with an EMPTY gap
+fig, ax = plt.subplots(figsize=(4, 3))
+X, Y = np.meshgrid(np.linspace(-3, 3, 120), np.linspace(-2, 2, 90))
+Z = np.exp(-(X ** 2 + Y ** 2) / 2)
+cs = ax.contour(X, Y, Z, levels=[0.2, 0.5, 0.8], colors=INK)
+# the truth is each WHOLE loop, taken before the labels open it
+segs = [s.copy() for lev in cs.allsegs for s in lev]
+ax.clabel(cs, fontsize=7)
+save(fig, ax, 'lines-contour-labels', segs)
+
+fig, ax = plt.subplots(figsize=(4, 3))
+y = np.sin(x / 2) * 3 + 5
+yg = y.copy(); yg[35:45] = np.nan
+ax.plot(x, yg, color=INK)
+save(fig, ax, 'lines-empty-gap', [np.c_[x[:35], y[:35]], np.c_[x[45:], y[45:]]])
+
+# V27: a straight reference line (2-point path) and a fit line beside a curve
+fig, ax = plt.subplots(figsize=(4, 3))
+y = np.sin(x / 2) * 3 + 5
+ax.plot(x, y, color=INK)
+ax.axhline(3.0, color=INK, linestyle='--')
+ax.plot([1, 9], [7, 8.5], color=INK)
+ax.set_xlim(0, 10); ax.set_ylim(0, 10)
+save(fig, ax, 'lines-straight', [np.c_[x, y], [[0, 3.0], [10, 3.0]], [[1, 7], [9, 8.5]]])
+
+# V16: a line that runs outside the axes, clipped by the figure
+fig, ax = plt.subplots(figsize=(4, 3))
+y = 0.3 * x ** 2
+ax.plot(x, y, color=INK)
+ax.set_ylim(0, 12)
+inside = x[y <= 12]
+save(fig, ax, 'lines-clipped', [np.c_[inside, 0.3 * inside ** 2]])
+
+# V17: a legend whose sample lines are the series' own style
+fig, ax = plt.subplots(figsize=(4, 3))
+ys = [np.sin(x / 2) * 2 + 5, 0.5 * x + 1]
+for k, y in enumerate(ys):
+    ax.plot(x, y, color=INK, label=f'series {k + 1}')
+leg = ax.legend(loc='upper left')
+save(fig, ax, 'lines-legend', [np.c_[x, y] for y in ys], legend=leg)
+
+# V12a: a picture inside the PDF (nothing drawn to read)
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+fig, ax = plt.subplots(figsize=(4, 3))
+FigureCanvasAgg(fig)
+ax.plot(x, np.sin(x), color=INK)
+fig.canvas.draw()
+img = np.asarray(fig.canvas.buffer_rgba())
+plt.close(fig)
+fig = plt.figure(figsize=(4, 3))
+fig.figimage(img, resize=True)
+fig.savefig('lines-picture.pdf', dpi=100)
+plt.close(fig)
+print('written')

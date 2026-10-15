@@ -266,7 +266,7 @@ export function figureKindLine(k: FigureKind | null): string | null {
   if (!k) return null;
   switch (k.kind) {
     case 'drawn':
-      return 'Drawn as vectors in the PDF.';
+      return 'Drawn as vectors in the PDF: Find lines reads its lines from the drawing.';
     case 'picture':
       return 'A picture inside the PDF: read from its pixels, as any image.';
     case 'partly':
@@ -276,4 +276,28 @@ export function figureKindLine(k: FigureKind | null): string | null {
     case 'none':
       return null;
   }
+}
+
+/** pdf.js getTextContent items, the fields used. */
+export interface PdfTextItem {
+  str: string;
+  transform: readonly number[];
+  width: number;
+}
+
+/** The box of each piece of the page's text, in page space [x0, y0, x1, y1]
+ * (a rotated label gets the box of its run). */
+export function readTextBoxes(items: readonly PdfTextItem[]): [number, number, number, number][] {
+  const out: [number, number, number, number][] = [];
+  for (const t of items) {
+    if (!t.str || !t.str.trim()) continue;
+    const [a, b, c, d, e, f] = t.transform as [number, number, number, number, number, number];
+    const h = Math.hypot(c, d);
+    const n = Math.hypot(a, b) || 1;
+    const ux = a / n, uy = b / n;
+    const q: Pt[] = [[e, f], [e + ux * t.width, f + uy * t.width], [e - uy * h, f + ux * h], [e + ux * t.width - uy * h, f + uy * t.width + ux * h]];
+    const xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
+    out.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+  }
+  return out;
 }
