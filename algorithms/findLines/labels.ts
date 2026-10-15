@@ -127,7 +127,10 @@ export function slotCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
 
 /** Chosen on the research dev set with tesseract.js (READS-dev.md in plottracer-ref): below
  * 0.8 most reads were wrong; above it most were right, though not all - a read is
- * OFFERED, never asserted. */
+ * OFFERED, never asserted.
+ * ⚑ Re-measured for the PaddleOCR reader (v2.7, docs/v2.7-paddle-ocr.md case 12) and KEPT:
+ * at 0.8 it is 84 right / 21 wrong on dev and 78 / 26 on heldout2, against Tesseract's
+ * 51 / 25 and 42 / 37 with the same harness the same day; 0.85 moved one read either way. */
 export const MIN_CONFIDENCE = 0.8;
 
 export interface SlotRead {

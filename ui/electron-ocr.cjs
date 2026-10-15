@@ -68,11 +68,12 @@ function getWorker() {
  *
  * Returns `{ text, confidence, words }` (confidence 0 to 100, each word with its
  * own box in the region's pixels), or `{ error }` with a sentence the panel can
- * show. ⚑ A REFUSAL IS A VALUE HERE, not a thrown stack: the one thing the user
+ * show. `options.detectorBoxes` is for a crop the caller has already isolated
+ * and margined (contour labels); see electron-ocr-paddle.cjs. ⚑ A REFUSAL IS A VALUE HERE, not a thrown stack: the one thing the user
  * must never see is a region that silently produced nothing, because an absent
  * proposal is indistinguishable from a label that genuinely read as blank.
  */
-function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
+function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS, options = {}) {
   return new Promise((resolve) => {
     const id = nextId++
     let timer = null
@@ -88,7 +89,7 @@ function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
       )
     }, timeoutMs)
     try {
-      getWorker().postMessage({ id, pngBase64: String(pngBase64) })
+      getWorker().postMessage({ id, pngBase64: String(pngBase64), options: { detectorBoxes: Boolean(options && options.detectorBoxes) } })
     } catch (e) {
       dropWorker(`Could not read the text: ${e && e.message ? e.message : String(e)}`)
     }

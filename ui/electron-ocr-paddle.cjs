@@ -32,6 +32,10 @@ const REC_MAX_WIDTH = 3200
  * 2.3. The cut is between, nearer the letters.
  */
 const WORD_GAP_HEIGHTS = 1.15
+/** White border added round a region before detection, as a fraction of its short side. */
+const PAD_FRACTION = 0.5
+/** Margin round a single detected row, in row heights, before it is read as one line. */
+const ROW_MARGIN = 0.25
 
 /** OpenCV's source index and 11-bit weights for one output coordinate of a linear resize. */
 function linearTap(d, scale, size) {
@@ -258,10 +262,59 @@ const spellUnits = (s) => s.replace(/[℃℉KÅ]/g, (c) => UNIT_SIGNS[c])
  * files each WORD under its tick, so each space-separated run of characters gets
  * its own box from the columns its characters were read at.
  */
-async function readPixels({ ort, det, rec, chars }, image) {
-  const { width: w, height: h } = image
-  const bgr = toBgr(image)
-  const boxes = await detect(ort, det, bgr, w, h)
+async function readPixels({ ort, det, rec, chars }, image, { detectorBoxes = false } = {}) {
+  const { width: iw, height: ih } = image
+  const inner = toBgr(image)
+  // ⚑⚑ WHITE PAPER ROUND THE REGION BEFORE DETECTING, half its short side.
+  // Callers hand over tight crops (a label cut 2 px from its edges), and the
+  // detector finds nothing in text that touches the border: through the shipped
+  // reader, single tick labels came back EMPTY and the benchmark fell from 89.6%
+  // (recognition alone) to 79.9%. Measured 2026-10-15 on 2,000 PMC labels:
+  // no pad 1,570 right, a quarter 1,655, half 1,661, a full side 1,608.
+  // ⚑ `detectorBoxes`: the caller has already isolated, cleaned and margined the
+  // text (a contour label from `slotCrop`), and any ink near it is a contour line,
+  // not a neighbouring glyph. There the detector's own boxes, unpadded, read best:
+  // contour labels on heldout2 at the 0.8 floor, 78 right / 26 wrong box by box
+  // against 72 / 27 padded and read as one line (2026-10-15).
+  const p = detectorBoxes ? 0 : Math.round(PAD_FRACTION * Math.min(iw, ih))
+  const w = iw + 2 * p
+  const h = ih + 2 * p
+  const bgr = new Float32Array(w * h * 3).fill(255)
+  for (let y = 0; y < ih; y++) bgr.set(inner.subarray(y * iw * 3, (y + 1) * iw * 3), ((y + p) * w + p) * 3)
+  let boxes = await detect(ort, det, bgr, w, h)
+  // ⚑⚑ ONE ROW OF TEXT IS READ AS ONE LINE. Every caller sends a label or a row of
+  // labels; the detector's job is to say how many ROWS there are, not to cut a row
+  // into pieces, because the pieces it cuts off a tight crop are neighbouring ink
+  // (a tick mark, a bar edge) that it then reads as `1` or `.` beside the label.
+  // Recognition across the whole row reads past them. Words still get their own
+  // boxes from the recogniser's time steps. Measured on the same 2,000 labels:
+  // per box 1,661 right, one line round the boxes 1,735.
+  // ⚠️ The margin is SENSITIVE: a half or a whole row height read one category
+  // name fewer on bar-grouped-viability (3 of 4); a quarter keeps every test.
+  // ▶ Several rows (a two-line label) keep the detector's boxes, and so does a
+  // strip too long for the recogniser to take in one piece.
+  if (!detectorBoxes && iw / ih <= REC_MAX_WIDTH / REC_HEIGHT) {
+    const rows = []
+    for (const b of boxes) {
+      const row = rows.find((r) => Math.min(r.y1, b.y1) - Math.max(r.y0, b.y0) >= 0.5 * Math.min(r.y1 - r.y0, b.y1 - b.y0))
+      if (row) {
+        row.y0 = Math.min(row.y0, b.y0)
+        row.y1 = Math.max(row.y1, b.y1)
+      } else rows.push({ y0: b.y0, y1: b.y1 })
+    }
+    if (rows.length === 0) {
+      // Nothing detected: the region is still what the user pointed at, so it is read whole.
+      boxes = [{ x0: p, y0: p, x1: p + iw, y1: p + ih }]
+    } else if (rows.length === 1) {
+      const m = ROW_MARGIN * (rows[0].y1 - rows[0].y0)
+      boxes = [{
+        x0: Math.max(p, Math.round(Math.min(...boxes.map((b) => b.x0)) - m)),
+        y0: Math.max(p, Math.round(Math.min(...boxes.map((b) => b.y0)) - m)),
+        x1: Math.min(p + iw, Math.round(Math.max(...boxes.map((b) => b.x1)) + m)),
+        y1: Math.min(p + ih, Math.round(Math.max(...boxes.map((b) => b.y1)) + m)),
+      }]
+    }
+  }
   const lines = []
   const words = []
   for (const b of boxes) {
@@ -282,7 +335,9 @@ async function readPixels({ ort, det, rec, chars }, image) {
       if (!run.length) return
       const wt = run.map((c) => c.ch).join('')
       const conf = (100 * run.reduce((s, c) => s + c.p, 0)) / run.length
-      const bbox = { x0: b.x0 + toX(run[0].t), y0: b.y0, x1: b.x0 + toX(run[run.length - 1].t + 1), y1: b.y1 }
+      const cx = (v) => Math.max(0, Math.min(iw, v - p))
+      const cy = (v) => Math.max(0, Math.min(ih, v - p))
+      const bbox = { x0: cx(b.x0 + toX(run[0].t)), y0: cy(b.y0), x1: cx(b.x0 + toX(run[run.length - 1].t + 1)), y1: cy(b.y1) }
       words.push({ text: wt, confidence: conf, bbox })
       run = []
     }

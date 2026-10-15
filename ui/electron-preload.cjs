@@ -37,7 +37,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Read text off one region of the figure (v2.4). `pngBase64` is a crop the
   // renderer has already taken and turned; the answer is `{ text, confidence }`
   // or `{ error }`. See ui/electron-ocr.cjs.
-  readText: (pngBase64) => ipcRenderer.invoke('ocr:readText', pngBase64),
+  // `options.detectorBoxes` (v2.7): the crop is already isolated and margined (contour labels).
+  readText: (pngBase64, options) => ipcRenderer.invoke('ocr:readText', pngBase64, options),
 
   // Settings (v2.7). Read synchronously once, for the first render; written back
   // on every change. See ui/electron-settings.cjs and ui/src/settings.ts.

@@ -132,9 +132,9 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
   // ⚑ `require`d lazily, inside the handler: the OCR engine is ~9MB of wasm and
   // language data, and a user who never reads a label should never pay to load
   // it. The first read is the one that starts the worker.
-  ipcMain.handle('ocr:readText', async (_event, pngBase64) => {
+  ipcMain.handle('ocr:readText', async (_event, pngBase64, options) => {
     const { readText } = require('./electron-ocr.cjs')
-    return readText(pngBase64)
+    return readText(pngBase64, undefined, options)
   })
 
   // ⚑ The OCR engine runs in a worker THREAD, which keeps the event loop alive.

@@ -30,11 +30,11 @@ async function startEngine() {
 
 let engine = null
 
-parentPort.on('message', async ({ id, pngBase64 }) => {
+parentPort.on('message', async ({ id, pngBase64, options }) => {
   try {
     const image = decodePng(Buffer.from(String(pngBase64), 'base64'))
     if (!engine) engine = startEngine()
-    parentPort.postMessage({ id, answer: await readPixels(await engine, image) })
+    parentPort.postMessage({ id, answer: await readPixels(await engine, image, options) })
   } catch (e) {
     // ⚑ A failed START is forgotten, so the next read tries again cleanly.
     if (engine) engine.catch(() => (engine = null))
