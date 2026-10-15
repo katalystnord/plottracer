@@ -1,0 +1,22 @@
+PlotTracer text reader: models and runtime
+==========================================
+
+det.onnx, rec.onnx and rec-chars.json are the PP-OCRv6 tiny text detection and text
+recognition models from PaddleOCR.
+
+  PaddleOCR / PP-OCRv6 - Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved.
+  Licensed under the Apache License, Version 2.0 (see LICENSE in this folder).
+  https://github.com/PaddlePaddle/PaddleOCR
+  Models: https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det (revision d3177d4e5551463292a61e27cfca2b53e7c3fe9d)
+          https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec (revision 0736086f72f666350ebcdc0c3a504eeac89cdfad)
+
+Modifications: Katalyst Nord AB converted the published Paddle inference files to ONNX
+with paddle2onnx (opset 14), and wrote the recogniser's character dictionary out as
+Unicode code points in rec-chars.json. The weights are not otherwise changed. The conversion is reproduced by
+tools/ocr-model/build.sh in the PlotTracer source.
+
+The models are run by ONNX Runtime Web (onnxruntime-web), Copyright (c) Microsoft
+Corporation, licensed under the MIT License (see onnxruntime/LICENSE). Its third-party
+notices are in onnxruntime/ThirdPartyNotices.txt, copied from the v1.30.0 release with one
+change: a section separator drawn with two dash characters is written in the file's own
+"_____" separator style. No licence text is altered.

@@ -28,9 +28,13 @@ for pair in "det:PP-OCRv6_tiny_det:$DET_REV" "rec:PP-OCRv6_tiny_rec:$REC_REV"; d
 done
 
 # The recogniser's output classes: index 0 is the CTC blank, then the dictionary, then a space.
+# ⚑ Written as CODE POINTS, not glyphs: the dictionary contains the em-dash among the characters
+# the model can read, and tools/no-em-dashes.sh rightly refuses that glyph anywhere in the tree.
+# The blank is 0; it is never emitted.
 "$PY" - "$WORK/rec/inference.yml" "$OUT/rec-chars.json" <<'PYEOF'
 import json, sys, yaml
-chars = yaml.safe_load(open(sys.argv[1]))['PostProcess']['character_dict']
-json.dump(['blank'] + chars + [' '], open(sys.argv[2], 'w'), ensure_ascii=False)
+chars = yaml.safe_load(open(sys.argv[1]))['PostProcess']['character_dict'] + [' ']
+assert all(len(c) == 1 for c in chars), 'a dictionary entry is not one code point'
+json.dump([0] + [ord(c) for c in chars], open(sys.argv[2], 'w'))
 PYEOF
 sha256sum "$OUT"/det.onnx "$OUT"/rec.onnx "$OUT"/rec-chars.json

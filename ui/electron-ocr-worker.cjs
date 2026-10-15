@@ -23,7 +23,8 @@ async function startEngine() {
     ort.InferenceSession.create(fs.readFileSync(path.join(MODEL_DIR, 'det.onnx')), options),
     ort.InferenceSession.create(fs.readFileSync(path.join(MODEL_DIR, 'rec.onnx')), options),
   ])
-  const chars = JSON.parse(fs.readFileSync(path.join(MODEL_DIR, 'rec-chars.json'), 'utf8'))
+  // Code points, not glyphs (tools/ocr-model/build.sh says why); 0 is the CTC blank.
+  const chars = JSON.parse(fs.readFileSync(path.join(MODEL_DIR, 'rec-chars.json'), 'utf8')).map((cp) => (cp ? String.fromCodePoint(cp) : ''))
   return { ort, det, rec, chars }
 }
 

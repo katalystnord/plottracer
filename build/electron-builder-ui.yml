@@ -45,6 +45,8 @@ files:
   # electron-main.cjs directly with the right platform flags; a packaged app
   # never goes through npm scripts, so it has nothing to spawn.
   - ui/electron-*.cjs
+  # ⚑ The OCR models (v2.7): read by electron-ocr-worker.cjs from beside it.
+  - ui/ocr-model/**/*
   - "!ui/electron-dev.cjs"
   - "!ui/electron-start.cjs"
   - build/icons/**/*
@@ -71,8 +73,9 @@ files:
   #     including pdf.js's worker (`?worker`, whose own comment in
   #     ui/src/pdfRender.ts says "there is no runtime path to guess").
   #   · the MAIN process and the PRELOAD require, in total: `electron`, `path`,
-  #     `fs`, each other, and `tesseract.js`. That is the whole list, and it is
-  #     checkable by grepping `require(` across the five shipped `.cjs` files.
+  #     `fs`, `worker_threads`, `zlib`, each other, and `onnxruntime-web`. That is
+  #     the whole list, and it is checkable by grepping `require(` across the
+  #     shipped `.cjs` files.
   #
   # ⚑ So the rule is an ALLOW LIST: drop `node_modules`, then put back the OCR
   # engine and the handful of packages its NODE path actually loads. A deny list
@@ -83,81 +86,21 @@ files:
   # this change is not made on reasoning alone - the packaged binary is driven
   # (image open, PDF open, an export, and an OCR read) before it is believed.
   - "!node_modules/**/*"
-  - node_modules/tesseract.js/**/*
-  - node_modules/tesseract.js-core/**/*
-  - node_modules/@tesseract.js-data/**/*
-  # ⚠️⚑⚑ WHAT THE NODE PATH REQUIRES, READ OFF ITS OWN SOURCE - AND I GOT THIS
-  # WRONG ONCE, WHICH IS WHY IT IS SPELLED OUT. The first attempt dropped
-  # `bmp-js` as "browser only". It is not: `worker-script/utils/setImage.js` is
-  # SHARED, so the node worker requires it, and the packaged app then failed
-  # with `Cannot find module 'bmp-js'`.
-  # ▶ The check that settles it is a grep for bare `require(` across
-  # `node_modules/tesseract.js/src`, then asking WHICH FILE each one is in:
-  # `zlibjs` (3.7MB) and `idb-keyval` appear only under `worker-script/browser/`,
-  # which the node worker never loads (it uses built-in `zlib`), while `bmp-js`
-  # sits in `worker-script/utils/`, which it always does.
-  # ⚠️ AND A PLAIN `node` CHECK INSIDE THIS REPO CANNOT SETTLE IT: node resolves
-  # up the directory tree, so a module missing from the package is found in the
-  # repo's own `node_modules` and the test passes. Only the packaged binary
-  # answers honestly - which is what `ui/__tests__/packagedApp.e2e.test.ts` is
-  # for.
-  - node_modules/bmp-js/**/*
-  - node_modules/is-url/**/*
-  - node_modules/wasm-feature-detect/**/*
-  - node_modules/regenerator-runtime/**/*
-  # ⚑ `node-fetch` and its three helpers are kept although they are almost
-  # certainly dead: the call is `global.fetch || require('node-fetch')`, and
-  # Electron's main process has `fetch`. 580KB against the chance that some
-  # runtime one day does not is the right side of that trade, and unlike the
-  # rest it is a `require` that would fire at OCR time.
-  - node_modules/node-fetch/**/*
-  - node_modules/whatwg-url/**/*
-  - node_modules/tr46/**/*
-  - node_modules/webidl-conversions/**/*
-
-  # ⚑⚑ OCR SHIPS THREE ENGINE BUILDS, NOT SIX (v2.4). `tesseract.js-core` is
-  # ~44MB: the same engine compiled six ways (plain / simd / relaxedsimd, each
-  # with and without LSTM) plus a single-file `.wasm.js` copy of each with the
-  # wasm inlined. The `.wasm.js` copies are never referenced by the loaders we
-  # use, and half the builds are unreachable - see below.
-  #
-  # ⚠️⚠️ WHICH HALF IS UNREACHABLE WAS MEASURED, AND BOTH OF MY EARLIER ANSWERS
-  # WERE WRONG. The v2.4 spike note said "ship `simd-lstm`". Then, having found
-  # that Electron reports `relaxedSimd: true`, I shipped the two `*-lstm` SIMD
-  # builds and asserted that OEM 1 (LSTM_ONLY) could reach nothing else. The
-  # packaged app then failed with `Cannot find module
-  # 'tesseract.js-core/tesseract-core-relaxedsimd'` - the NON-LSTM one.
-  #
-  # ▶ THE REASON IS A QUIRK IN tesseract.js 7.0.0, and it is worth writing down
-  # because it makes the right answer certain rather than lucky.
-  # `worker-script/index.js` calls `adapter.getCore(lstmOnly, corePath, res)`,
-  # passing a BOOLEAN; `worker-script/node/getCore.js` receives it as `oem` and
-  # branches on `[OEM.DEFAULT, OEM.LSTM_ONLY].includes(oem)` - that is
-  # `[3, 1].includes(true)`, which is ALWAYS false. So the node worker takes the
-  # non-LSTM branch whatever OEM the caller asks for, and the three builds it can
-  # reach are exactly `relaxedsimd`, `simd` and plain, chosen by
-  # `wasm-feature-detect`. All three are shipped: this machine loads
-  # `relaxedsimd`, and the other two are the honest fallbacks for a CPU whose V8
-  # answers differently.
-  # ⚑ It costs ~10MB uncompressed against the 96MB this rule saves, and the
-  # accuracy is unaffected: the non-LSTM core contains the LSTM engine too, it is
-  # merely the larger build. Measured reading with it: 6 of 6 labels, confidence
-  # 73-96.
-  # ⚠️ If a later tesseract.js fixes that boolean, the `*-lstm` builds become the
-  # reachable ones and this rule is wrong again - which is precisely what
-  # `ui/__tests__/packagedApp.e2e.test.ts` exists to catch. Run it after a
-  # package build; it is the only check that can see this class of fault.
-  #
-  # ⚑ These come AFTER the allow list above, because a later pattern wins.
-  - "!node_modules/tesseract.js-core/*.wasm.js"
-  - "!node_modules/tesseract.js-core/tesseract-core-lstm.*"
-  - "!node_modules/tesseract.js-core/tesseract-core-simd-lstm.*"
-  - "!node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.*"
-  # ⚑ And ONE language set. `@tesseract.js-data/eng` carries both the 10.9MB
-  # `4.0.0` data (which its own index.js points at) and the compact 2.95MB
-  # `4.0.0_best_int`. We ask for the compact one by path in electron-ocr.cjs;
-  # this is what stops the other one riding along.
-  - "!node_modules/@tesseract.js-data/eng/4.0.0/**"
+  # ⚑⚑ OCR SHIPS ONE WASM BUILD AND THREE MODEL FILES (v2.7, PaddleOCR).
+  # The reader is `onnxruntime-web` running PP-OCRv6 tiny (docs/v2.7-paddle-ocr.md).
+  # In Node, `require('onnxruntime-web')` resolves to `dist/ort.node.min.js`, which
+  # loads `onnxruntime-common`'s CommonJS build and ONE wasm build, the plain
+  # threaded one, through its `.mjs` loader. Read off an strace of a real read
+  # (2026-10-15), not off the package's file list: the other three wasm builds
+  # (asyncify, jsep, jspi) are browser paths Node never takes, and they are 72MB.
+  # ⚠️ As with Tesseract before it, only the packaged binary can confirm this
+  # list: run `PACKAGED_APP=1 npx vitest run ui/__tests__/packagedApp.e2e.test.ts`.
+  - node_modules/onnxruntime-web/package.json
+  - node_modules/onnxruntime-web/dist/ort.node.min.js
+  - node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs
+  - node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm
+  - node_modules/onnxruntime-common/package.json
+  - node_modules/onnxruntime-common/dist/cjs/**/*
 
 linux:
   target:
