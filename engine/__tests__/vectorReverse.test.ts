@@ -154,10 +154,9 @@ describe('V22: what is read from the drawing is the data the figure was made fro
     const off = lines[0]!.map((g) => Math.min(...s.data.map((d) => Math.max(Math.abs(g[0] - d[0]), Math.abs(g[1] - d[1])))));
     expect(Math.max(...off)).toBeLessThan(half);
   });
-  // ⚑ Whether EVERY corner of a dense drawn line is kept, rather than one every
-  // 2.5 px, is the open thinning decision (design note below V22 in the cases
-  // doc). Today the dense line above keeps 156 of its 451 data points.
-  it.todo('given a drawn line whose corners are closer than 2.5 px, every corner is a point in the series (waits for David: thinning)');
+  // ⚑ Its corners are NOT all the data: matplotlib simplified 451 points to 178
+  // corners when it wrote the PDF. So a drawn line keeps Find lines' density
+  // (David, 2026-10-16), and this test asks only that what is kept is data.
 
   // ⚑ The other half of V22, the calibration READ from the labels, is in
   // labelCalibration.test.ts ("V22, the calibration half"), beside the reader.
