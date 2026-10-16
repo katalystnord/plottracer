@@ -70,7 +70,7 @@ save(fig, ax, 'labels-unpaired')
 
 # V8: Y has a single label (one usable pair); X labels do not fit one scale
 fig, ax = plt.subplots(figsize=(4, 3))
-ax.plot([0, 10], [0, 10], color='#8c564b')
+ax.plot(np.arange(11), np.arange(11), color='#8c564b', marker='o')  # markers: enough drawn shapes to class as drawn (V1)
 ax.set_xlim(0, 10); ax.set_ylim(0, 10)
 ax.set_yticks([5]); ax.set_yticklabels(['5'])
 ax.set_xticks([0, 2, 4, 6, 8, 10]); ax.set_xticklabels(['0', '2', '4', '9', '8', '10'])

@@ -2875,6 +2875,65 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(savePath);
   }, 60000);
 
+  it('V5-V9: a drawn figure\'s axes are read from its own labels, offered, and Apply fills the calibration as clicks would', async () => {
+    const fixture = (n: string) => path.join(__dirname, '../../engine/__tests__/fixtures/vector', n + '.pdf');
+    const openAndCapture = async (file: string) => {
+      await resetWorkspace('xy');
+      await stubOpenProjectDialog(file);
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+      await page.getByTestId('capture-figure').click();
+      // the line comes once the page's drawing is read; a card folded by the
+      // last calibration opens again with its fold arrow
+      const line = page.getByTestId('figure-kind');
+      await line.waitFor({ timeout: 3000 }).catch(async () => {
+        await page.getByTestId('calib-fold').click();
+        await line.waitFor({ timeout: 5000 });
+      });
+    };
+
+    // V5: the card offers the read beside the line that says the figure is drawn
+    await openAndCapture(fixture('labels-linear'));
+    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
+    expect(await textOf('label-axes-x')).toBe('X: 0, 20, 40, 60, 80, 100');
+    expect(await textOf('label-axes-y')).toBe('Y: 0, 500, 1000, 1500, 2000, 2500, 3000, 3500');
+    // V11
+    expect(await textOf('label-axes-precision')).toBe('To the printed digits: 0.5 on X, 0.5 on Y.');
+    // nothing applied until Apply
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    expect(await textOf('calib-chip-x1')).toBe('X1click image');
+
+    // V6: Apply fills X1, X2, Y1, Y2 with the outermost ticks and their values;
+    // the walk then ends the way a hand-filled one does, with Calibrate
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
+    expect((await textOf('calib-chip-x1')).replace(/\s/g, '')).toBe('X10');
+    expect((await textOf('calib-chip-x2')).replace(/\s/g, '')).toBe('X2100');
+    expect((await textOf('calib-chip-y1')).replace(/\s/g, '')).toBe('Y10');
+    expect((await textOf('calib-chip-y2')).replace(/\s/g, '')).toBe('Y23500');
+    // X1 and Y1 sit at their own ticks, so the box no longer says they are one point
+    expect(await page.getByTestId('common-origin').isChecked()).toBe(false);
+    await page.getByRole('button', { name: 'Calibrate', exact: true }).click();
+    expect(await textOf('calib-status')).toContain('Calibrated');
+
+    // V9: exponent labels: the axis is offered as log, and Apply ticks Log Y where it can be seen
+    await openAndCapture(fixture('labels-log'));
+    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
+    expect(await textOf('label-axes-y')).toBe('Y: 10^1, 10^2, 10^3, 10^4, log');
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
+    expect(await page.getByTestId('calib-option-isLogY').isChecked()).toBe(true);
+    expect(await page.getByTestId('calib-option-isLogX').isChecked()).toBe(false);
+
+    // V8: an axis that cannot be read says why, and nothing can be applied
+    await openAndCapture(fixture('labels-refused'));
+    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
+    expect(await textOf('label-axes-x')).toBe('X could not be read: the labels do not fit one linear or one log scale.');
+    expect(await textOf('label-axes-y')).toBe('Y could not be read: only one label sits at a tick mark; two are needed.');
+    expect(await page.getByRole('button', { name: 'Apply', exact: true }).isDisabled()).toBe(true);
+    // Cancel takes the offer away; calibrating by hand is unchanged
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(await page.getByTestId('label-axes-offer').count()).toBe(0);
+  }, 60000);
+
   it('bundles the source PDF into the saved project, and restores it (checkpoint 104)', async () => {
     await resetWorkspace('xy'); // establishes wiring
     const pdfPath = tempFilePath('pdf');

@@ -239,7 +239,7 @@ function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Labe
       labelBox: label.box,
       tick: (axis === 'x' ? [tick.at, end(tick)] : [end(tick), tick.at]) as Pt,
     }))
-    .sort((a, b) => (axis === 'x' ? a.tick[0] - b.tick[0] : a.tick[1] - b.tick[1]));
+    .sort((a, b) => a.value - b.value); // as a reader lists them, lowest first
   // what lies along this axis but was not used: marks on the same axis line
   // with no label (minor ticks), and numbers in the label band with no mark
   const axisLine = end(row[0]!);

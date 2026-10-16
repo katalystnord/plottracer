@@ -174,8 +174,10 @@ import {
 // LoadedDocument is the shared shape for PDF and TIFF alike (ui/src/pagedDocument.ts).
 import type { LoadedDocument } from './pagedDocument.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
-import { figureKind, figureKindLine, type FigureKind, type PageDrawing } from '../../engine/pdfDrawing.js';
-import { pageToImage, placeDrawing } from '../../engine/drawingPlacement.js';
+import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type PageText } from '../../engine/pdfDrawing.js';
+import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
+import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
+import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
 import { findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import {
   serializeProjectZip,
@@ -1750,11 +1752,15 @@ export function Workspace() {
     figureKindTextRef.current = t;
     setFigureKindTextState(t);
   }, []);
-  const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; pageArea: number }> } | null>(null);
+  const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; items: PageText[]; pageArea: number }> } | null>(null);
   /** The kind as last measured, for Find lines to choose its source by (V12). */
   const figureKindRef = useRef<FigureKind | null>(null);
   /** The page's drawing once read, for the readers that run synchronously (V15). */
-  const pageDrawingReadRef = useRef<{ drawing: PageDrawing; text: [number, number, number, number][] } | null>(null);
+  const pageDrawingReadRef = useRef<{ drawing: PageDrawing; text: [number, number, number, number][]; items: PageText[] } | null>(null);
+  /** v2.7 V5: the axes read from the figure's labels, offered in the calibration
+   * card until Apply or Cancel; the line said when they cannot be read (V10). */
+  const [labelAxes, setLabelAxes] = useState<AxesFromLabels | null>(null);
+  const [labelAxesNotice, setLabelAxesNotice] = useState<string | null>(null);
   useEffect(() => {
     const src = sourcePdfRef.current;
     const page = provenance.source?.page;
@@ -1762,19 +1768,23 @@ export function Workspace() {
       figureKindRef.current = null;
       pageDrawingReadRef.current = null;
       setFigureKindText(null);
+      setLabelAxes(null);
+      setLabelAxesNotice(null);
       return;
     }
     let live = true;
+    setLabelAxes(null);
+    setLabelAxesNotice(null);
     if (!pageDrawingRef.current || pageDrawingRef.current.bytes !== src.bytes || pageDrawingRef.current.page !== page) {
       pageDrawingRef.current = { bytes: src.bytes, page, read: import('./pdfRender.js').then((m) => m.readPdfPageDrawing(src.bytes, page)) };
     }
     const prov = provenance;
-    pageDrawingRef.current.read.then(({ drawing, text, pageArea }) => {
+    pageDrawingRef.current.read.then(({ drawing, text, items, pageArea }) => {
       const img = imageCanvasRef.current?.getImageData();
       if (!live || !img) return;
       const k = figureKind(drawing, (q) => pageToImage(prov, q), img.width, img.height, pageArea);
       figureKindRef.current = k;
-      pageDrawingReadRef.current = { drawing, text };
+      pageDrawingReadRef.current = { drawing, text, items };
       setFigureKindText(figureKindLine(k));
     }).catch(() => {
       if (!live) return;
@@ -4729,6 +4739,53 @@ export function Workspace() {
       bump();
     }
   }, [session, bump, commit, heatmapActive, runHeatmapDetect]);
+
+  /**
+   * v2.7 V5: read the axes from the figure's own tick labels and the marks drawn
+   * at them. The result is only OFFERED (the card shows it, the canvas joins
+   * each label to its tick); Apply is what fills the walk (V6).
+   */
+  const readAxesFromFigureLabels = useCallback(() => {
+    const read = pageDrawingReadRef.current;
+    const img = imageCanvasRef.current?.getImageData();
+    if (!read || !img) return;
+    const prov = provenanceRef.current;
+    const placed = placeDrawing(prov, read.drawing, read.text);
+    const text = placeTextItems(prov, read.items).filter((t) => {
+      const cx = (t.box.x0 + t.box.x1) / 2, cy = (t.box.y0 + t.box.y1) / 2;
+      return cx >= 0 && cy >= 0 && cx <= img.width && cy <= img.height;
+    });
+    if (!placed) return;
+    // V10: a drawn figure with no text in it draws its labels as shapes
+    if (!text.some((t) => /\d/.test(t.str))) {
+      setLabelAxes(null);
+      setLabelAxesNotice('The labels are drawn as shapes, so they cannot be read from the drawing. Calibrate by hand instead.');
+      return;
+    }
+    setLabelAxesNotice(null);
+    setLabelAxes(readAxesFromLabels(placed, text, { width: img.width, height: img.height }));
+  }, []);
+
+  /** V6: fill X1, X2, Y1 and Y2 with the offered ticks and values, exactly as
+   * the clicks and typed values would, and the Log boxes with what was read. */
+  const applyLabelAxes = useCallback(() => {
+    const read = labelAxes;
+    if (!read?.points || !read.x.ok || !read.y.ok) return;
+    if (session.getCurrentStep()?.key !== 'x1') return;
+    session.setOption('isLogX', String(read.x.log));
+    session.setOption('isLogY', String(read.y.log));
+    const [x1, x2, y1, y2] = read.points;
+    for (const [p, v] of [[x1!, x1!.x], [x2!, x2!.x], [y1!, y1!.y], [y2!, y2!.y]] as const) {
+      session.handleCalibrationClick(p.px, p.py);
+      if (!session.confirmCalibrationValues([String(v)])) break;
+    }
+    // X1 and Y1 were placed at their own ticks, so the box saying they are
+    // one point would no longer be true
+    setCommonOrigin(false);
+    setLabelAxes(null);
+    setDataValueInputs([]);
+    commit();
+  }, [labelAxes, session, commit]);
 
   const setGlobalField = useCallback(
     (key: string, value: string) => {
@@ -7846,8 +7903,25 @@ export function Workspace() {
         color: theme.color.primary.main,
       });
     }
+    // v2.7 V5: each label read from the figure joined to its own tick mark, in
+    // its axis's calibration colour, while the read is offered; a number with
+    // no tick mark at it is marked not used, in grey
+    if (labelAxes) {
+      for (const a of [labelAxes.x, labelAxes.y]) {
+        const colour = steps.find((st) => st.key === (a.axis === 'x' ? 'x1' : 'y1'))?.color;
+        a.pairs.forEach((p, i) => {
+          const at = { x: (p.labelBox.x0 + p.labelBox.x1) / 2, y: (p.labelBox.y0 + p.labelBox.y1) / 2 };
+          list.push({ id: `label-axes-${a.axis}-${i}`, points: [{ x: p.tick[0], y: p.tick[1] }, at], label: p.label, labelAt: at, ...(colour ? { color: colour } : {}) });
+        });
+        a.unused.forEach((u, i) => {
+          if (u.label === null) return;
+          const at = { x: (u.box.x0 + u.box.x1) / 2, y: (u.box.y0 + u.box.y1) / 2 };
+          list.push({ id: `label-axes-${a.axis}-unused-${i}`, points: [at], label: 'not used', labelAt: at, color: '#8a8a8a' });
+        });
+      }
+    }
     return list;
-  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag]);
+  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps]);
 
   // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
   // nothing if only its author knows it is possible -- that is the "shortcut-only
@@ -9202,6 +9276,25 @@ export function Workspace() {
             <span data-testid="figure-kind" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
               {figureKindText}
             </span>
+          )}
+          {/* v2.7 V5: a drawn figure's axes can be READ from its own labels.
+              Offered before the walk starts, beside the line that says the
+              figure is drawn; calibrating by hand is unchanged (V6). */}
+          {figureCaptured && calibExpanded && !axes && !labelAxes && steps[0]?.key === 'x1' && Object.keys(placedPoints).length === 0
+            && (figureKindRef.current?.kind === 'drawn' || figureKindRef.current?.kind === 'partly') && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <button type="button" data-testid="read-axes-from-labels" onClick={readAxesFromFigureLabels} style={{ fontSize: 12 }}>
+                Read the axes from the figure's labels
+              </button>
+              {labelAxesNotice && (
+                <span data-testid="label-axes-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                  {labelAxesNotice}
+                </span>
+              )}
+            </span>
+          )}
+          {figureCaptured && calibExpanded && labelAxes && (
+            <LabelAxesOffer read={labelAxes} onApply={applyLabelAxes} onCancel={() => setLabelAxes(null)} />
           )}
           {figureCaptured && calibExpanded && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>

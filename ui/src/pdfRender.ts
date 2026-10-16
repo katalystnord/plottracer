@@ -36,7 +36,7 @@ import PdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?worker';
 import type { LoadedDocument } from './pagedDocument.js';
 import { sharpRenderTransform } from '../../engine/drawingPlacement.js';
 import type { Provenance } from '../../engine/projectFile.js';
-import { readDrawing, readTextBoxes, type PageDrawing, type PdfOps, type PdfTextItem } from '../../engine/pdfDrawing.js';
+import { readDrawing, readTextItems, type PageDrawing, type PageText, type PdfOps, type PdfTextItem } from '../../engine/pdfDrawing.js';
 
 pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -63,14 +63,14 @@ const MAX_SCALE = 6;
 /** v2.7: page `n`'s DRAWING (engine/pdfDrawing.ts), read from the PDF's bytes -
  * not from an open LoadedDocument, so a reopened project (whose PDF is kept in
  * it, checkpoint 104) can be read too. */
-export async function readPdfPageDrawing(bytes: Uint8Array, n: number): Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; pageArea: number }> {
+export async function readPdfPageDrawing(bytes: Uint8Array, n: number): Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; items: PageText[]; pageArea: number }> {
   const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
   try {
     const page = await doc.getPage(n);
     const ops = await page.getOperatorList();
-    const text = readTextBoxes((await page.getTextContent()).items as PdfTextItem[]);
+    const items = readTextItems((await page.getTextContent()).items as PdfTextItem[]);
     const [x0, y0, x1, y1] = page.view as number[];
-    return { drawing: readDrawing(ops, pdfjs.OPS as unknown as PdfOps), text, pageArea: (x1! - x0!) * (y1! - y0!) };
+    return { drawing: readDrawing(ops, pdfjs.OPS as unknown as PdfOps), text: items.map((t) => t.box), items, pageArea: (x1! - x0!) * (y1! - y0!) };
   } finally {
     void doc.destroy();
   }
