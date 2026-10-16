@@ -18,7 +18,7 @@ import type { Provenance } from '../projectFile.js';
 import type { PlacedDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import { barsFromDrawing } from '../barsFromDrawing.js';
 import { partitionSwatchSuspects } from '../barDetectRun.js';
-import { CalibrationSession, BAR_AXES_CONFIG, type CalibratedAxes } from '../calibrationSession.js';
+import { CalibrationSession, BAR_AXES_CONFIG, STACKED_AXES_CONFIG, type CalibratedAxes } from '../calibrationSession.js';
 import { walkCategoryAxis } from './helpers/categoryWalk.js';
 
 const FIX = join(__dirname, 'fixtures/vector');
@@ -36,7 +36,7 @@ const figs: Record<string, { drawing: PlacedDrawing; truth: Truth; at: (p: Pt) =
 
 beforeAll(async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  for (const name of ['bars-grouped', 'bars-horizontal', 'bars-floating']) {
+  for (const name of ['bars-grouped', 'bars-horizontal', 'bars-floating', 'bars-stacked']) {
     const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(join(FIX, name + '.pdf'))), verbosity: 0 }).promise;
     const page = await doc.getPage(1);
     const vp = page.getViewport({ scale: 3.7 });
@@ -53,10 +53,10 @@ beforeAll(async () => {
 });
 
 /** A bar session calibrated the way a user walks it, at the generator's positions. */
-function session(name: string): CalibrationSession<CalibratedAxes> {
+function session(name: string, stacked = false): CalibrationSession<CalibratedAxes> {
   const f = figs[name]!;
   const t = f.truth;
-  const s = new CalibrationSession<CalibratedAxes>(BAR_AXES_CONFIG as never);
+  const s = new CalibrationSession<CalibratedAxes>((stacked ? STACKED_AXES_CONFIG : BAR_AXES_CONFIG) as never);
   if (t.horizontal) s.setOption('isRotated', 'true');
   for (const [v, pos] of t.value) {
     const p = t.horizontal ? f.at([pos, t.box[1]!]) : f.at([t.box[0]!, pos]);
@@ -71,9 +71,9 @@ function session(name: string): CalibrationSession<CalibratedAxes> {
 
 /** The series' bars as the app files them: read, swatches held back, filed.
  * `maskLegend` marks the legend as not-data, as a user does (V17). */
-function file(name: string, k: number, maskLegend = false) {
+function file(name: string, k: number, maskLegend = false, stacked = false) {
   const f = figs[name]!;
-  const s = session(name);
+  const s = session(name, stacked);
   const baseline = s.baselinePixelForDetect() ?? undefined;
   const masks = maskLegend ? f.truth.swatches.map((b) => {
     const a = f.at([b[0]! - 2, b[1]! - 2]), c = f.at([b[2]! + 2, b[3]! + 2]);
@@ -113,6 +113,17 @@ describe('V18: bars read from the drawing are the data the figure was made from'
     expect(added).toBe(want.length);
     expect(heights).toHaveLength(want.length);
     want.forEach((w, i) => expect(Math.abs(heights[i]! - w), `bar ${i}`).toBeLessThan(0.005));
+  });
+
+  it('V18: a stacked bar chart (the Stacked bar type): each layer\'s segments are read, and the upper ones are not held back though they float', () => {
+    for (const k of [0, 1]) {
+      const { heights, added, holdBack } = file('bars-stacked', k, false, true);
+      const want = figs['bars-stacked']!.truth.series[k]!.heights;
+      expect(holdBack, `layer ${k}: nothing held back`).toHaveLength(0);
+      expect(added, `layer ${k}: one segment per drawn rectangle`).toBe(want.length);
+      expect(heights).toHaveLength(want.length);
+      want.forEach((w, i) => expect(Math.abs(heights[i]! - w), `layer ${k} segment ${i}`).toBeLessThan(0.005));
+    }
   });
 
   it('V18: a bar that does not stand on the baseline is filed, and the bar table\'s own off-baseline note says so', () => {

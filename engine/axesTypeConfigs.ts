@@ -2430,12 +2430,11 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     // chart whose bars do not share an origin is a Span chart, a type of its
     // own), and then the typed `Baseline value` beside it. Tenet 9 in its
     // plainest form: if it can be measured off the pixels, it is not a setting.
-    // ⚑⚑ v2.3: THIS IS WHERE THE STACK QUESTION BELONGS, and it replaces the
-    // Series card's `Stack group` free-text field entirely. David, having got
-    // that field working and then asked what it did that a series name did not:
-    // *"THIS is where we should ask if the bars are stacked!"* One fact about
-    // how the whole figure draws its bars, asked once, beside the two questions
-    // of exactly the same kind that were already here.
+    // ⚑ The STACK question was asked here from v2.3 (a checkbox that replaced
+    // the Series card's `Stack group` field: *"THIS is where we should ask if
+    // the bars are stacked!"*). It is gone: a stacked bar chart is its own type,
+    // `STACKED_AXES_CONFIG` ("Stacked bar", 5871779), and this one always builds
+    // unstacked axes (`setStacked(false)` in `buildAxes`).
   ],
   /**
    * ⚑⚑ FOUR STEPS, BECAUSE A BAR CHART HAS TWO AXES (v2.3). The value axis is

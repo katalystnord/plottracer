@@ -109,4 +109,13 @@ fig, ax = plt.subplots(figsize=(4, 3))
 ax.bar(np.arange(3), f, width=0.6, color='#9467bd', bottom=[0, 1.5, 0])
 ax.set_xlim(-0.5, 2.5); ax.set_ylim(0, 6)
 save(fig, ax, 'bars-floating', [{'colour': rgb('#9467bd'), 'heights': f}], extra={'floating': [1]})
+# V18: stacked bars, two layers in their own colours; the upper layer's
+# segments stand on the lower one's tops, so they float by design
+lo_ = [2.10, 3.40, 1.75, 2.90]
+hi_ = [1.20, 0.85, 2.30, 1.65]
+fig, ax = plt.subplots(figsize=(4, 3))
+ax.bar(np.arange(4), lo_, width=0.6, color='#1f77b4')
+ax.bar(np.arange(4), hi_, width=0.6, color='#ff7f0e', bottom=lo_)
+ax.set_xlim(-0.5, 3.5); ax.set_ylim(0, 6)
+save(fig, ax, 'bars-stacked', [{'colour': rgb('#1f77b4'), 'heights': lo_}, {'colour': rgb('#ff7f0e'), 'heights': hi_}])
 print('written')
