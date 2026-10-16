@@ -21,7 +21,9 @@ const name = (a: AxisFromLabels) => a.axis.toUpperCase();
 function axisLine(a: AxisFromLabels & { ok: true }): string {
   const labels = a.pairs.map((p) => p.label);
   const shown = labels.length > 8 ? `${labels.slice(0, 3).join(', ')} … ${labels[labels.length - 1]}` : labels.join(', ');
-  return `${name(a)}: ${shown}${a.log ? ', log' : ''}`;
+  // a second axis on the far side is a different quantity, so say which edge
+  const edge = a.side === 'top' || a.side === 'right' ? ` (the ${a.side} axis)` : '';
+  return `${name(a)}: ${shown}${a.log ? ', log' : ''}${edge}`;
 }
 
 /** "7.3 has no tick mark at it; 8 tick marks have no label". */

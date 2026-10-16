@@ -201,3 +201,98 @@ describe('V22, the calibration half: read from the labels, the data come out as 
     });
   }
 });
+
+/**
+ * Forms met on real preprint charts (plottracer-ref research/v2.7-vector/bench,
+ * labelsreal.harness.ts), each built here from made-up marks and text so the
+ * rule is tested apart from the chart it was found on.
+ */
+describe('V5-V8 on the forms real figures take', () => {
+  type T = { str: string; box: { x0: number; y0: number; x1: number; y1: number }; size: number };
+  const ink = [0, 0, 0] as [number, number, number];
+  const seg = (a: Pt, b: Pt) => ({ subs: [[a, b]], stroked: true, filled: false, stroke: ink, fill: ink, lineWidth: 1, dash: null });
+  /** A figure in picture px (1 px a point): X axis at y = 250, Y axis at x = 50. */
+  function figure(o: { x?: [number, string[]][]; y?: [number, string[]][]; xTicks?: number[]; yTicks?: number[]; inward?: boolean; top?: [number, string][]; yMidOff?: number; extra?: T[] }) {
+    const shapes = [];
+    const text: T[] = [...(o.extra ?? [])];
+    const piece = (s: string) => (s === ',' || s === '-' || s === '−' ? 3 : 6 * s.length);
+    for (const [x, pieces] of o.x ?? []) {
+      const w = pieces.reduce((a, s) => a + piece(s), 0);
+      let at = x - w / 2;
+      for (const s of pieces) {
+        const y0 = o.inward ? 248.8 : 258;
+        text.push({ str: s, box: { x0: at, y0, x1: at + piece(s), y1: y0 + 10 }, size: 10 });
+        at += piece(s);
+      }
+    }
+    for (const x of o.xTicks ?? (o.x ?? []).map(([x]) => x)) shapes.push(o.inward ? seg([x, 250], [x, 246]) : seg([x, 250], [x, 254]));
+    for (const [y, pieces] of o.y ?? []) {
+      const w = pieces.reduce((a, s) => a + piece(s), 0);
+      let at = 42 - w;
+      const y1 = y + (o.yMidOff ?? 3.5);
+      for (const s of pieces) {
+        text.push({ str: s, box: { x0: at, y0: y1 - 10, x1: at + piece(s), y1 }, size: 10 });
+        at += piece(s);
+      }
+    }
+    for (const y of o.yTicks ?? (o.y ?? []).map(([y]) => y)) shapes.push(seg([46, y], [50, y]));
+    for (const [x, s] of o.top ?? []) {
+      shapes.push(seg([x, 20], [x, 16]));
+      text.push({ str: s, box: { x0: x - 3 * s.length, y0: 4, x1: x + 3 * s.length, y1: 14 }, size: 10 });
+    }
+    return readAxesFromLabels({ shapes, text: [], pxPerPt: 1 }, text, { width: 400, height: 300 });
+  }
+  const xs = (vals: string[][]) => vals.map((p, i): [number, string[]] => [80 + 60 * i, p]);
+  const ys = (vals: string[][]) => vals.map((p, i): [number, string[]] => [230 - 50 * i, p]);
+
+  it('a decimal comma set as its own piece reads as a decimal point: "0" "," "05" is 0.05', () => {
+    const r = figure({ x: xs([['0', ',', '05'], ['0', ',', '10'], ['0', ',', '15']]), y: ys([['0'], ['1'], ['2']]) });
+    expect(values(r.x)).toEqual([0.05, 0.1, 0.15]);
+  });
+
+  it('beside a decimal comma, "0,065" is 0.065 and never 65', () => {
+    const r = figure({ x: xs([['0,04'], ['0,065'], ['0,09']]), xTicks: [80, 140, 200], y: ys([['0'], ['1'], ['2']]) });
+    expect(values(r.x)).toEqual([0.04, 0.065, 0.09]);
+  });
+
+  it('with no decimal comma on the figure, "1,000" is a thousands separator', () => {
+    const r = figure({ x: xs([['0'], ['1,000'], ['2,000']]), y: ys([['0'], ['1'], ['2']]) });
+    expect(values(r.x)).toEqual([0, 1000, 2000]);
+  });
+
+  it('a minus set as its own piece joins its number: "−" "2" is -2', () => {
+    const r = figure({ x: xs([['0'], ['1'], ['2']]), y: ys([['−', '2'], ['−', '1'], ['0']]) });
+    expect(values(r.y)).toEqual([-2, -1, 0]);
+  });
+
+  it('two stacked panels sharing one axis line are read as one axis, not both', () => {
+    // top panel 0 ... 1000 at y 20 ... 120, the bottom panel's 0 ... 1000 at
+    // y 125 ... 225: the panels touch, so the break is a SMALL gap
+    const panel = (top: number) => [0, 250, 500, 750, 1000].map((v, i): [number, string[]] => [top + 100 - 25 * i, [String(v)]]);
+    const r = figure({ x: xs([['0'], ['1'], ['2']]), y: [...panel(20), ...panel(125)] });
+    const y = ok(r.y);
+    expect(values(r.y)).toEqual([0, 250, 500, 750, 1000]);
+    const at = y.pairs.map((p) => p.tick[1]);
+    expect(Math.max(...at) - Math.min(...at)).toBeCloseTo(100, 6);
+  });
+
+  it('a label whose box reaches a little into an inward tick still pairs with it', () => {
+    const r = figure({ x: xs([['0'], ['10'], ['20']]), inward: true, y: ys([['0'], ['1'], ['2']]) });
+    expect(values(r.x)).toEqual([0, 10, 20]);
+  });
+
+  it('a level Y label pairs by its digits\' middle, not its box\'s', () => {
+    // the box runs a whole size above the baseline: its middle sits 2.8 px off
+    // the tick while the digits' middle sits 1.3 px off (a pgfplots figure)
+    const r = figure({ x: xs([['0'], ['1'], ['2']]), y: ys([['0'], ['5'], ['10']]), yMidOff: 2.2 });
+    expect(values(r.y)).toEqual([0, 5, 10]);
+  });
+
+  it('a second X axis along the top, with more labels, is read and the read says it is the top one', () => {
+    const r = figure({ x: xs([['0'], ['1'], ['2']]), y: ys([['0'], ['1'], ['2']]), top: [[80, '10'], [140, '20'], [200, '30'], [260, '40']] });
+    const x = ok(r.x);
+    expect(values(r.x)).toEqual([10, 20, 30, 40]);
+    expect(x.side).toBe('top');
+    expect(ok(r.y).side).toBe('left');
+  });
+});

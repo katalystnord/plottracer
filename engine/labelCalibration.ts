@@ -46,7 +46,17 @@ export interface UnusedMark {
   reason: string;
 }
 export type AxisFromLabels =
-  | { axis: 'x' | 'y'; ok: true; log: boolean; pairs: LabelPair[]; unused: UnusedMark[]; precision: number }
+  | {
+      axis: 'x' | 'y';
+      ok: true;
+      log: boolean;
+      pairs: LabelPair[];
+      unused: UnusedMark[];
+      precision: number;
+      /** Which edge of the plot the labels were read along: a figure may print
+       * a second axis (another unit) on the far side. */
+      side: 'bottom' | 'top' | 'left' | 'right';
+    }
   | { axis: 'x' | 'y'; ok: false; reason: string; pairs: LabelPair[]; unused: UnusedMark[] };
 export interface AxesFromLabels {
   x: AxisFromLabels;
@@ -78,19 +88,66 @@ interface Tick {
 const NUMBER = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
 const SCALE_FACTOR = /^(1e[+-]?\d+|×\s*10\^[+-]?\d+)$/i;
 
-/** A printed number, the minus sign (U+2212) and thousands commas understood. */
-function parseNumber(s: string): { value: number; decimals: number } | null {
+/** A comma the figure can only mean as a decimal point: "0,04", "1,5",
+ * "0,0001" (a leading 0 group, or not three digits after it). */
+const DECIMAL_COMMA = /^[+-\u2212]?(0,\d+|\d+,\d{1,2}|\d+,\d{4,})$/;
+
+/** A printed number, the minus sign (U+2212) understood, and commas as the
+ * figure uses them: decimal commas when `decimalComma`, else thousands
+ * separators ("1,000"). Undecided, "1,250" would be either, so the figure's
+ * other labels decide (labelsOf). */
+function parseNumber(s: string, decimalComma = false): { value: number; decimals: number } | null {
   let t = s.trim().replace(/\u2212/g, '-').replace(/[\u2009\u202f\u00a0]/g, '');
-  if (/^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
+  if (decimalComma && /^[+-]?\d+,\d+$/.test(t)) t = t.replace(',', '.');
+  else if (/^[+-]?[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
   if (!NUMBER.test(t)) return null;
   const mantissa = t.split(/[eE]/)[0]!;
   const dot = mantissa.indexOf('.');
   return { value: Number(t), decimals: dot < 0 ? 0 : mantissa.length - dot - 1 };
 }
 
+/** Pieces of text that touch on one line, at one size, joined when together
+ * they make a number: a minus set apart ("\u2212", "2" in LaTeX's 10^{-2}), a
+ * decimal comma set as its own piece ("0", ",", "04"). Pieces further apart
+ * than a quarter of their size are separate labels. */
+function joinTouching(text: readonly PlacedText[]): PlacedText[] {
+  const sameLine = (a: PlacedText, b: PlacedText) => {
+    const overlap = Math.min(a.box.y1, b.box.y1) - Math.max(a.box.y0, b.box.y0);
+    return Math.abs(b.size - a.size) <= 0.15 * a.size && overlap >= 0.5 * Math.min(a.box.y1 - a.box.y0, b.box.y1 - b.box.y0)
+      && b.box.x0 >= a.box.x1 - 0.2 * a.size && b.box.x0 <= a.box.x1 + 0.25 * a.size;
+  };
+  const piece = /^([-\u2212,.]|\d+)$/;
+  const used = new Set<number>();
+  const out: PlacedText[] = [];
+  text.forEach((a, i) => {
+    if (used.has(i)) return;
+    if (!piece.test(a.str.trim())) {
+      out.push(a);
+      return;
+    }
+    // follow the chain of touching pieces to the right
+    const chain = [i];
+    for (;;) {
+      const last = text[chain[chain.length - 1]!]!;
+      const j = text.findIndex((b, k) => !used.has(k) && !chain.includes(k) && piece.test(b.str.trim()) && sameLine(last, b));
+      if (j < 0) break;
+      chain.push(j);
+    }
+    const str = chain.map((k) => text[k]!.str.trim()).join('');
+    if (chain.length > 1 && parseNumber(str, true)) {
+      for (const k of chain) used.add(k);
+      const bs = chain.map((k) => text[k]!.box);
+      out.push({ str, size: a.size, box: { x0: Math.min(...bs.map((b) => b.x0)), y0: Math.min(...bs.map((b) => b.y0)), x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)) } });
+    } else out.push(a);
+  });
+  return out;
+}
+
 /** The page's labels: numbers, with "10" and a smaller raised number after it
  * joined into 10 to that power (V9), and scale factors kept apart (V8). */
-function labelsOf(text: readonly PlacedText[]): { labels: Label[]; factors: PlacedText[] } {
+function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: PlacedText[] } {
+  const text = joinTouching(pieces);
+  const decimalComma = text.some((t) => DECIMAL_COMMA.test(t.str.trim()));
   const used = new Set<number>();
   const labels: Label[] = [];
   const factors: PlacedText[] = [];
@@ -122,7 +179,7 @@ function labelsOf(text: readonly PlacedText[]): { labels: Label[]; factors: Plac
       factors.push(t);
       return;
     }
-    const n = parseNumber(t.str);
+    const n = parseNumber(t.str, decimalComma);
     if (n) labels.push({ str: t.str.trim(), value: n.value, decimals: n.decimals, exponent: false, box: t.box, size: t.size });
   });
   return { labels, factors };
@@ -163,6 +220,46 @@ function rowsOf(ticks: readonly Tick[], k: number): Tick[][] {
   return rows;
 }
 
+/** Pairs split where their values turn back or repeat AND the spacing breaks
+ * there (over 1.5 times the usual tick spacing, or under 0.6 of it). Stacked or
+ * side-by-side panels share an axis line's extent ("... 250, 0 | 1000, 750 ...",
+ * the panels touching or apart), and each is an axis of its own. Neither alone
+ * is enough: a log axis's spacing is uneven by nature, and an axis printed
+ * 0, 2, 4, 9, 8, 10 turns back at an ordinary spacing - one axis, misprinted,
+ * which V8 refuses rather than reading half of it. */
+function panelRuns<T extends { tick: Tick; label: Label }>(pairs: readonly T[]): T[][] {
+  const sorted = [...pairs].sort((a, b) => a.tick.at - b.tick.at);
+  if (sorted.length < 3) return [sorted];
+  const gaps = sorted.slice(1).map((q, i) => q.tick.at - sorted[i]!.tick.at);
+  const usual = [...gaps].sort((a, b) => a - b)[gaps.length >> 1]!;
+  const runs: T[][] = [[sorted[0]!]];
+  let dir = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const run = runs[runs.length - 1]!;
+    const d = Math.sign(sorted[i]!.label.value - sorted[i - 1]!.label.value);
+    const turns = d === 0 || (dir !== 0 && d !== dir);
+    const breaks = gaps[i - 1]! > 1.5 * usual || gaps[i - 1]! < 0.6 * usual;
+    if (turns && breaks) {
+      runs.push([sorted[i]!]);
+      dir = 0;
+      continue;
+    }
+    if (run.length) dir = d;
+    run.push(sorted[i]!);
+  }
+  return runs;
+}
+
+/** Whether the pairs fit one scale, and which. Exponent labels fit only a log one. */
+function scaleOf(pairs: readonly { tick: Tick; label: Label }[]): 'linear' | 'log' | null {
+  if (pairs.length < 2) return null;
+  const sorted = [...pairs].sort((a, b) => a.tick.at - b.tick.at);
+  const pos = sorted.map((q) => q.tick.at), val = sorted.map((q) => q.label.value);
+  if (!sorted.some((q) => q.label.exponent) && fits(pos, val)) return 'linear';
+  if (val.every((v) => v > 0) && fits(pos, val.map(Math.log10))) return 'log';
+  return null;
+}
+
 interface Pairing {
   pairs: { tick: Tick; label: Label }[];
   /** Which side of the marks the labels sit: true for the far side (below X, right of Y). */
@@ -175,9 +272,15 @@ function pairRow(row: readonly Tick[], labels: readonly Label[], axis: 'x' | 'y'
   const best = new Map<Tick, { label: Label; off: number }>();
   for (const l of labels) {
     const [lo, hi] = axis === 'x' ? [l.box.y0, l.box.y1] : [l.box.x0, l.box.x1];
-    const mid = axis === 'x' ? (l.box.x0 + l.box.x1) / 2 : (l.box.y0 + l.box.y1) / 2;
+    // a level label's middle is its digits' middle, about a third of its size
+    // above the baseline (its box runs a whole size up, past the digits); a
+    // label turned along the axis (R's Y labels) has its run's middle
+    const level = l.box.y1 - l.box.y0 <= 1.3 * l.size;
+    const mid = axis === 'x' ? (l.box.x0 + l.box.x1) / 2 : level ? l.box.y1 - 0.35 * l.size : (l.box.y0 + l.box.y1) / 2;
     const gap = far ? lo - to : from - hi;
-    if (gap < -0.5 * k || gap > Math.max(2 * l.size, 12 * k)) continue; // not just beyond the marks' end
+    // just beyond the marks' end; a label's box (its ascenders) may reach a
+    // little into an inward tick's line
+    if (gap < -Math.max(0.5 * k, 0.15 * l.size) || gap > Math.max(2 * l.size, 12 * k)) continue;
     const tol = Math.max(0.5 * k, 0.2 * l.size);
     let tick: Tick | null = null, off = Infinity;
     for (const t of row) {
@@ -216,16 +319,23 @@ const unionBox = (bs: readonly Box[]): Box => ({
 
 function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Label[], factors: readonly PlacedText[], k: number): AxisFromLabels {
   const tickBox = (t: Tick): Box => (axis === 'x' ? { x0: t.at, y0: t.from, x1: t.at, y1: t.to } : { x0: t.from, y0: t.at, x1: t.to, y1: t.at });
-  const rows = rowsOf(ticks, k);
-  let pick: { row: Tick[]; p: Pairing } | null = null;
-  for (const row of rows) {
+  // every run of every row, labels on either side, is a candidate axis
+  const candidates: { row: Tick[]; p: Pairing; scale: 'linear' | 'log' | null }[] = [];
+  for (const row of rowsOf(ticks, k)) {
     for (const far of [true, false]) {
-      const p = pairRow(row, labels, axis, far, k);
-      // the most pairs wins; on a tie, tick marks before gridlines
-      if (!pick || p.pairs.length > pick.p.pairs.length || (p.pairs.length === pick.p.pairs.length && pick.row[0]!.grid && !row[0]!.grid)) pick = { row, p };
+      for (const pairs of panelRuns(pairRow(row, labels, axis, far, k).pairs)) {
+        if (pairs.length) candidates.push({ row, p: { pairs, far }, scale: scaleOf(pairs) });
+      }
     }
   }
-  if (!pick || !pick.p.pairs.length) {
+  // the most pairs wins, a candidate that fits one scale before one that does
+  // not (four small panels' "-8 0 8" outnumber the main axis but are not one
+  // axis), so long as it holds at least half the most pairs; on a tie, tick
+  // marks before gridlines
+  const most = Math.max(0, ...candidates.map((c) => c.p.pairs.length));
+  const rank = (c: (typeof candidates)[number]) => (c.scale && c.p.pairs.length * 2 >= most ? 1e6 : 0) + c.p.pairs.length * 2 + (c.row[0]!.grid ? 0 : 1);
+  const pick = candidates.reduce<(typeof candidates)[number] | null>((b, c) => (!b || rank(c) > rank(b) ? c : b), null);
+  if (!pick) {
     return { axis, ok: false, reason: 'no label sits at a tick mark', pairs: [], unused: [] };
   }
   const { row, p } = pick;
@@ -266,14 +376,11 @@ function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Labe
   const factor = factors.find((f) => f.box.x1 >= around.x0 - reach && f.box.x0 <= around.x1 + reach && f.box.y1 >= around.y0 - reach && f.box.y0 <= around.y1 + reach);
   if (factor) return no(`a scale factor (${factor.str.trim()}) is printed by the axis, so the labels are not the values`);
   if (pairs.length < 2) return no('only one label sits at a tick mark; two are needed');
-  const pos = pairs.map((q) => (axis === 'x' ? q.tick[0] : q.tick[1]));
-  const val = pairs.map((q) => q.value);
-  const exponent = p.pairs.some((q) => q.label.exponent);
-  const linear = !exponent && fits(pos, val);
-  const log = !linear && val.every((v) => v > 0) && fits(pos, val.map(Math.log10));
-  if (!linear && !log) return no('the labels do not fit one linear or one log scale');
+  if (!pick.scale) return no('the labels do not fit one linear or one log scale');
+  const log = pick.scale === 'log';
   const decimals = Math.max(...p.pairs.map((q) => q.label.decimals));
-  return { axis, ok: true, log, pairs, unused, precision: 5 / 10 ** (decimals + 1) };
+  const side = axis === 'x' ? (p.far ? 'bottom' : 'top') : p.far ? 'right' : 'left';
+  return { axis, ok: true, log, pairs, unused, precision: 5 / 10 ** (decimals + 1), side };
 }
 
 /** The two pairs furthest apart, for the calibration's two points on an axis. */
