@@ -137,6 +137,19 @@ ax.scatter(pts[:, 0], pts[:, 1], color='#d62728', s=30)
 ax.set_xlim(0, 10); ax.set_ylim(0, 10)
 save(fig, ax, 'markers-clipped', [pts[pts[:, 0] <= 10]])
 
+# E1-E4 (error bars, not read): a line with markers and vertical error bars
+# in its own colour, symmetric and asymmetric, with caps; a dashed vertical
+# reference line in the SAME colour through none of its points; and a second
+# series with horizontal error bars (xerr)
+fig, ax = plt.subplots(figsize=(4, 3))
+ex = np.array([1.0, 2.5, 4.0, 5.5, 7.0, 8.5]); ey = np.array([3.0, 4.2, 3.6, 5.1, 4.8, 6.0])
+ax.errorbar(ex, ey, yerr=[[0.4, 1.2, 0.3, 0.8, 0.5, 1.5], [0.6, 1.2, 0.3, 0.2, 0.9, 1.0]], color='#1f4e79', marker='o', capsize=3)
+ax.axvline(6.2, color='#1f4e79', linestyle='--')
+hx = np.array([2.0, 4.5, 7.5]); hy = np.array([8.0, 8.6, 7.9])
+ax.errorbar(hx, hy, xerr=[0.8, 0.5, 1.1], color='#9b3a2e', marker='s', linestyle='none', capsize=3)
+ax.set_xlim(0, 10); ax.set_ylim(0, 10)
+save(fig, ax, 'lines-errorbars', [np.c_[ex, ey], [[6.2, 0], [6.2, 10]], np.c_[hx, hy]])
+
 # V14: a smoothed line through 6 data points, drawn as ~100 corners, with
 # a marker at each data point in the same colour (as LibreOffice draws a
 # smoothed chart series)

@@ -12172,6 +12172,31 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 26 points (one per marker).');
   }, 120000);
 
+  it('E1, E2: error bars in a series\' colour are not read, never pass as data, and the screen says they are there', async () => {
+    await openDrawnFigure('lines-errorbars');
+    const L = vTruth('lines-errorbars').lines[0]!.points;
+    // half way between the first two points, on the line
+    const p = vImg([(L[0]![0] + L[1]![0]) / 2, (L[0]![1] + L[1]![1]) / 2]);
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(p[0], p[1]);
+    await page.getByTestId('find-lines-run').click();
+    // E1: the line and the dashed reference line, no line for any of the 6 bars
+    await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: 2 lines found/);
+    expect(await textOf('places-to-check')).toMatch(/6 error bars in this colour are not read: they are not data\. To capture them, use Error bars \(add to a traced series\)\./);
+    // the tool it names is on the rail
+    expect(await page.getByTestId('mode-error-bars').count()).toBe(1);
+
+    // E2: Scattered points on the same colour reads the 6 markers, and says the bars are not read
+    await page.getByTestId('undo').click();
+    const m = vImg(L[0]!);
+    await page.getByTestId('auto-extract-colour').click();
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(m[0], m[1]);
+    await page.getByTestId('color-trace-shape').selectOption('scatter');
+    await page.getByTestId('color-trace-run').click();
+    await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 6 points (one per marker). 6 error bars in this colour are not read: they are not data. To capture them, use Error bars (add to a traced series).');
+  }, 120000);
+
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
     const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');
     await openDrawnFigure('lines-cross');

@@ -53,12 +53,14 @@ export interface Place {
   /** bridge: lines met and were joined; split: pieces left apart where unsure;
    * end: a line stops inside the plot, where it may well carry on; unresolved:
    * merged ink not recorded as a line. */
-  kind: 'bridge' | 'split' | 'end' | 'unresolved' | 'overlap' | 'markers';
+  kind: 'bridge' | 'split' | 'end' | 'unresolved' | 'overlap' | 'markers' | 'errorbars';
   at: Pt;
   /** Indices into `lines` this place touches. */
   lines: number[];
   /** markers (v2.7 V14): the line's drawn corners and the markers on it. */
   counts?: { corners: number; markers: number };
+  /** errorbars (v2.7 E1): how many error bars of the colour were left unread. */
+  bars?: number;
 }
 
 export interface FindLinesResult {

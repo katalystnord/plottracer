@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { readDrawing, readTextBoxes, type PdfTextItem } from '../pdfDrawing.js';
 import { pageToImage, placeDrawing } from '../drawingPlacement.js';
 import type { Provenance } from '../projectFile.js';
-import { findLinesFromDrawing, markersFromDrawing, type PlacedDrawing } from '../../algorithms/findLines/fromDrawing.js';
+import { errorBarsInDrawing, findLinesFromDrawing, markersFromDrawing, type PlacedDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import type { Box } from '../../algorithms/findLines/ink.js';
 import type { FindLinesResult } from '../../algorithms/findLines/lines.js';
 
@@ -26,7 +26,7 @@ interface Case {
   truth: Pt[][];
 }
 const cases: Record<string, Case> = {};
-const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled', 'markers-scatter', 'lines-smoothed', 'markers-clipped', 'predashed'];
+const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled', 'markers-scatter', 'lines-smoothed', 'markers-clipped', 'predashed', 'lines-errorbars'];
 
 beforeAll(async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -326,6 +326,47 @@ describe('V23: a dashed line written as separate short pieces, with no dash arra
     const shapes = [0, 1, 2, 3].map((i) => stroke([100, 100 + 2 * i], [100, 102 + 2 * i]));
     const res = findLinesFromDrawing({ shapes, text: [], pxPerPt: 1 }, ink, { x0: 0, y0: 0, x1: 300, y1: 300 });
     expect(res.lines).toHaveLength(0);
+  });
+});
+
+describe('E1-E4: error bars are not read, never pass as data, and are always said', () => {
+  // fixtures/vector/make_lines.py 'lines-errorbars'; the evidence is real:
+  // r101 and r102 (plottracer-ref research/v2.7-vector), where long bars came
+  // back as lines and short ones were dropped silently
+  const BLUE: [number, number, number] = [31, 78, 121], RED: [number, number, number] = [155, 58, 46];
+  const isUpright = (L: { points: readonly Pt[] }) => L.points.length === 2 && Math.abs(L.points[0]![0] - L.points[1]![0]) < 0.5;
+  const isLevel = (L: { points: readonly Pt[] }) => L.points.length === 2 && Math.abs(L.points[0]![1] - L.points[1]![1]) < 0.5;
+
+  it('E1: Find lines returns the line through the points and no line for any error bar, and Places to check says they are not read', () => {
+    const c = cases['lines-errorbars']!;
+    const res = findLinesFromDrawing(c.drawing, BLUE, c.box);
+    // the data line and the reference line (E3), nothing else
+    expect(res.lines).toHaveLength(2);
+    const [line] = c.truth;
+    expect(res.lines.some((L) => share(line!, L.points) >= 0.9 && share(L.points, line!) >= 0.9)).toBe(true);
+    const place = res.places.find((p) => p.kind === 'errorbars');
+    expect(place?.bars).toBe(6);
+  });
+
+  it('E3: a reference line in the same colour that passes through none of the points is still a line', () => {
+    const c = cases['lines-errorbars']!;
+    const res = findLinesFromDrawing(c.drawing, BLUE, c.box);
+    const ref = c.truth[1]!;
+    expect(res.lines.filter(isUpright).some((L) => share(ref, L.points, 2) >= 0.9)).toBe(true);
+  });
+
+  it('E4: horizontal error bars are not read either, and are said', () => {
+    const c = cases['lines-errorbars']!;
+    const res = findLinesFromDrawing(c.drawing, RED, c.box);
+    expect(res.lines.filter(isLevel)).toHaveLength(0);
+    expect(res.places.find((p) => p.kind === 'errorbars')?.bars).toBe(3);
+  });
+
+  it('E2: Scattered points reads one point per marker and nothing from the bars, and counts the bars', () => {
+    const c = cases['lines-errorbars']!;
+    expect(markersFromDrawing(c.drawing, BLUE, c.box)).toHaveLength(6);
+    expect(errorBarsInDrawing(c.drawing, BLUE, c.box)).toBe(6);
+    expect(errorBarsInDrawing(c.drawing, RED, c.box)).toBe(3);
   });
 });
 

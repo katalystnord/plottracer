@@ -178,7 +178,7 @@ import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type Pag
 import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
 import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
-import { findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
+import { errorBarsInDrawing, findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import {
   serializeProjectZip,
   deserializeProjectZip,
@@ -6633,7 +6633,10 @@ export function Workspace() {
         if (markers.length) {
           session.addSegmentFillPoints(markers.map(([x, y]) => ({ x, y })));
           adoptTracedColour();
-          setColorTraceInfo(`Read from the figure’s drawing: placed ${markers.length} point${markers.length === 1 ? '' : 's'} (one per marker).`);
+          // E2: error bars are not read, never pass as data, and are always said
+          const bars = placed ? errorBarsInDrawing(placed, target, region, masks) : 0;
+          const barsSaid = bars ? ` ${bars} error bar${bars === 1 ? '' : 's'} in this colour ${bars === 1 ? 'is' : 'are'} not read: they are not data. To capture them, use Error bars (add to a traced series).` : '';
+          setColorTraceInfo(`Read from the figure’s drawing: placed ${markers.length} point${markers.length === 1 ? '' : 's'} (one per marker).${barsSaid}`);
           commit();
           return;
         }
@@ -6906,6 +6909,11 @@ export function Workspace() {
       if (kind === 'markers' && pl.counts) {
         const { corners, markers } = pl.counts;
         return (names) => `${names || 'This line'} has ${corners} corners and ${markers} markers on it: the markers may be the data. To take them as their own series, use By colour ▸ Scattered points on their colour.`;
+      }
+      // E1 (David, 2026-10-16): error bars are not read, never pass as data, and are always said
+      if (kind === 'errorbars' && pl.bars) {
+        const n = pl.bars;
+        return () => `${n} error bar${n === 1 ? '' : 's'} in this colour ${n === 1 ? 'is' : 'are'} not read: they are not data. To capture them, use Error bars (add to a traced series).`;
       }
       if (kind === 'bridge') return (names) => `Lines meet here and were joined across it${names ? ` (${names})` : ''} - check each carries on the right way.`;
       if (kind === 'split') return (names) => `Unsure how the lines carry on here, so the pieces were left apart${names ? ` (${names})` : ''} - if they are one line, pick one in the series list and choose the other in Join with.`;

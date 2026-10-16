@@ -219,11 +219,13 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
     return Math.abs(p[0] - box.x0) + Math.abs(q[0] - box.x0) < e || Math.abs(p[0] - box.x1) + Math.abs(q[0] - box.x1) < e
       || Math.abs(p[1] - box.y0) + Math.abs(q[1] - box.y0) < e || Math.abs(p[1] - box.y1) + Math.abs(q[1] - box.y1) < e;
   };
+  // E1: error bars are not read, and never pass as data
+  const bars = errorBarSubs(d, colour, box, masks);
   for (const s of d.shapes) {
     if (!s.stroked || !near(s.stroke, colour)) continue;
     const style = `${s.stroke.join(',')}|${s.lineWidth.toFixed(2)}|${s.dash ? s.dash.join(',') : '-'}`;
     for (const sp of s.subs) {
-      if (sp.length < 2) continue;
+      if (sp.length < 2 || bars.has(sp)) continue;
       const xs = sp.map((p) => p[0]), ys = sp.map((p) => p[1]);
       const cx = xs.reduce((a, v) => a + v, 0) / sp.length, cy = ys.reduce((a, v) => a + v, 0) / sp.length;
       if (!inBox([cx, cy], box)) continue;
@@ -380,6 +382,12 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
       places.push({ kind: 'markers', at: on[0]!, lines: [i], counts: { corners: L.points.length, markers: on.length } });
     }
   });
+  // E1: the error bars left unread are said, at the first one, beside the lines they belong to
+  if (bars.size) {
+    const first = [...bars][0]!;
+    const owners = lines.flatMap((L, i) => ([...bars].some((sp) => sp.some((p) => nearestOn(p, L.points) <= 0.5 * PT * k + RULE.marker * k)) ? [i] : []));
+    places.push({ kind: 'errorbars', at: [(first[0]![0] + first[1]![0]) / 2, (first[0]![1] + first[1]![1]) / 2], lines: owners, bars: bars.size });
+  }
   widths.sort((a, b) => a - b);
   return { lines, labelInk: [], unresolved: [], places, lineWidth: widths.length ? widths[widths.length >> 1]! : 1 };
 }
@@ -447,4 +455,57 @@ export function markersFromDrawing(d: PlacedDrawing, colour: RGB, region: Box, m
     for (let i = 0; i < count; i++) out.push(q.c);
   }
   return out;
+}
+
+/**
+ * v2.7 E1-E4 - the drawing's ERROR BARS of a colour, which are not read (David,
+ * 2026-10-16: not read until detection models can read them, but never passed
+ * as data, and always said). An error bar is a straight vertical or horizontal
+ * stroke of the colour that passes through one of that colour's own drawn
+ * points: a marker's centre, or a corner of a line. A stroke through none of
+ * them, such as a reference line, is not one (V27). Caps are short and are
+ * left out as ticks already.
+ */
+function errorBarSubs(d: PlacedDrawing, colour: RGB, region: Box, masks: readonly Box[]): Set<readonly Pt[]> {
+  const k = d.pxPerPt;
+  const anchors: Pt[] = [...markersFromDrawing(d, colour, region, masks)];
+  for (const s of d.shapes) {
+    if (!s.stroked || !near(s.stroke, colour)) continue;
+    for (const sp of s.subs) {
+      // a line's corners; not a marker's own outline (a small closed shape),
+      // whose centre is already an anchor
+      if (sp.length <= 2) continue;
+      const xs = sp.map((p) => p[0]), ys = sp.map((p) => p[1]);
+      const closed = Math.hypot(sp[0]![0] - sp[sp.length - 1]![0], sp[0]![1] - sp[sp.length - 1]![1]) < 0.5 * PT * k;
+      if (closed && Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) < RULE.marker * k) continue;
+      anchors.push(...sp);
+    }
+  }
+  const bars = new Set<readonly Pt[]>();
+  const tol = 0.5 * PT * k;
+  for (const s of d.shapes) {
+    if (!s.stroked || !near(s.stroke, colour)) continue;
+    for (const sp of s.subs) {
+      if (sp.length !== 2) continue;
+      const [a, b] = sp as [Pt, Pt];
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (len < 0.5 * k) continue;
+      const upright = Math.abs(b[0] - a[0]) <= 0.02 * len, level = Math.abs(b[1] - a[1]) <= 0.02 * len;
+      if (!upright && !level) continue;
+      const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      if (!inBox(mid, region) || masks.some((m) => inBox(mid, m))) continue;
+      const on = anchors.some((p) => {
+        const [along, across, lo, hi] = upright ? [p[1], p[0] - a[0], Math.min(a[1], b[1]), Math.max(a[1], b[1])] : [p[0], p[1] - a[1], Math.min(a[0], b[0]), Math.max(a[0], b[0])];
+        return Math.abs(across) <= tol && along >= lo - tol && along <= hi + tol;
+      });
+      if (on) bars.add(sp);
+    }
+  }
+  return bars;
+}
+
+/** E2: how many error bars of the colour the drawing holds in the region, for
+ * Scattered points to say (none of them is read). */
+export function errorBarsInDrawing(d: PlacedDrawing, colour: RGB, region: Box, masks: readonly Box[] = []): number {
+  return errorBarSubs(d, colour, region, masks).size;
 }
