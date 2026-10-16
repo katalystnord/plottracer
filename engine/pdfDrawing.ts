@@ -285,10 +285,17 @@ export interface PdfTextItem {
   width: number;
 }
 
-/** The box of each piece of the page's text, in page space [x0, y0, x1, y1]
- * (a rotated label gets the box of its run). */
-export function readTextBoxes(items: readonly PdfTextItem[]): [number, number, number, number][] {
-  const out: [number, number, number, number][] = [];
+/** A piece of the page's text: its string, its box in page space [x0, y0, x1,
+ * y1] (a rotated label gets the box of its run), and its font size, points. */
+export interface PageText {
+  str: string;
+  box: [number, number, number, number];
+  size: number;
+}
+
+/** The page's text pieces, the empty ones left out. */
+export function readTextItems(items: readonly PdfTextItem[]): PageText[] {
+  const out: PageText[] = [];
   for (const t of items) {
     if (!t.str || !t.str.trim()) continue;
     const [a, b, c, d, e, f] = t.transform as [number, number, number, number, number, number];
@@ -297,7 +304,13 @@ export function readTextBoxes(items: readonly PdfTextItem[]): [number, number, n
     const ux = a / n, uy = b / n;
     const q: Pt[] = [[e, f], [e + ux * t.width, f + uy * t.width], [e - uy * h, f + ux * h], [e + ux * t.width - uy * h, f + uy * t.width + ux * h]];
     const xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
-    out.push([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+    out.push({ str: t.str, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], size: h });
   }
   return out;
+}
+
+/** The box of each piece of the page's text, in page space [x0, y0, x1, y1]
+ * (a rotated label gets the box of its run). */
+export function readTextBoxes(items: readonly PdfTextItem[]): [number, number, number, number][] {
+  return readTextItems(items).map((t) => t.box);
 }

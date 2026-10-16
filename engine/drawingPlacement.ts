@@ -14,7 +14,7 @@
  */
 import { editPointMap, type ImageEdit } from './imageEdit.js';
 import type { Provenance } from './projectFile.js';
-import type { PageDrawing, Pt } from './pdfDrawing.js';
+import type { PageDrawing, PageText, Pt } from './pdfDrawing.js';
 import type { PlacedDrawing } from '../algorithms/findLines/fromDrawing.js';
 
 export type { ImageEdit };
@@ -72,6 +72,28 @@ export function placeDrawing(prov: Provenance, drawing: PageDrawing, text: reado
     text: text.map(box),
     pxPerPt,
   };
+}
+
+/** A piece of the page's text placed in the working picture (v2.7 V5): its
+ * box, picture px, and its font size, picture px. */
+export interface PlacedText {
+  str: string;
+  box: { x0: number; y0: number; x1: number; y1: number };
+  size: number;
+}
+
+/** The page's text pieces, placed in the working picture; empty when the
+ * figure's page render was not recorded. */
+export function placeTextItems(prov: Provenance, items: readonly PageText[]): PlacedText[] {
+  const m = prov.source?.pageTransform;
+  if (!m) return [];
+  const pxPerPt = Math.hypot(m[0], m[1]);
+  return items.map((t) => {
+    const [x0, y0, x1, y1] = t.box;
+    const q = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map((p) => pageToImage(prov, p as [number, number])!);
+    const xs = q.map((p) => p.x), ys = q.map((p) => p.y);
+    return { str: t.str, box: { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) }, size: t.size * pxPerPt };
+  });
 }
 
 /**
