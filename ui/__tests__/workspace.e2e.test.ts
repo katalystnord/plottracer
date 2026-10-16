@@ -2924,6 +2924,13 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await page.getByTestId('calib-option-isLogY').isChecked()).toBe(true);
     expect(await page.getByTestId('calib-option-isLogX').isChecked()).toBe(false);
 
+    // a second Y axis along the right is not read, and the card says so
+    await openAndCapture(fixture('labels-twin'));
+    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
+    expect(await textOf('label-axes-y')).toBe('Y: 0, 5, 10, 15, 20, 25, 30');
+    expect(await textOf('label-axes-second-y')).toBe('A second Y axis along the right is not read; data plotted against it needs calibrating by hand.');
+    expect(await page.getByTestId('label-axes-second-x').count()).toBe(0);
+
     // V8: an axis that cannot be read says why, and nothing can be applied
     await openAndCapture(fixture('labels-refused'));
     await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();

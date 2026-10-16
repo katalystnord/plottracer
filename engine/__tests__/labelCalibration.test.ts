@@ -279,11 +279,20 @@ describe('V5-V8 on the forms real figures take', () => {
     expect(values(r.y)).toEqual([0, 5, 10]);
   });
 
-  it('a second X axis along the top, with more labels, is read and the read says it is the top one', () => {
+  it('a second X axis along the top, even with more labels, is not read: the bottom one is, and the read says a second one is there', () => {
     const r = figure({ x: xs([['0'], ['1'], ['2']]), y: ys([['0'], ['1'], ['2']]), top: [[80, '10'], [140, '20'], [200, '30'], [260, '40']] });
     const x = ok(r.x);
-    expect(values(r.x)).toEqual([10, 20, 30, 40]);
+    expect(values(r.x)).toEqual([0, 1, 2]);
+    expect(x.side).toBe('bottom');
+    expect(x.second).toBe('top');
+    expect(ok(r.y).second).toBeNull();
+  });
+
+  it('labels along the top only are the figure\'s one X axis, and are read', () => {
+    const r = figure({ y: ys([['0'], ['1'], ['2']]), top: [[80, '10'], [140, '20'], [200, '30']] });
+    const x = ok(r.x);
+    expect(values(r.x)).toEqual([10, 20, 30]);
     expect(x.side).toBe('top');
-    expect(ok(r.y).side).toBe('left');
+    expect(x.second).toBeNull();
   });
 });

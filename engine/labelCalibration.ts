@@ -51,9 +51,12 @@ export type AxisFromLabels =
       log: boolean;
       pairs: LabelPair[];
       unused: UnusedMark[];
-      /** Which edge of the plot the labels were read along: a figure may print
-       * a second axis (another unit) on the far side. */
+      /** Which edge of the plot the labels were read along. */
       side: 'bottom' | 'top' | 'left' | 'right';
+      /** A second labelled axis on the far edge, not read (David, 2026-10-16:
+       * the reader takes the FIRST X and Y; a second axis, another unit, is a
+       * special case for calibrating by hand), or null. */
+      second: 'top' | 'right' | null;
     }
   | { axis: 'x' | 'y'; ok: false; reason: string; pairs: LabelPair[]; unused: UnusedMark[] };
 export interface AxesFromLabels {
@@ -322,12 +325,17 @@ function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Labe
       }
     }
   }
-  // the most pairs wins, a candidate that fits one scale before one that does
-  // not (four small panels' "-8 0 8" outnumber the main axis but are not one
-  // axis), so long as it holds at least half the most pairs; on a tie, tick
-  // marks before gridlines
+  // ⚑ THE FIRST AXIS: X along the bottom, Y along the left, when it reads
+  // (David, 2026-10-16); the far edge only when it is the figure's only one.
+  // Then the most pairs wins, a candidate that fits one scale before one that
+  // does not (four small panels' "-8 0 8" outnumber the main axis but are not
+  // one axis), so long as it holds at least half the most pairs; on a tie,
+  // tick marks before gridlines
+  const first = (c: (typeof candidates)[number]) => (axis === 'x' ? c.p.far : !c.p.far);
+  const reads = (c: (typeof candidates)[number]) => !!c.scale && c.p.pairs.length >= 2;
   const most = Math.max(0, ...candidates.map((c) => c.p.pairs.length));
-  const rank = (c: (typeof candidates)[number]) => (c.scale && c.p.pairs.length * 2 >= most ? 1e6 : 0) + c.p.pairs.length * 2 + (c.row[0]!.grid ? 0 : 1);
+  const mostFirst = Math.max(0, ...candidates.filter(first).map((c) => c.p.pairs.length));
+  const rank = (c: (typeof candidates)[number]) => (first(c) && reads(c) && c.p.pairs.length * 2 >= mostFirst ? 2e6 : 0) + (c.scale && c.p.pairs.length * 2 >= most ? 1e6 : 0) + c.p.pairs.length * 2 + (c.row[0]!.grid ? 0 : 1);
   const pick = candidates.reduce<(typeof candidates)[number] | null>((b, c) => (!b || rank(c) > rank(b) ? c : b), null);
   if (!pick) {
     return { axis, ok: false, reason: 'no label sits at a tick mark', pairs: [], unused: [] };
@@ -373,7 +381,8 @@ function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Labe
   if (!pick.scale) return no('the labels do not fit one linear or one log scale');
   const log = pick.scale === 'log';
   const side = axis === 'x' ? (p.far ? 'bottom' : 'top') : p.far ? 'right' : 'left';
-  return { axis, ok: true, log, pairs, unused, side };
+  const second = first(pick) && candidates.some((c) => !first(c) && reads(c)) ? (axis === 'x' ? 'top' : 'right') : null;
+  return { axis, ok: true, log, pairs, unused, side, second };
 }
 
 /** The two pairs furthest apart, for the calibration's two points on an axis. */

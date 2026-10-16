@@ -21,7 +21,7 @@ const name = (a: AxisFromLabels) => a.axis.toUpperCase();
 function axisLine(a: AxisFromLabels & { ok: true }): string {
   const labels = a.pairs.map((p) => p.label);
   const shown = labels.length > 8 ? `${labels.slice(0, 3).join(', ')} … ${labels[labels.length - 1]}` : labels.join(', ');
-  // a second axis on the far side is a different quantity, so say which edge
+  // read along the far edge only when it is the figure's one axis: say so
   const edge = a.side === 'top' || a.side === 'right' ? ` (the ${a.side} axis)` : '';
   return `${name(a)}: ${shown}${a.log ? ', log' : ''}${edge}`;
 }
@@ -44,6 +44,13 @@ export function LabelAxesOffer({ read, onApply, onCancel }: LabelAxesOfferProps)
           {a.ok ? axisLine(a) : `${name(a)} could not be read: ${a.reason}.`}
         </span>
       ))}
+      {axes.map((a) =>
+        a.ok && a.second ? (
+          <span key={`s-${a.axis}`} data-testid={`label-axes-second-${a.axis}`} style={small}>
+            A second {name(a)} axis along the {a.second} is not read; data plotted against it needs calibrating by hand.
+          </span>
+        ) : null
+      )}
       {axes.map((a) => {
         const line = unusedLine(a);
         return line ? (
