@@ -12197,6 +12197,62 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 6 points (one per marker). 6 error bars in this colour are not read: they are not data. To capture them, use Error bars (add to a traced series).');
   }, 120000);
 
+  it('V18: on a drawn bar chart, By colour reads each bar from its drawn rectangle; a bar off the baseline is said by the bar table', async () => {
+    const t = vTruth('bars-floating') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; series: { colour: number[]; heights: number[] }[] };
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(VFIX, 'bars-floating.pdf'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-bar').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    // the walk as its prompts ask: P1 a known bar value (0, where the bars stand), P2 another
+    const bx0 = t.box[0]!;
+    const p1 = vImg([bx0, t.value[0]![1]]), p2 = vImg([bx0, t.value[1]![1]]);
+    await clickImagePixel(p1[0], p1[1]);
+    await confirmValue('0');
+    await clickImagePixel(p2[0], p2[1]);
+    await confirmValue(String(t.value[1]![0]));
+    // the category axis: its START (the offer may already have placed it at P1), then its END and the count
+    if (/STARTS/.test(await textOf('tips-bar'))) {
+      const c1 = vImg(t.category.from);
+      await clickImagePixel(c1[0], c1[1]);
+    }
+    expect(await textOf('tips-bar')).toMatch(/ENDS/);
+    const cn = vImg(t.category.to);
+    await clickImagePixel(cn[0], cn[1]);
+    await confirmValue(String(t.category.count));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    // By colour, its eyedropper on the first bar, then Trace
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-colour').click();
+    await page.getByTestId('color-trace-eyedropper').click();
+    const span = t.category.to[0] - t.category.from[0];
+    const onBar = vImg([t.category.from[0] + span / 6, (t.value[0]![1] + (t.value[0]![1] + (t.value[1]![1] - t.value[0]![1]) * (t.series[0]!.heights[0]! / t.value[1]![0]))) / 2]);
+    await clickImagePixel(onBar[0], onBar[1]);
+    await page.getByTestId('color-trace-run').click();
+    await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 3 bars (one per drawn rectangle).');
+    // each bar's value is its far end from the common origin (the bar model's
+    // rule): the floating bar, drawn 1.5 to 5.25, reads 5.25 and is said below
+    const tops = [t.series[0]!.heights[0]!, 1.5 + t.series[0]!.heights[1]!, t.series[0]!.heights[2]!];
+    for (let i = 0; i < 3; i++) {
+      // to 0.05 (1% of this axis): the calibration here is clicked to whole
+      // screen pixels; with exact calibration the heights are exact to 2 decimals
+      // (engine/__tests__/barsFromDrawing.test.ts)
+      expect(Number((await textOf(`tuple-derived-${i}`)).replace(/[^0-9.eE+-]/g, ''))).toBeCloseTo(tops[i]!, 1);
+    }
+    expect(await textOf('bar-off-baseline')).toMatch(/^1 bar .* does not reach the baseline/);
+  }, 120000);
+
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
     const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');
     await openDrawnFigure('lines-cross');

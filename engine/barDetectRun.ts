@@ -183,7 +183,7 @@ const MIN_MATCHED_PIXELS = 3;
  * layer - and there is no reference to measure "small" against. Saying nothing is
  * the honest answer; guessing would libel every bar on the figure.
  */
-function swatchSuspectsIn(
+export function swatchSuspectsIn(
   boxes: readonly DetectedBarBox[],
   categoryAxis: 'x' | 'y',
   baseline: BarDetectBaseline

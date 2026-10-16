@@ -179,6 +179,7 @@ import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalib
 import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
 import { errorBarsInDrawing, findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
+import { barsFromDrawing } from '../../engine/barsFromDrawing.js';
 import {
   serializeProjectZip,
   deserializeProjectZip,
@@ -6585,6 +6586,29 @@ export function Workspace() {
       // aimed the join 198px off the rule on David's own floating-temperature
       // figure and it silently stopped firing.
       const severedBy = session.severingRulePixelForDetect();
+      // ⚑ v2.7 V18: on a drawn figure each bar is read from its DRAWN RECTANGLE,
+      // when the drawing holds any of that colour in the region (or the figure);
+      // otherwise from the pixels, as always. Filed through the same hold-back
+      // and the same drag-box path below, so the swatch offer, the bar table and
+      // its off-baseline note work unchanged.
+      const kindNow = figureKindRef.current;
+      const readNow = pageDrawingReadRef.current;
+      if (kindNow && (kindNow.kind === 'drawn' || kindNow.kind === 'partly') && readNow) {
+        const placed = placeDrawing(provenanceRef.current, readNow.drawing, readNow.text);
+        const r = colorTraceRegion;
+        const region = r ? { x0: r.x, y0: r.y, x1: r.x + r.width, y1: r.y + r.height } : { x0: 0, y0: 0, x1: width, y1: height };
+        const masks = session.getNotDataRegions().map((m) => ({ x0: m.x, y0: m.y, x1: m.x + m.width, y1: m.y + m.height }));
+        const drawn = placed ? barsFromDrawing(placed, target, region, { categoryAxis: declared?.categoryAxis ?? 'x', masks, ...(baseline ? { baseline } : {}) }) : null;
+        if (drawn && drawn.boxes.length) {
+          const { file, holdBack } = partitionSwatchSuspects(drawn);
+          const added = session.addBarDetectBoxes(file);
+          setHeldBackBars(holdBack);
+          adoptTracedColour();
+          setColorTraceInfo(`Read from the figure’s drawing: placed ${added} ${noun}${added === 1 ? '' : 's'} (one per drawn rectangle).`);
+          commit();
+          return;
+        }
+      }
       const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined);
       if ('error' in result) {
         setColorTraceInfo(result.error);
