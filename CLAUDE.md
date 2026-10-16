@@ -308,15 +308,6 @@ while every instrument reports green.
 
 ---
 
-## ⚑ Work in flight on another branch
-
-**OCR is moving from Tesseract to PaddleOCR on branch `v2.7-paddle-ocr`** (from beast, 2026-10-15).
-Leave `ui/electron-ocr.cjs`, the OCR allow list in `build/electron-builder-ui.yml`, the tesseract
-dependencies and the `ocr*` tests to that branch; `readText` keeps its interface. Details and the
-measurements: `docs/v2.7-paddle-ocr.md`. Remove this section when the branch is merged.
-
----
-
 ## Project
 
 - **Name / token:** PlotTracer / `plottracer`

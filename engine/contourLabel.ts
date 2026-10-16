@@ -4,7 +4,7 @@
  * file already saves and restores - and never exported as a data point.
  *
  * ⚑ A read is OFFERED, not asserted. Measured on the research figures with the
- * reader the app ships (tesseract.js): too many reads were wrong to write them
+ * reader the app shipped then (tesseract.js; PaddleOCR since v2.7): too many reads were wrong to write them
  * into the Level field unasked, and a wrong level looks exactly like a right
  * one. So the panel shows what the label reads, and one press uses it.
  */

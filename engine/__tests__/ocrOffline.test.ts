@@ -10,8 +10,8 @@ import https from 'node:https';
  * ⚑⚑ READING A LABEL NEEDS NO NETWORK, AND THAT IS PROVEN HERE RATHER THAN
  * CONFIGURED (v2.4).
  *
- * `tesseract.js` fetches its wasm core AND its language data from a CDN unless
- * every path is set to a local file. In a tool whose whole promise is that a
+ * `tesseract.js` (the reader until v2.7) fetched its wasm core AND its language
+ * data from a CDN unless every path was set to a local file. In a tool whose whole promise is that a
  * figure never leaves the machine, a default like that is a cloud dependency
  * smuggled in by omission - and setting three options is not evidence that it
  * worked, because a silent fallback would look identical until the day someone
@@ -26,7 +26,7 @@ import https from 'node:https';
  *
  * ⚑ It exercises `ui/electron-ocr.cjs`, the module the SHIPPED main process
  * loads, not a copy of its settings. That module needs no Electron - it is
- * `tesseract.js` and `path` - which is what makes this testable at all, and is
+ * a worker thread running `onnxruntime-web`, and `path` - which is what makes this testable at all, and is
  * one more reason the reader was kept one function wide.
  *
  * ⚑ The fixture is one category label cropped from our own `samples/
