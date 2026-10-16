@@ -17,14 +17,15 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readDrawing, readTextBoxes, type PdfTextItem } from '../pdfDrawing.js';
-import { pageToImage, placeDrawing } from '../drawingPlacement.js';
+import { readDrawing, readTextBoxes, readTextItems, type PdfTextItem } from '../pdfDrawing.js';
+import { pageToImage, placeDrawing, placeTextItems } from '../drawingPlacement.js';
 import type { Provenance } from '../projectFile.js';
 import { thinFoundLine } from '../lineEdits.js';
 import { findLinesFromDrawing, markersFromDrawing, type PlacedDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import type { Box } from '../../algorithms/findLines/ink.js';
 import { XYAxes } from '../../core/axes/xy.js';
 import { Calibration } from '../../core/calibration.js';
+import { readAxesFromLabels } from '../labelCalibration.js';
 
 const FIX = join(__dirname, 'fixtures/vector');
 type Pt = [number, number];
@@ -157,6 +158,37 @@ describe('V22: what is read from the drawing is the data the figure was made fro
   // ⚑ Its corners are NOT all the data: matplotlib simplified 451 points to 178
   // corners when it wrote the PDF. So a drawn line keeps Find lines' density
   // (David, 2026-10-16), and this test asks only that what is kept is data.
+
+  // ⚑ figverify's renderer fixtures (MIT, fixtures/vector/figverify): one known
+  // 50-point scatter drawn by six renderers, two of them generators we have no
+  // files from (PGFPlots, Plotly/Skia; figverify's own reader recovers no Plotly
+  // markers). Markers from the drawing, axes from the figure's own labels.
+  for (const [f, colour, within] of [
+    ['fig_mpl', [31, 119, 180], 1e-6], ['fig_pgfplots', [0, 0, 0], 1e-5], ['fig_plotly', [31, 119, 180], 1e-3],
+    ['r_base_pdf', [0, 0, 0], 2e-3], ['r_ggplot_cairo', [0, 0, 0], 1e-3], ['r_ggplot_pdf', [0, 0, 0], 1e-3],
+  ] as const) {
+    it(`V22 ${f} (figverify): every one of the 50 known points is read from the drawing through the axes read from its labels`, async () => {
+      const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const dir = join(FIX, 'figverify');
+      const known = JSON.parse(readFileSync(join(dir, 'known_xy.json'), 'utf8')) as Pt[];
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(join(dir, f + '.pdf'))), verbosity: 0 }).promise;
+      const page = await doc.getPage(1);
+      const vp = page.getViewport({ scale: 3.7 });
+      const prov: Provenance = { source: { pageTransform: vp.transform as [number, number, number, number, number, number] } };
+      const placed = placeDrawing(prov, readDrawing(await page.getOperatorList(), pdfjs.OPS as unknown as Record<string, number>), [])!;
+      const text = placeTextItems(prov, readTextItems((await page.getTextContent()).items as PdfTextItem[]));
+      const r = readAxesFromLabels(placed, text, { width: vp.width, height: vp.height });
+      expect(r.points, `${f}: both axes read from the labels`).not.toBeNull();
+      const cal = new Calibration(2);
+      for (const p of r.points!) cal.addPoint(p.px, p.py, String(p.x), String(p.y));
+      const axes = new XYAxes();
+      expect(axes.calibrate(cal, false, false, false)).toBe(true);
+      const got = markersFromDrawing(placed, colour as unknown as [number, number, number], { x0: 0, y0: 0, x1: vp.width, y1: vp.height }).map(([x, y]) => toData(axes, { x, y }));
+      expect(got).toHaveLength(50);
+      const off = known.map((k) => Math.min(...got.map((g) => Math.max(Math.abs(g[0] - k[0]), Math.abs(g[1] - k[1])))));
+      expect(Math.max(...off), `${f}: every known point read within ${within} (range 0 to 10)`).toBeLessThan(within);
+    });
+  }
 
   // ⚑ The other half of V22, the calibration READ from the labels, is in
   // labelCalibration.test.ts ("V22, the calibration half"), beside the reader.
