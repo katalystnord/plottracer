@@ -179,6 +179,34 @@ describe('V12: Find lines on a drawn figure reads the drawing', () => {
     }
   });
 
+  it('V16: a straight line whose ends lie just outside the plot box keeps the part inside, cut at the box edge', () => {
+    // ⚑ Found on the V22a held-out set (matplotlib's straight y = 0.4x drawn as
+    // one segment from axis edge to axis edge): a box drawn a fraction of a
+    // pixel inside the axes put both corners outside, and the whole line was
+    // dropped. Built here from a made-up shape, not from that figure.
+    const ink: [number, number, number] = [31, 119, 180];
+    const shape = (subs: Pt[][]) => ({ subs, stroked: true, filled: false, stroke: ink, fill: ink, lineWidth: 2, dash: null });
+    const drawing: PlacedDrawing = {
+      shapes: [
+        shape([[[99.9, 400], [600.1, 150], [600.1, 150]]]), // ends a tenth of a pixel past each side
+        shape([[[80, 300], [300, 80]]]), // crosses the box's top-left corner, both ends outside
+      ],
+      text: [],
+      pxPerPt: 2,
+    };
+    const box: Box = { x0: 100, y0: 100, x1: 600, y1: 500 };
+    const res = findLinesFromDrawing(drawing, ink, box);
+    expect(res.lines).toHaveLength(2);
+    const [a, b] = res.lines;
+    expect(a!.points[0]![0]).toBeCloseTo(100, 6);
+    expect(a!.points[a!.points.length - 1]![0]).toBeCloseTo(600, 6);
+    for (const p of b!.points) {
+      expect(p[0]).toBeGreaterThanOrEqual(100 - 1e-9);
+      expect(p[1]).toBeGreaterThanOrEqual(100 - 1e-9);
+    }
+    expect(b!.points.map((p) => p.map((v) => +v.toFixed(6)))).toEqual([[100, 280], [280, 100]]);
+  });
+
   it('V17: a masked legend leaves its sample lines out; unmasked, they come back as short lines of their own', () => {
     const c = cases['lines-legend']!;
     const masked = read('lines-legend', { masks: [c.legend!] });

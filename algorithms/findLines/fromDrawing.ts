@@ -89,33 +89,48 @@ const isClosed = (p: readonly Pt[]) => p.length > 2 && Math.hypot(p[0]![0] - p[p
 const near = (a: RGB, b: RGB) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 40;
 const inBox = (p: Pt, b: Box) => p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1;
 
-/** The runs of a polyline inside the box, each cut at the box edge. */
+/** The part of segment p -> q inside the box, as [t0, t1] along it, or null (Liang-Barsky). */
+function clipSegment(p: Pt, q: Pt, b: Box): [number, number] | null {
+  let t0 = 0, t1 = 1;
+  const dx = q[0] - p[0], dy = q[1] - p[1];
+  for (const [den, num] of [[-dx, p[0] - b.x0], [dx, b.x1 - p[0]], [-dy, p[1] - b.y0], [dy, b.y1 - p[1]]] as const) {
+    if (den === 0) {
+      if (num < 0) return null; // parallel to this side and outside it
+      continue;
+    }
+    const t = num / den;
+    if (den < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return null;
+  }
+  return [t0, t1];
+}
+
+/** The runs of a polyline inside the box, each cut at the box edge. A segment
+ * is clipped by itself, so one that crosses the box with both corners outside
+ * (a straight line drawn edge to edge, a box drawn a hair inside the axes)
+ * keeps its part inside. */
 function clipToBox(pts: readonly Pt[], b: Box): Pt[][] {
   const runs: Pt[][] = [];
   let cur: Pt[] = [];
-  const cut = (p: Pt, q: Pt): Pt => {
-    // the point where p (inside) -> q (outside) leaves the box
-    let t = 1;
-    const dx = q[0] - p[0], dy = q[1] - p[1];
-    if (q[0] < b.x0) t = Math.min(t, (b.x0 - p[0]) / dx);
-    if (q[0] > b.x1) t = Math.min(t, (b.x1 - p[0]) / dx);
-    if (q[1] < b.y0) t = Math.min(t, (b.y0 - p[1]) / dy);
-    if (q[1] > b.y1) t = Math.min(t, (b.y1 - p[1]) / dy);
-    return [p[0] + t * dx, p[1] + t * dy];
+  const end = () => {
+    if (cur.length) runs.push(cur);
+    cur = [];
   };
-  for (let i = 0; i < pts.length; i++) {
-    const p = pts[i]!;
-    const was = i > 0 ? pts[i - 1]! : null;
-    if (inBox(p, b)) {
-      if (!cur.length && was) cur.push(cut(p, was));
-      cur.push(p);
-    } else if (cur.length) {
-      cur.push(cut(cur[cur.length - 1]!, p));
-      runs.push(cur);
-      cur = [];
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i - 1]!, q = pts[i]!;
+    const c = clipSegment(p, q, b);
+    if (!c) {
+      end();
+      continue;
     }
+    const at = (t: number): Pt => (t === 0 ? p : t === 1 ? q : [p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+    if (c[0] > 0) end(); // it enters here: a new run
+    if (!cur.length) cur.push(at(c[0]));
+    cur.push(at(c[1]));
+    if (c[1] < 1) end(); // it leaves here
   }
-  if (cur.length) runs.push(cur);
+  end();
   return runs;
 }
 
