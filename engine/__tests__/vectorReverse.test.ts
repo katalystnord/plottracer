@@ -159,8 +159,6 @@ describe('V22: what is read from the drawing is the data the figure was made fro
   // doc). Today the dense line above keeps 156 of its 451 data points.
   it.todo('given a drawn line whose corners are closer than 2.5 px, every corner is a point in the series (waits for David: thinning)');
 
-  // ⚑ The other half of V22 waits for phase 2 (V5): the calibration READ from
-  // the tick labels must equal the figure's own axis, to the labels' rounding.
-  // Nothing reads the labels into a calibration yet, so there is nothing to test.
-  it.todo('V22 (phase 2, with V5): a calibration read from the labels equals the figure\'s own axis limits, to the labels\' rounding');
+  // ⚑ The other half of V22, the calibration READ from the labels, is in
+  // labelCalibration.test.ts ("V22, the calibration half"), beside the reader.
 });
