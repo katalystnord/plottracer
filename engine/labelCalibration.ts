@@ -1,5 +1,5 @@
 /**
- * v2.7 V5-V11 - the axes read from a drawn figure's own tick labels
+ * v2.7 V5-V10 - the axes read from a drawn figure's own tick labels
  * (docs/v2.7-vector-cases.md, "Calibration read from the labels").
  *
  * In a PDF the tick labels are real text at real positions and the tick marks
@@ -21,7 +21,6 @@
  *     factor printed by it ("1e6"), whose labels are not the values (V8);
  *   - "10" with a smaller raised number after it is 10 to that power, and an
  *     axis of them is log (V9);
- *   - the labels' printed digits say how precisely they pin the scale (V11).
  */
 import type { PlacedDrawing } from '../algorithms/findLines/fromDrawing.js';
 import type { PlacedText } from './drawingPlacement.js';
@@ -52,7 +51,6 @@ export type AxisFromLabels =
       log: boolean;
       pairs: LabelPair[];
       unused: UnusedMark[];
-      precision: number;
       /** Which edge of the plot the labels were read along: a figure may print
        * a second axis (another unit) on the far side. */
       side: 'bottom' | 'top' | 'left' | 'right';
@@ -69,8 +67,6 @@ export interface AxesFromLabels {
 interface Label {
   str: string;
   value: number;
-  /** Digits after the decimal point, as printed. */
-  decimals: number;
   exponent: boolean;
   box: Box;
   size: number;
@@ -96,14 +92,12 @@ const DECIMAL_COMMA = /^[+-\u2212]?(0,\d+|\d+,\d{1,2}|\d+,\d{4,})$/;
  * figure uses them: decimal commas when `decimalComma`, else thousands
  * separators ("1,000"). Undecided, "1,250" would be either, so the figure's
  * other labels decide (labelsOf). */
-function parseNumber(s: string, decimalComma = false): { value: number; decimals: number } | null {
+function parseNumber(s: string, decimalComma = false): { value: number } | null {
   let t = s.trim().replace(/\u2212/g, '-').replace(/[\u2009\u202f\u00a0]/g, '');
   if (decimalComma && /^[+-]?\d+,\d+$/.test(t)) t = t.replace(',', '.');
   else if (/^[+-]?[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
   if (!NUMBER.test(t)) return null;
-  const mantissa = t.split(/[eE]/)[0]!;
-  const dot = mantissa.indexOf('.');
-  return { value: Number(t), decimals: dot < 0 ? 0 : mantissa.length - dot - 1 };
+  return { value: Number(t) };
 }
 
 /** Pieces of text that touch on one line, at one size, joined when together
@@ -171,7 +165,7 @@ function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: Pl
       factors.push({ str: `×10^${e}`, box, size: a.size });
       return;
     }
-    labels.push({ str: `${base}^${e}`, value: (base.startsWith('-') ? -1 : 1) * 10 ** e, decimals: 0, exponent: true, box, size: a.size });
+    labels.push({ str: `${base}^${e}`, value: (base.startsWith('-') ? -1 : 1) * 10 ** e, exponent: true, box, size: a.size });
   });
   text.forEach((t, i) => {
     if (used.has(i)) return;
@@ -180,7 +174,7 @@ function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: Pl
       return;
     }
     const n = parseNumber(t.str, decimalComma);
-    if (n) labels.push({ str: t.str.trim(), value: n.value, decimals: n.decimals, exponent: false, box: t.box, size: t.size });
+    if (n) labels.push({ str: t.str.trim(), value: n.value, exponent: false, box: t.box, size: t.size });
   });
   return { labels, factors };
 }
@@ -378,9 +372,8 @@ function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Labe
   if (pairs.length < 2) return no('only one label sits at a tick mark; two are needed');
   if (!pick.scale) return no('the labels do not fit one linear or one log scale');
   const log = pick.scale === 'log';
-  const decimals = Math.max(...p.pairs.map((q) => q.label.decimals));
   const side = axis === 'x' ? (p.far ? 'bottom' : 'top') : p.far ? 'right' : 'left';
-  return { axis, ok: true, log, pairs, unused, precision: 5 / 10 ** (decimals + 1), side };
+  return { axis, ok: true, log, pairs, unused, side };
 }
 
 /** The two pairs furthest apart, for the calibration's two points on an axis. */

@@ -2897,8 +2897,9 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
     expect(await textOf('label-axes-x')).toBe('X: 0, 20, 40, 60, 80, 100');
     expect(await textOf('label-axes-y')).toBe('Y: 0, 500, 1000, 1500, 2000, 2500, 3000, 3500');
-    // V11
-    expect(await textOf('label-axes-precision')).toBe('To the printed digits: 0.5 on X, 0.5 on Y.');
+    // V11 dropped (David, 2026-10-16): the ticks give the axis exactly, and the
+    // data's precision is the source's, not ours to state
+    expect(await page.getByTestId('label-axes-precision').count()).toBe(0);
     // nothing applied until Apply
     expect(await textOf('calib-status')).toContain('Not calibrated');
     expect(await textOf('calib-chip-x1')).toBe('X1click image');

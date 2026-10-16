@@ -3,7 +3,7 @@ import { theme } from '../theme.js';
 import type { AxesFromLabels, AxisFromLabels } from '../../../engine/labelCalibration.js';
 
 /**
- * v2.7 V5-V11: what was read from a drawn figure's tick labels, OFFERED in the
+ * v2.7 V5-V10: what was read from a drawn figure's tick labels, OFFERED in the
  * calibration card. Nothing reaches the calibration until Apply, as with the
  * OCR offer window (OcrReviewCard): the read is shown, the user looks at it
  * against the figure, where each label is drawn joined to its own tick mark,
@@ -37,7 +37,6 @@ function unusedLine(a: AxisFromLabels): string | null {
 export function LabelAxesOffer({ read, onApply, onCancel }: LabelAxesOfferProps): React.ReactElement {
   const axes = [read.x, read.y];
   const small = { fontSize: theme.font.size.small, color: theme.color.text.secondary } as const;
-  const ok = axes.filter((a): a is AxisFromLabels & { ok: true } => a.ok);
   return (
     <div data-testid="label-axes-offer" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
       {axes.map((a) => (
@@ -45,12 +44,6 @@ export function LabelAxesOffer({ read, onApply, onCancel }: LabelAxesOfferProps)
           {a.ok ? axisLine(a) : `${name(a)} could not be read: ${a.reason}.`}
         </span>
       ))}
-      {ok.length > 0 && (
-        <span data-testid="label-axes-precision" style={small}>
-          {/* V11: the labels' rounding, not the drawing, limits the scale */}
-          To the printed digits: {ok.map((a) => `${a.precision} on ${name(a)}`).join(', ')}.
-        </span>
-      )}
       {axes.map((a) => {
         const line = unusedLine(a);
         return line ? (

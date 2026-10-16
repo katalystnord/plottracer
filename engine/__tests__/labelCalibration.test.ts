@@ -167,15 +167,6 @@ describe('V9: exponent labels mean a log axis', () => {
   });
 });
 
-describe('V11: how precisely the labels pin the scale', () => {
-  it('V11: half the last printed digit: 0.5 for whole numbers, 0.05 for one decimal, 0.005 for two', () => {
-    expect(ok(figs['labels-linear']!.read.x).precision).toBe(0.5);
-    expect(ok(figs['labels-linear']!.read.y).precision).toBe(0.5);
-    expect(ok(figs['labels-negative']!.read.x).precision).toBe(0.05);
-    expect(ok(figs['labels-negative']!.read.y).precision).toBe(0.005);
-  });
-});
-
 describe('V22, the calibration half: read from the labels, the data come out as the figure was made', () => {
   for (const name of ['reverse-mpl-lines', 'reverse-rbase-line', 'reverse-rcairo-line', 'reverse-rgg-line', 'reverse-lo-lines']) {
     it(`V22 ${name}: a line read from the drawing, through the calibration read from its labels, is the data to its printed digits`, () => {
