@@ -203,7 +203,9 @@ export async function readLabelCrop(crop: { data: Uint8ClampedArray; width: numb
   if (!api) return { error: NO_BRIDGE };
   const enc = encodeCrop(crop);
   if (!enc) return { error: 'Could not prepare that label to be read.' };
-  const answer = await api.readText(enc.base64);
+  // ⚑ `slotCrop` has already isolated, cleaned and margined the label, so it is read box by
+  // box as the detector found it (docs/v2.7-paddle-ocr.md, case 12).
+  const answer = await api.readText(enc.base64, { detectorBoxes: true });
   if (answer.error !== undefined) return { error: answer.error };
   return { text: answer.text ?? '', confidence: typeof answer.confidence === 'number' ? answer.confidence / 100 : null };
 }

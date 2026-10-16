@@ -77,7 +77,7 @@ declare global {
        * gesture, the axis's quarter turn and which category the answer belongs
        * to all stay on this side. See ui/electron-ocr.cjs.
        */
-      readText: (pngBase64: string) => Promise<{
+      readText: (pngBase64: string, options?: { detectorBoxes?: boolean }) => Promise<{
         text?: string;
         confidence?: number;
         /**

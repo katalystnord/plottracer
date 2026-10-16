@@ -15,15 +15,15 @@ import { ozoneArgs } from './e2eContainment.js';
  * ⚠️ WHY IT HAD TO EXIST. v2.4 stopped packaging 107MB of `node_modules` that
  * nothing could reach - the renderer has no `require` at all (contextIsolation,
  * nodeIntegration off, a `file://` document), and main requires only `electron`,
- * `path`, `fs` and `tesseract.js`. That reasoning is sound and it is still only
+ * `path`, `fs` and the OCR engine (`tesseract.js` then, `onnxruntime-web` since v2.7). That reasoning is sound and it is still only
  * reasoning: a missing transitive dependency shows up ONLY in the packaged app,
  * ONLY when a feature is used, and every test in the repo would stay green.
  * So the three features whose libraries were dropped get driven for real:
  *
  *   · PDF (pdf.js, and its worker)   - `pdfjs-dist`, 18MB, no longer shipped
  *   · XLSX export (exceljs)          - 7.5MB, no longer shipped, lazy-loaded
- *   · reading a label (tesseract.js) - the one package that IS still shipped,
- *                                      from a tree trimmed to two wasm builds
+ *   · reading a label (onnxruntime-web) - the one package that IS still shipped,
+ *                                        as one wasm build and three model files
  *
  * ⚑ RUN IT AFTER A PACKAGE BUILD:
  *
@@ -136,7 +136,14 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     expect(fs.statSync(out).size).toBeGreaterThan(1000);
   }, 120000);
 
-  it('reads a category label, from a tesseract tree trimmed to two wasm builds', async () => {
+  it('reads a category label, from a tree with one wasm build and no Tesseract files', async () => {
+    // ⚑ Case 10 of docs/v2.7-paddle-ocr.md: the reader that answers is the new one, and the old
+    // one is gone from the package rather than merely unused.
+    const app = path.join(path.dirname(BINARY), 'resources/app');
+    expect(fs.readdirSync(path.join(app, 'node_modules')).filter((d) => /tesseract/i.test(d))).toEqual([]);
+    for (const f of ['det.onnx', 'rec.onnx', 'rec-chars.json']) {
+      expect(fs.existsSync(path.join(app, 'ui/ocr-model', f)), `ui/ocr-model/${f} is missing from the package`).toBe(true);
+    }
     // ⚑ Straight at the OCR boundary rather than through the whole calibration
     // walk: what is in question here is whether the packaged tree can LOAD its
     // engine, and the gesture that reaches it is covered in ocrLabels.e2e.

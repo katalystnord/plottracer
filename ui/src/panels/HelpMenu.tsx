@@ -211,8 +211,9 @@ export function HelpMenu({ onOpenHelpOverlay, onOpenExample, onStartChallenge, a
                 from <strong>Ketcher</strong> by EPAM Systems (Apache-2.0). Project files
                 written by <strong>StarryDigitizer</strong> (MIT) are read at the file
                 level. Text is read
-                off figures with <strong>Tesseract.js</strong> (Apache-2.0) and the
-                Tesseract English training data (MIT), both bundled so that reading a
+                off figures with the <strong>PP-OCRv6</strong> models from{' '}
+                <strong>PaddleOCR</strong> (Apache-2.0, converted to ONNX) run by{' '}
+                <strong>ONNX Runtime</strong> (MIT), both bundled so that reading a
                 label needs no network. Developed by Katalyst Nord AB, Stockholm.
               </div>
             </>
