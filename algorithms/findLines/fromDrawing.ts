@@ -37,6 +37,9 @@ export interface PlacedShape {
   /** Line width, picture px. */
   lineWidth: number;
   dash: readonly number[] | null;
+  /** The clip in force when it was painted, picture px; null for none. What
+   * lies outside it is not shown. Optional, so a drawing built by hand needs none. */
+  clip?: Box | null;
 }
 
 export interface PlacedDrawing {
@@ -106,6 +109,68 @@ function clipSegment(p: Pt, q: Pt, b: Box): [number, number] | null {
   return [t0, t1];
 }
 
+/** Short straight pieces chained into dashed lines: each next piece starts
+ * close past the last one's end, heading the same way (within 30 degrees) along
+ * the line from one to the next, and a run is kept when it has at least four
+ * pieces whose dashes and gaps are regular (each within half of the run's
+ * typical), every gap a real one, and an extent of three tick lengths. The
+ * run's points are every piece's two ends, in order. */
+function dashRuns(shorts: readonly { a: Pt; b: Pt; style: string; width: number }[], k: number): { points: Pt[]; style: string; width: number }[] {
+  const used = new Set<number>();
+  const dir = (p: Pt, q: Pt) => Math.atan2(q[1] - p[1], q[0] - p[0]);
+  const turn = (x: number, y: number) => Math.abs(((x - y + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * 180 / Math.PI;
+  const runs: { points: Pt[]; style: string; width: number }[] = [];
+  const nextOf = (end: Pt, heading: number, style: string): { i: number; flip: boolean } | null => {
+    let best: { i: number; flip: boolean; d: number } | null = null;
+    shorts.forEach((s, i) => {
+      if (used.has(i) || s.style !== style) return;
+      for (const flip of [false, true]) {
+        const [a, b] = flip ? [s.b, s.a] : [s.a, s.b];
+        const d = Math.hypot(a[0] - end[0], a[1] - end[1]);
+        if (d > RULE.straight * k) continue;
+        if (turn(dir(a, b), heading) > 30) continue;
+        if (d > 0.05 * k && turn(dir(end, a), heading) > 30) continue;
+        if (!best || d < best.d) best = { i, flip, d };
+      }
+    });
+    return best;
+  };
+  shorts.forEach((s0, i0) => {
+    if (used.has(i0)) return;
+    // grow the run both ways from this piece
+    used.add(i0);
+    let segs: [Pt, Pt][] = [[s0.a, s0.b]];
+    for (const back of [false, true]) {
+      for (;;) {
+        const last = back ? segs[0]! : segs[segs.length - 1]!;
+        const end = back ? last[0] : last[1];
+        const heading = back ? dir(last[1], last[0]) : dir(last[0], last[1]);
+        const n = nextOf(end, heading, s0.style);
+        if (!n) break;
+        used.add(n.i);
+        const s = shorts[n.i]!;
+        const [a, b] = n.flip ? [s.b, s.a] : [s.a, s.b];
+        if (back) segs = [[b, a], ...segs];
+        else segs.push([a, b]);
+      }
+    }
+    if (segs.length < 4) return; // too few to be a dashed line: ticks, caps
+    const dashes = segs.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]));
+    const gaps = segs.slice(1).map(([a], i) => Math.hypot(a[0] - segs[i]![1][0], a[1] - segs[i]![1][1]));
+    const typical = (v: number[]) => [...v].sort((x, y) => x - y)[v.length >> 1]!;
+    const regular = (v: number[]) => { const t = typical(v); return v.every((x) => Math.abs(x - t) <= 0.5 * Math.max(t, 0.5 * k)); };
+    if (!regular(dashes) || !regular(gaps)) return;
+    // a dash leaves a real gap, and a dashed line runs a distance: the strokes
+    // of a label drawn in pen (cairo's contour labels) touch and are a few
+    // points across
+    if (gaps.some((g) => g < 0.25 * k)) return;
+    const first = segs[0]![0], last = segs[segs.length - 1]![1];
+    if (Math.hypot(last[0] - first[0], last[1] - first[1]) < 3 * RULE.straight * k) return;
+    runs.push({ points: segs.flatMap(([a, b]) => [a, b]), style: s0.style, width: s0.width });
+  });
+  return runs;
+}
+
 /** The runs of a polyline inside the box, each cut at the box edge. A segment
  * is clipped by itself, so one that crosses the box with both corners outside
  * (a straight line drawn edge to edge, a box drawn a hair inside the axes)
@@ -147,6 +212,8 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
   const pieces: Piece[] = [];
   const widths: number[] = [];
   const seen = new Set<string>();
+  // short straight pieces, kept aside: a dash written as its own piece (V23)
+  const shorts: { a: Pt; b: Pt; style: string; width: number }[] = [];
   const alongSide = (p: Pt, q: Pt) => {
     const e = 2 * RULE.edge * k;
     return Math.abs(p[0] - box.x0) + Math.abs(q[0] - box.x0) < e || Math.abs(p[0] - box.x1) + Math.abs(q[0] - box.x1) < e
@@ -166,7 +233,11 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
       const closed = Math.hypot(first[0] - last[0], first[1] - last[1]) < 0.5 * PT * k;
       if (closed && span < RULE.marker * k) continue; // V15: a marker
       if (sp.slice(1).every((q, i) => alongSide(sp[i]!, q))) continue; // V26: the frame
-      if (sp.length === 2 && span < RULE.straight * k) continue; // V27: a tick or a cap
+      if (sp.length === 2 && span < RULE.straight * k) {
+        // V27: a tick or a cap - unless it is one dash of a line (below)
+        if (span >= 0.5 * k) shorts.push({ a: sp[0]!, b: sp[1]!, style, width: s.lineWidth });
+        continue;
+      }
       // the same path painted twice is one line (a fill and an outline, a redraw)
       const key = `${style}|${sp.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')}`;
       if (seen.has(key)) continue;
@@ -176,6 +247,19 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
         pieces.push({ points: run, roles: run.map(() => 'measured'), gaps: [], style });
         widths.push(s.lineWidth);
       }
+    }
+  }
+
+  // V23: a dashed line written as separate short pieces with no dash array.
+  // Pieces of one style laid END TO END along their own direction, with a
+  // regular dash and gap, are one dashed line; the gaps are its style, not
+  // bridged. Tick marks stand side by side, across the way they repeat, so they
+  // never chain. (Found reading ChartDetective, which leaves this to the user.)
+  for (const run of dashRuns(shorts, k)) {
+    for (const clipped of clipToBox(run.points, box)) {
+      if (clipped.length < 2) continue;
+      pieces.push({ points: clipped, roles: clipped.map(() => 'measured'), gaps: [], style: run.style });
+      widths.push(run.width);
     }
   }
 
@@ -313,12 +397,13 @@ export function findLinesFromDrawing(d: PlacedDrawing, colour: RGB, box: Box, op
  */
 export function markersFromDrawing(d: PlacedDrawing, colour: RGB, region: Box, masks: readonly Box[] = []): Pt[] {
   const k = d.pxPerPt;
-  const out: Pt[] = [];
   // ⚑ A marker painted twice lands on the SAME centre, to a hundredth of a
   // pixel. Two different markers can be a pixel apart (where two lines cross),
   // so "the same" is kept tight - a 1.3 px allowance merged them.
   const same = 0.05 * k;
   const closedWithin = 0.5 * PT * k;
+  // every marker, with how it was painted (filled, outlined) and its size
+  const found: { c: Pt; how: string }[] = [];
   for (const s of d.shapes) {
     const inkMatches = (s.filled && near(s.fill, colour)) || (s.stroked && near(s.stroke, colour));
     if (!inkMatches) continue;
@@ -331,9 +416,35 @@ export function markersFromDrawing(d: PlacedDrawing, colour: RGB, region: Box, m
       if (Math.hypot(x1 - x0, y1 - y0) >= RULE.marker * k) continue; // too big to be a marker
       const c: Pt = [(x0 + x1) / 2, (y0 + y1) / 2];
       if (!inBox(c, region) || masks.some((m) => inBox(c, m))) continue;
-      if (out.some((q) => Math.hypot(q[0] - c[0], q[1] - c[1]) < same)) continue; // painted twice
-      out.push(c);
+      // V16 for markers: one the figure clips away is not shown, so it is not data
+      if (s.clip && !inBox(c, s.clip)) continue;
+      found.push({ c, how: `${s.filled ? 'F' : ''}${s.stroked ? 'S' : ''}|${((x1 - x0) / k).toFixed(1)}x${((y1 - y0) / k).toFixed(1)}` });
     }
+  }
+  // ⚑⚑ TWO MARKERS AT ONE SPOT ARE TWO POINTS (tenet 9: integer data ties, and
+  // the drawing shows them where the pixels cannot), UNLESS the drawing painted
+  // one marker twice: a fill pass and an outline pass, or the whole series
+  // drawn again - every marker of that kind repeated the same number of times.
+  // (Found reading figverify, whose matplotlib path keeps every placement.)
+  const spots: { c: Pt; hows: string[] }[] = [];
+  for (const f of found) {
+    const at = spots.find((q) => Math.hypot(q.c[0] - f.c[0], q.c[1] - f.c[1]) < same);
+    if (at) at.hows.push(f.how);
+    else spots.push({ c: f.c, hows: [f.how] });
+  }
+  // how many times each kind is painted at every one of its spots, when that
+  // is the same everywhere (a series drawn n times), else 1
+  const times = new Map<string, number>();
+  for (const how of new Set(found.map((f) => f.how))) {
+    const n = spots.filter((q) => q.hows.includes(how)).map((q) => q.hows.filter((h) => h === how).length);
+    times.set(how, n.every((m) => m === n[0]) ? n[0]! : 1);
+  }
+  const out: Pt[] = [];
+  for (const q of spots) {
+    // per kind, the repeats beyond its series-wide count are data points; kinds
+    // painted over one another at one spot (fill, then outline) are one marker
+    const count = Math.max(...[...new Set(q.hows)].map((h) => Math.max(1, Math.round(q.hows.filter((x) => x === h).length / times.get(h)!))));
+    for (let i = 0; i < count; i++) out.push(q.c);
   }
   return out;
 }

@@ -64,10 +64,13 @@ interface State {
   lw: number;
   dash: number[] | null;
   clip: [number, number, number, number] | null;
+  /** Stroke and fill alpha (the graphics state's CA and ca), 0..1. */
+  sa: number;
+  fa: number;
 }
 
 export function readDrawing(ops: PdfOperatorList, OPS: PdfOps): PageDrawing {
-  let st: State = { ctm: [1, 0, 0, 1, 0, 0], stroke: [0, 0, 0], fill: [0, 0, 0], lw: 1, dash: null, clip: null };
+  let st: State = { ctm: [1, 0, 0, 1, 0, 0], stroke: [0, 0, 0], fill: [0, 0, 0], lw: 1, dash: null, clip: null, sa: 1, fa: 1 };
   const stack: State[] = [];
   let path: Pt[][] | null = null;
   let clipNext = false;
@@ -94,6 +97,18 @@ export function readDrawing(ops: PdfOperatorList, OPS: PdfOps): PageDrawing {
     else if (fn === OPS['setDash']) {
       const d = a?.[0] as number[] | undefined;
       st = { ...st, dash: d && d.length ? [...d] : null };
+    } else if (fn === OPS['setGState']) {
+      // ⚑ An ExtGState can set the width, the dash and the alpha too (`/G1 gs`);
+      // pdf.js passes it as [[key, value], ...]. Read only these, the ones the
+      // readers key on (style: V23, V25, V28) or that decide whether it is ink.
+      for (const [key, v] of (a?.[0] as [string, unknown][] | undefined) ?? []) {
+        if (key === 'LW') st = { ...st, lw: Number(v) };
+        else if (key === 'D') {
+          const d = (v as [number[], number] | undefined)?.[0];
+          st = { ...st, dash: d && d.length ? [...d] : null };
+        } else if (key === 'CA') st = { ...st, sa: Number(v) };
+        else if (key === 'ca') st = { ...st, fa: Number(v) };
+      }
     } else if (pictureOps.has(fn)) {
       const c = [ap(st.ctm, 0, 0), ap(st.ctm, 1, 0), ap(st.ctm, 0, 1), ap(st.ctm, 1, 1)];
       const xs = c.map((p) => p[0]), ys = c.map((p) => p[1]);
@@ -143,11 +158,14 @@ export function readDrawing(ops: PdfOperatorList, OPS: PdfOps): PageDrawing {
       }
       path = subs;
     } else if (paints.has(fn)) {
-      if (path) {
+      // a paint at alpha 0 leaves no ink, so it is not drawn
+      const stroked = strokes.has(fn) && st.sa > 0;
+      const filled = fn !== OPS['stroke'] && fn !== OPS['closeStroke'] && st.fa > 0;
+      if (path && (stroked || filled)) {
         shapes.push({
           subs: path,
-          stroked: strokes.has(fn),
-          filled: fn !== OPS['stroke'] && fn !== OPS['closeStroke'],
+          stroked,
+          filled,
           stroke: st.stroke,
           fill: st.fill,
           lineWidth: st.lw * Math.hypot(st.ctm[0], st.ctm[1]),

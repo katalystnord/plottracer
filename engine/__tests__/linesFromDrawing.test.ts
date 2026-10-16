@@ -26,7 +26,7 @@ interface Case {
   truth: Pt[][];
 }
 const cases: Record<string, Case> = {};
-const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled', 'markers-scatter', 'lines-smoothed'];
+const NAMES = ['lines-cross', 'lines-dashed', 'lines-markers', 'lines-contour-labels', 'lines-empty-gap', 'lines-straight', 'lines-clipped', 'lines-legend', 'lines-doubled', 'markers-scatter', 'lines-smoothed', 'markers-clipped', 'predashed'];
 
 beforeAll(async () => {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -306,5 +306,87 @@ describe('V15: By colour, Scattered points, on a drawn figure reads one point pe
     const pts = markersFromDrawing(c.drawing, BLACK, c.box);
     const centres = c.truth.flatMap((T) => T.filter((_, i) => i % 8 === 0));
     expectOnePerMarker(pts, centres);
+  });
+});
+
+describe('V23: a dashed line written as separate short pieces, with no dash array', () => {
+  // fixtures/vector/make_predashed.py; found reading ChartDetective, which
+  // leaves such dashes to the user to select by hand
+  it('V23: a line whose dashes are separate short pieces is one whole line, not dropped as ticks', () => {
+    const c = cases['predashed']!;
+    const res = findLinesFromDrawing(c.drawing, [0, 0, 255], c.box);
+    expectWhole('predashed', res);
+    expect(res.lines).toHaveLength(2);
+  });
+  it('V23: the touching pen strokes of a label drawn in strokes (cairo\'s contour labels) are not taken for a dashed line', () => {
+    const ink: [number, number, number] = [0, 0, 255];
+    const stroke = (p: Pt, q: Pt) => ({ subs: [[p, q]], stroked: true, filled: false, stroke: ink, fill: ink, lineWidth: 1, dash: null });
+    // a digit's long stroke drawn as four touching pieces, end to end, as a
+    // pen-drawn glyph flattens it: regular, collinear, but no gaps and short
+    const shapes = [0, 1, 2, 3].map((i) => stroke([100, 100 + 2 * i], [100, 102 + 2 * i]));
+    const res = findLinesFromDrawing({ shapes, text: [], pxPerPt: 1 }, ink, { x0: 0, y0: 0, x1: 300, y1: 300 });
+    expect(res.lines).toHaveLength(0);
+  });
+});
+
+describe('V16 for markers: what the figure clips away is not shown, so it is not data', () => {
+  it('Scattered points over the whole figure reads only the markers inside the axes, not those the figure clips away', () => {
+    const c = cases['markers-clipped']!;
+    // the region is the whole figure, as By colour reads it when no region is drawn
+    const all = { x0: 0, y0: 0, x1: 1e5, y1: 1e5 };
+    const got = markersFromDrawing(c.drawing, [214, 39, 40], all);
+    expect(got).toHaveLength(c.truth[0]!.length);
+    for (const p of c.truth[0]!) expect(got.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.5)).toBe(true);
+  });
+});
+
+describe('a style set through the PDF graphics state (ExtGState) is the style drawn', () => {
+  // fixtures/vector/make_gstate.py: three blue strokes whose width, dash and
+  // stroke alpha are set ONLY through `/Gn gs`, as some exporters write them
+  // (found reading ChartDetective, which gets it from pdf.js's renderer)
+  let shapes: ReturnType<typeof readDrawing>['shapes'] = [];
+  beforeAll(async () => {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(readFileSync(join(FIX, 'gstate.pdf'))), verbosity: 0 }).promise;
+    const ops = await (await doc.getPage(1)).getOperatorList();
+    shapes = readDrawing(ops, pdfjs.OPS as unknown as Record<string, number>).shapes.filter((s) => s.stroke[2] === 255 && s.stroke[0] === 0);
+  });
+  const at = (y: number) => shapes.find((s) => s.subs[0]![0]![1] === y);
+
+  it('a line width set through the graphics state is the line\'s width', () => {
+    expect(at(50)?.lineWidth).toBe(4);
+  });
+  it('a dash set through the graphics state makes the line dashed', () => {
+    expect(at(100)?.dash).toEqual([6, 3]);
+    expect(at(50)?.dash).toBeNull();
+  });
+  it('a stroke painted fully transparent is not ink, so it is not read', () => {
+    expect(at(150)).toBeUndefined();
+    expect(shapes).toHaveLength(2);
+  });
+});
+
+describe('V15: two markers at one spot are two points, unless the drawing painted one marker twice', () => {
+  const red: [number, number, number] = [214, 39, 40];
+  /** A square marker of side 4 px centred at p, filled or outlined. */
+  const marker = (p: Pt, mode: 'fill' | 'stroke') => ({
+    subs: [[[p[0] - 2, p[1] - 2], [p[0] + 2, p[1] - 2], [p[0] + 2, p[1] + 2], [p[0] - 2, p[1] + 2], [p[0] - 2, p[1] - 2]] as Pt[]],
+    stroked: mode === 'stroke', filled: mode === 'fill', stroke: red, fill: red, lineWidth: 1, dash: null,
+  });
+  const read = (shapes: ReturnType<typeof marker>[]) =>
+    markersFromDrawing({ shapes, text: [], pxPerPt: 1 }, red, { x0: 0, y0: 0, x1: 500, y1: 500 });
+  const pts: Pt[] = [[50, 50], [100, 80], [150, 120], [200, 60]];
+
+  it('a data point repeated at one spot (integer data) is kept as two points', () => {
+    const got = read([...pts.map((p) => marker(p, 'fill')), marker([100, 80], 'fill')]);
+    expect(got).toHaveLength(5);
+  });
+  it('a marker filled and then outlined at one spot is one point', () => {
+    const got = read([...pts.map((p) => marker(p, 'fill')), ...pts.map((p) => marker(p, 'stroke'))]);
+    expect(got).toHaveLength(4);
+  });
+  it('a whole series painted twice is read once', () => {
+    const got = read([...pts.map((p) => marker(p, 'fill')), ...pts.map((p) => marker(p, 'fill'))]);
+    expect(got).toHaveLength(4);
   });
 });

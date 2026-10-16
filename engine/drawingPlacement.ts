@@ -68,6 +68,7 @@ export function placeDrawing(prov: Provenance, drawing: PageDrawing, text: reado
       fill: to255(s.fill),
       lineWidth: s.lineWidth * pxPerPt,
       dash: s.dash,
+      clip: s.clip ? box(s.clip) : null,
     })),
     text: text.map(box),
     pxPerPt,

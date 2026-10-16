@@ -128,6 +128,15 @@ ax.set_xlim(0, 10); ax.set_ylim(0, 10)
 leg = ax.legend(loc='upper right')
 save(fig, ax, 'markers-scatter', [pa, pb, pc], legend=leg)
 
+# V16 for markers: a scatter whose points run past the axes. matplotlib writes
+# every marker and lets the axes' clip hide the ones outside; only those
+# inside are shown, so only they are data
+fig, ax = plt.subplots(figsize=(4, 3))
+pts = np.c_[np.linspace(1, 14, 14), np.linspace(1, 9, 14)]
+ax.scatter(pts[:, 0], pts[:, 1], color='#d62728', s=30)
+ax.set_xlim(0, 10); ax.set_ylim(0, 10)
+save(fig, ax, 'markers-clipped', [pts[pts[:, 0] <= 10]])
+
 # V14: a smoothed line through 6 data points, drawn as ~100 corners, with
 # a marker at each data point in the same colour (as LibreOffice draws a
 # smoothed chart series)
