@@ -339,6 +339,11 @@ const unionBox = (bs: readonly Box[]): Box => ({
  * Measured (plottracer-ref research/v2.7-figdet/FINDINGS.md, vet.py): on 1,141 held-out
  * CHART-Info axes with right tick marks, right offers 87.4% -> 93.4%, wrong 0.9% -> 0.9%.
  *
+ * Two guards, proposed after measuring and agreed by David ("yes, try it"): (a) corrections only when
+ * the pairs that agree outnumber those that do not (two confident pairs once "corrected" three
+ * others); (b) a pair FITS by the engine's own strict tolerance, and a pair a pixel or two off whose
+ * mark is on the spacing and whose value is already its neighbours' agrees rather than disagrees.
+ *
  * ⚠️ NOT YET AGREED WITH DAVID, each a proposal from that prototype: the HIGH lines below;
  * anchors as the largest agreeing group of at least two; linear or log by which lets more
  * pairs agree; "the right place" as the anchors' own spacing; a reassigned value snapped
@@ -346,7 +351,6 @@ const unionBox = (bs: readonly Box[]): Box => ({
  */
 const HIGH_LABEL = 80; // OCR confidence, 0..100
 const HIGH_MARK = 0.5; // detector confidence, 0..1
-const SPACING = 0.15; // of one label step: how far off the spacing a mark may sit
 
 interface Vetted {
   pairs: { tick: Tick; label: Label; value: number; vetted?: LabelPair['vetted'] }[];
@@ -357,7 +361,10 @@ interface Vetted {
 function vetPairs(pairs: readonly { tick: Tick; label: Label }[], row: readonly Tick[], axis: 'x' | 'y', k: number): Vetted | null {
   const strong = pairs.filter((q) => q.label.confidence >= HIGH_LABEL && q.tick.confidence >= HIGH_MARK);
   const span = Math.max(...pairs.map((q) => q.tick.at)) - Math.min(...pairs.map((q) => q.tick.at));
+  // finding the anchors allows a picture's pixel noise; whether a pair FITS uses the engine's own
+  // strict tolerance (fits()), guard (b), David 2026-10-17
   const tol = Math.max(0.5 * k, 0.005 * span);
+  const strict = Math.max(0.5, 0.002 * span);
   type Fit = { a: number; b: number }; // pos = a + b * f(value)
   const lsq = (ps: readonly [number, number][]): Fit | null => {
     const n = ps.length, mv = ps.reduce((s, [, v]) => s + v, 0) / n, mp = ps.reduce((s, [p]) => s + p, 0) / n;
@@ -394,19 +401,29 @@ function vetPairs(pairs: readonly { tick: Tick; label: Label }[], row: readonly 
   const gaps = sorted.slice(1).map((q, i) => f(q.label.value) - f(sorted[i]!.label.value)).filter((g) => g > 1e-12);
   const step = gaps.length ? Math.min(...gaps) : null;
   const base = f(sorted[0]!.label.value);
-  const onSpacing = (pos: number) => step !== null && Math.abs((valueAt(pos) - base) / step - Math.round((valueAt(pos) - base) / step)) <= SPACING;
+  // "the right place": where the anchors' spacing puts a mark, within the picture-noise tolerance in
+  // pixels (a fraction of a label step can be many pixels and let a broken axis through, measured)
+  const onSpacing = (pos: number) => step !== null && Math.abs(at(base + Math.round((valueAt(pos) - base) / step) * step) - pos) <= tol;
   const digits = Math.max(0, ...anchors.map((q) => (String(q.label.value).split('.')[1] ?? '').length));
   const tidy = (v: number) => Number(v.toFixed(Math.min(12, digits + 2)));
   const out: Vetted = { pairs: anchors.map((q) => ({ tick: q.tick, label: q.label, value: q.label.value })), aside: [], scale };
   const taken = new Set(pairs.map((q) => q.tick));
   const mid = (l: Label) => (axis === 'x' ? (l.box.x0 + l.box.x1) / 2 : (l.box.y0 + l.box.y1) / 2);
-  for (const q of pairs) {
-    if (anchors.includes(q)) continue;
-    const fitsAt = (v: number, pos: number) => (scale === 'linear' || v > 0) && Math.abs(at(v) - pos) <= tol;
-    if (fitsAt(q.label.value, q.tick.at)) { out.pairs.push({ tick: q.tick, label: q.label, value: q.label.value }); continue; }
+  const fitsAt = (v: number, pos: number) => (scale === 'linear' || v > 0) && Math.abs(at(v) - pos) <= strict;
+  const snapAt = (pos: number) => (step === null ? null : base + Math.round((valueAt(pos) - base) / step) * step);
+  // a pair agrees when it fits strictly, or misses only by a picture's pixel noise (guard (b))
+  const agrees = (q: typeof pairs[number]) => fitsAt(q.label.value, q.tick.at)
+    || ((scale === 'linear' || q.label.value > 0) && Math.abs(at(q.label.value) - q.tick.at) <= tol);
+  const others = pairs.filter((q) => !anchors.includes(q));
+  const disagree = others.filter((q) => !agrees(q));
+  // guard (a), David 2026-10-17: corrections only when the pairs that agree outnumber those that do not
+  if (disagree.length >= anchors.length + (others.length - disagree.length)) return null;
+  for (const q of others) {
+    if (agrees(q)) { out.pairs.push({ tick: q.tick, label: q.label, value: q.label.value }); continue; }
     // 1. the tick mark's placement: off the spacing -> a free mark on it at the label, else aside
     if (!onSpacing(q.tick.at)) {
-      const free = row.find((t) => !taken.has(t) && onSpacing(t.at) && Math.abs(t.at - mid(q.label)) <= Math.max(tol, 0.25 * q.label.size) && fitsAt(q.label.value, t.at));
+      const free = row.find((t) => !taken.has(t) && onSpacing(t.at) && Math.abs(t.at - mid(q.label)) <= Math.max(tol, 0.25 * q.label.size)
+        && Math.abs(at(q.label.value) - t.at) <= tol);
       if (free) { taken.add(free); out.pairs.push({ tick: free, label: q.label, value: q.label.value }); continue; }
       out.aside.push({ label: q.label, reason: 'it does not fit the other labels, and its tick mark is off their spacing' });
       continue;
@@ -416,7 +433,11 @@ function vetPairs(pairs: readonly { tick: Tick; label: Label }[], row: readonly 
     if (alt) { out.pairs.push({ tick: q.tick, label: q.label, value: alt.n!.value, vetted: { read: q.label.str, how: 'reread' } }); continue; }
     // 3. the mark is in the right place, the value is wrong: the value its neighbours give it
     if (step !== null) {
-      const v = base + Math.round((valueAt(q.tick.at) - base) / step) * step;
+      const v = snapAt(q.tick.at)!;
+      if (Math.abs(tidy(scale === 'log' ? 10 ** v : v) - q.label.value) <= 1e-9 * Math.max(1, Math.abs(q.label.value))) {
+        out.aside.push({ label: q.label, reason: 'it does not fit the other labels, and its tick mark is off their spacing' });
+        continue;
+      }
       out.pairs.push({ tick: q.tick, label: q.label, value: tidy(scale === 'log' ? 10 ** v : v), vetted: { read: q.label.str, how: 'reassigned' } });
       continue;
     }
