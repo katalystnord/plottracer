@@ -6815,7 +6815,7 @@ export function Workspace() {
     adoptTracedColour();
     setColorTraceInfo(curveTraceReport(result.points.length, result.matched, width, height));
     commit();
-  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, colorTraceRegion, commit]);
+  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, colorTraceRegion, commit, setColorTraceInfoState]);
   const handleColorTrace = useCallback(() => colorTraceWith(colorTraceColor, colorTraceShape), [colorTraceWith, colorTraceColor, colorTraceShape]);
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
