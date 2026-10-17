@@ -109,6 +109,42 @@ describe('vetting tick mark / label pairs: a disagreeing pair is checked, reread
     expect(x.pairs.map((p) => p.value)).toEqual([0, 500, 1000, 1500, 2000, 2500]);
   });
 
+  // David, 2026-10-17: a tick label with three decimals ("1.000") is highly uncommon; on a figure
+  // whose other labels are whole numbers or thousands, the dot is a thousands separator.
+  it('"1.000" beside whole numbers is one thousand: 0, 500, 1.000, 1.500, 2.000, 2.500', () => {
+    const x = readX([label('0', 100, sure), label('500', 150, sure), label('1.000', 200, sure),
+      label('1.500', 250, sure), label('2.000', 300, sure), label('2.500', 350, sure)]);
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([0, 500, 1000, 1500, 2000, 2500]);
+  });
+
+  it('"1.000" beside real decimals is one: 0.990, 0.995, 1.000, 1.005, 1.010, 1.015', () => {
+    const x = readX([label('0.990', 100, sure), label('0.995', 150, sure), label('1.000', 200, sure),
+      label('1.005', 250, sure), label('1.010', 300, sure), label('1.015', 350, sure)]);
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([0.99, 0.995, 1, 1.005, 1.01, 1.015]);
+  });
+
+  // Measured 2026-10-17 (PMC6249732): 2.242 … 2.256 was read as 2242 … 2256. David: "what would the
+  // steps be on that graph?" Thousands step in round amounts; groups like 242 are decimals.
+  it('three decimals that are not round thousands stay decimals: 2.242, 2.244 … 2.252', () => {
+    const x = readX(['2.242', '2.244', '2.246', '2.248', '2.250', '2.252'].map((s, i) => label(s, XS[i]!, sure)));
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([2.242, 2.244, 2.246, 2.248, 2.25, 2.252]);
+  });
+
+  it('several dot groups are thousands: 0, 1.000.000 … 5.000.000', () => {
+    const x = readX(['0', '1.000.000', '2.000.000', '3.000.000', '4.000.000', '5.000.000'].map((s, i) => label(s, XS[i]!, sure)));
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([0, 1e6, 2e6, 3e6, 4e6, 5e6]);
+  });
+
+  it('on a figure with decimal commas, a dot is a thousands separator: 1.000,5 is 1000.5', () => {
+    const x = readX(['0', '500,5', '1.000,5', '1.500,5', '2.000,5', '2.500,5'].map((s, i) => label(s, XS[i]!, sure)));
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([0, 500.5, 1000.5, 1500.5, 2000.5, 2500.5]);
+  });
+
   it('an axis whose pairs all fit is read exactly as before, whatever their confidence', () => {
     const x = readX([label('0', 100, unsure), label('10', 150, unsure), label('20', 200, unsure),
       label('30', 250, unsure), label('40', 300, unsure), label('50', 350, unsure)]);
