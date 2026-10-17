@@ -97,7 +97,9 @@ const SCALE_FACTOR = /^(1e[+-]?\d+|×\s*10\^[+-]?\d+)$/i;
 
 /** A comma the figure can only mean as a decimal point: "0,04", "1,5",
  * "0,0001" (a leading 0 group, or not three digits after it). */
-const DECIMAL_COMMA = /^[+-\u2212]?(0,\d+|\d+,\d{1,2}|\d+,\d{4,})$/;
+// ⚑ The sign class escapes its hyphen: `[+-\u2212]` was a RANGE from "+" to "\u2212" that holds every
+// digit, so "10,000" matched as a "1" sign before "0,000" (measured on PMC5855060, 2026-10-17).
+const DECIMAL_COMMA = /^[+\-\u2212]?(0,\d+|\d+,\d{1,2}|\d+,\d{4,})$/;
 
 /** A printed number, the minus sign (U+2212) understood, and commas as the
  * figure uses them: decimal commas when `decimalComma`, else thousands
