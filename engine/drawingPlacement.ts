@@ -81,6 +81,11 @@ export interface PlacedText {
   str: string;
   box: { x0: number; y0: number; x1: number; y1: number };
   size: number;
+  /** How sure the reader is of `str`, 0 to 100. Absent for a PDF's own text, which is exact. */
+  confidence?: number;
+  /** Other reads of the same text (the crop turned, enlarged), tried when `str` does not fit
+   * its neighbours (labelCalibration's vetting). Absent for a PDF's own text. */
+  alternatives?: readonly string[];
 }
 
 /** The page's text pieces, placed in the working picture; empty when the

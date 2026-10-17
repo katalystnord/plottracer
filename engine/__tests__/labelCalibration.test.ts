@@ -141,11 +141,15 @@ describe('V8: an axis that cannot be read is not offered, and never guessed', ()
     if (!y.ok) expect(y.reason).toBe('only one label sits at a tick mark; two are needed');
   });
 
-  it('V8: an axis whose labels do not fit one linear or one log scale says why', () => {
-    const x = figs['labels-refused']!.read.x;
-    expect(x.ok).toBe(false);
-    if (!x.ok) expect(x.reason).toBe('the labels do not fit one linear or one log scale');
-    expect(figs['labels-refused']!.read.points).toBeNull();
+  // ⚑ CHANGED (David, 2026-10-17): this figure's X labels 0, 2, 4, 9, 8, 10 were refused for
+  // not fitting one scale. Two agreeing pairs are enough to calibrate, and a pair that
+  // disagrees with high-confidence neighbours is checked and corrected rather than the
+  // whole axis refused: the "9" sits at a tick mark on the axis's spacing, so it takes 6.
+  it('V8, vetted: a misprinted label (0, 2, 4, 9, 8, 10) at a well-placed tick mark is corrected from its neighbours', () => {
+    const x = ok(figs['labels-refused']!.read.x);
+    expect(values(x)).toEqual([0, 2, 4, 6, 8, 10]);
+    expect(x.pairs.find((p) => p.value === 6)!.vetted).toEqual({ read: '9', how: 'reassigned' });
+    expect(figs['labels-refused']!.read.points).toBeNull(); // its Y has a single label (the case above)
   });
 
   it('V8: an axis with a scale factor printed by it (1e6) is not offered, since its labels are not the values', () => {

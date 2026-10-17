@@ -40,6 +40,9 @@ export interface PlacedShape {
   /** The clip in force when it was painted, picture px; null for none. What
    * lies outside it is not shown. Optional, so a drawing built by hand needs none. */
   clip?: Box | null;
+  /** How sure a detector is of a mark it found in a picture, 0 to 1. Absent for a
+   * PDF's own drawing, which is exact. */
+  confidence?: number;
 }
 
 export interface PlacedDrawing {

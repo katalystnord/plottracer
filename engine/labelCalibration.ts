@@ -36,6 +36,9 @@ export interface LabelPair {
   labelBox: Box;
   /** The tick mark's end on the axis line (the end away from the label), picture px. */
   tick: Pt;
+  /** Set when the vetting changed the value: the label as it was read, and how its value
+   * was found instead (another read, or the value its neighbours give its tick mark). */
+  vetted?: { read: string; how: 'reread' | 'reassigned' };
 }
 /** A label or tick mark that was not used, and why. */
 export interface UnusedMark {
@@ -73,6 +76,9 @@ interface Label {
   exponent: boolean;
   box: Box;
   size: number;
+  /** 0 to 100; 100 for a PDF's own text. */
+  confidence: number;
+  alternatives: readonly string[];
 }
 /** A mark drawn at a value: a tick mark (a short straight stroke) or a
  * gridline (a long one). `at` is its place along the axis, `from`/`to` its
@@ -82,6 +88,8 @@ interface Tick {
   from: number;
   to: number;
   grid: boolean;
+  /** 0 to 1; 1 for a PDF's own drawing. */
+  confidence: number;
 }
 
 const NUMBER = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
@@ -134,7 +142,11 @@ function joinTouching(text: readonly PlacedText[]): PlacedText[] {
     if (chain.length > 1 && parseNumber(str, true)) {
       for (const k of chain) used.add(k);
       const bs = chain.map((k) => text[k]!.box);
-      out.push({ str, size: a.size, box: { x0: Math.min(...bs.map((b) => b.x0)), y0: Math.min(...bs.map((b) => b.y0)), x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)) } });
+      const conf = chain.map((k) => text[k]!.confidence).filter((c): c is number => c !== undefined);
+      out.push({
+        str, size: a.size, box: { x0: Math.min(...bs.map((b) => b.x0)), y0: Math.min(...bs.map((b) => b.y0)), x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)) },
+        ...(conf.length ? { confidence: Math.min(...conf) } : {}),
+      });
     } else out.push(a);
   });
   return out;
@@ -168,7 +180,8 @@ function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: Pl
       factors.push({ str: `×10^${e}`, box, size: a.size });
       return;
     }
-    labels.push({ str: `${base}^${e}`, value: (base.startsWith('-') ? -1 : 1) * 10 ** e, exponent: true, box, size: a.size });
+    labels.push({ str: `${base}^${e}`, value: (base.startsWith('-') ? -1 : 1) * 10 ** e, exponent: true, box, size: a.size,
+      confidence: Math.min(a.confidence ?? 100, text[j]!.confidence ?? 100), alternatives: [] });
   });
   text.forEach((t, i) => {
     if (used.has(i)) return;
@@ -177,7 +190,8 @@ function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: Pl
       return;
     }
     const n = parseNumber(t.str, decimalComma);
-    if (n) labels.push({ str: t.str.trim(), value: n.value, exponent: false, box: t.box, size: t.size });
+    if (n) labels.push({ str: t.str.trim(), value: n.value, exponent: false, box: t.box, size: t.size,
+      confidence: t.confidence ?? 100, alternatives: t.alternatives ?? [] });
   });
   return { labels, factors };
 }
@@ -197,8 +211,9 @@ function ticksOf(d: PlacedDrawing, size: { width: number; height: number }): { x
       const len = Math.hypot(dx, dy);
       if (len < 0.8 * k) continue;
       const grid = len > 12 * k;
-      if (dx <= 0.01 * len) x.push({ at: (p[0] + q[0]) / 2, from: Math.min(p[1], q[1]), to: Math.max(p[1], q[1]), grid });
-      else if (dy <= 0.01 * len) y.push({ at: (p[1] + q[1]) / 2, from: Math.min(p[0], q[0]), to: Math.max(p[0], q[0]), grid });
+      const confidence = s.confidence ?? 1;
+      if (dx <= 0.01 * len) x.push({ at: (p[0] + q[0]) / 2, from: Math.min(p[1], q[1]), to: Math.max(p[1], q[1]), grid, confidence });
+      else if (dy <= 0.01 * len) y.push({ at: (p[1] + q[1]) / 2, from: Math.min(p[0], q[0]), to: Math.max(p[0], q[0]), grid, confidence });
     }
   }
   return { x, y };
@@ -314,6 +329,103 @@ const unionBox = (bs: readonly Box[]): Box => ({
   x1: Math.max(...bs.map((b) => b.x1)), y1: Math.max(...bs.map((b) => b.y1)),
 });
 
+/**
+ * ⚑⚑ VETTING THE PAIRS BEFORE REFUSING AN AXIS (David, 2026-10-17). Two tick mark /
+ * label pairs per axis are enough to calibrate, so one pair that does not fit must not
+ * cost the whole axis. If at least two other pairs have HIGH confidence, a pair that
+ * disagrees with them is judged incorrect, and then, in his order: check the tick
+ * mark's placement; reread the value; if the value is wrong but the mark is in the
+ * right place, reassign the value; if none of these is possible, set the pair aside.
+ * Measured (plottracer-ref research/v2.7-figdet/FINDINGS.md, vet.py): on 1,141 held-out
+ * CHART-Info axes with right tick marks, right offers 87.4% -> 93.4%, wrong 0.9% -> 0.9%.
+ *
+ * ⚠️ NOT YET AGREED WITH DAVID, each a proposal from that prototype: the HIGH lines below;
+ * anchors as the largest agreeing group of at least two; linear or log by which lets more
+ * pairs agree; "the right place" as the anchors' own spacing; a reassigned value snapped
+ * to the label step. A PDF's text and drawing carry no confidence and count as exact.
+ */
+const HIGH_LABEL = 80; // OCR confidence, 0..100
+const HIGH_MARK = 0.5; // detector confidence, 0..1
+const SPACING = 0.15; // of one label step: how far off the spacing a mark may sit
+
+interface Vetted {
+  pairs: { tick: Tick; label: Label; value: number; vetted?: LabelPair['vetted'] }[];
+  aside: { label: Label; reason: string }[];
+  scale: 'linear' | 'log';
+}
+
+function vetPairs(pairs: readonly { tick: Tick; label: Label }[], row: readonly Tick[], axis: 'x' | 'y', k: number): Vetted | null {
+  const strong = pairs.filter((q) => q.label.confidence >= HIGH_LABEL && q.tick.confidence >= HIGH_MARK);
+  const span = Math.max(...pairs.map((q) => q.tick.at)) - Math.min(...pairs.map((q) => q.tick.at));
+  const tol = Math.max(0.5 * k, 0.005 * span);
+  type Fit = { a: number; b: number }; // pos = a + b * f(value)
+  const lsq = (ps: readonly [number, number][]): Fit | null => {
+    const n = ps.length, mv = ps.reduce((s, [, v]) => s + v, 0) / n, mp = ps.reduce((s, [p]) => s + p, 0) / n;
+    const svv = ps.reduce((s, [, v]) => s + (v - mv) ** 2, 0);
+    if (!(svv > 0)) return null;
+    const b = ps.reduce((s, [p, v]) => s + (v - mv) * (p - mp), 0) / svv;
+    return b === 0 ? null : { a: mp - b * mv, b };
+  };
+  let best: { scale: 'linear' | 'log'; f: (v: number) => number; fit: Fit; anchors: typeof pairs[number][]; support: number } | null = null;
+  for (const scale of ['linear', 'log'] as const) {
+    if (scale === 'linear' && pairs.some((q) => q.label.exponent)) continue;
+    if (scale === 'log' && strong.some((q) => q.label.value <= 0)) continue;
+    const f = scale === 'log' ? Math.log10 : (v: number) => v;
+    let group: typeof pairs[number][] = [];
+    for (let i = 0; i < strong.length; i++) {
+      for (let j = i + 1; j < strong.length; j++) {
+        const fit = lsq([[strong[i]!.tick.at, f(strong[i]!.label.value)], [strong[j]!.tick.at, f(strong[j]!.label.value)]]);
+        if (!fit) continue;
+        const g = strong.filter((q) => Math.abs(fit.a + fit.b * f(q.label.value) - q.tick.at) <= tol);
+        if (g.length > group.length) group = g;
+      }
+    }
+    if (group.length < 2) continue;
+    const fit = lsq(group.map((q) => [q.tick.at, f(q.label.value)]));
+    if (!fit || group.some((q) => Math.abs(fit.a + fit.b * f(q.label.value) - q.tick.at) > tol)) continue;
+    const support = pairs.filter((q) => (scale === 'linear' || q.label.value > 0) && Math.abs(fit.a + fit.b * f(q.label.value) - q.tick.at) <= tol).length;
+    if (!best || support > best.support || (support === best.support && group.length > best.anchors.length)) best = { scale, f, fit, anchors: group, support };
+  }
+  if (!best) return null;
+  const { scale, f, fit, anchors } = best;
+  const at = (v: number) => fit.a + fit.b * f(v);
+  const valueAt = (pos: number) => (pos - fit.a) / fit.b;
+  const sorted = [...anchors].sort((p, q) => f(p.label.value) - f(q.label.value));
+  const gaps = sorted.slice(1).map((q, i) => f(q.label.value) - f(sorted[i]!.label.value)).filter((g) => g > 1e-12);
+  const step = gaps.length ? Math.min(...gaps) : null;
+  const base = f(sorted[0]!.label.value);
+  const onSpacing = (pos: number) => step !== null && Math.abs((valueAt(pos) - base) / step - Math.round((valueAt(pos) - base) / step)) <= SPACING;
+  const digits = Math.max(0, ...anchors.map((q) => (String(q.label.value).split('.')[1] ?? '').length));
+  const tidy = (v: number) => Number(v.toFixed(Math.min(12, digits + 2)));
+  const out: Vetted = { pairs: anchors.map((q) => ({ tick: q.tick, label: q.label, value: q.label.value })), aside: [], scale };
+  const taken = new Set(pairs.map((q) => q.tick));
+  const mid = (l: Label) => (axis === 'x' ? (l.box.x0 + l.box.x1) / 2 : (l.box.y0 + l.box.y1) / 2);
+  for (const q of pairs) {
+    if (anchors.includes(q)) continue;
+    const fitsAt = (v: number, pos: number) => (scale === 'linear' || v > 0) && Math.abs(at(v) - pos) <= tol;
+    if (fitsAt(q.label.value, q.tick.at)) { out.pairs.push({ tick: q.tick, label: q.label, value: q.label.value }); continue; }
+    // 1. the tick mark's placement: off the spacing -> a free mark on it at the label, else aside
+    if (!onSpacing(q.tick.at)) {
+      const free = row.find((t) => !taken.has(t) && onSpacing(t.at) && Math.abs(t.at - mid(q.label)) <= Math.max(tol, 0.25 * q.label.size) && fitsAt(q.label.value, t.at));
+      if (free) { taken.add(free); out.pairs.push({ tick: free, label: q.label, value: q.label.value }); continue; }
+      out.aside.push({ label: q.label, reason: 'it does not fit the other labels, and its tick mark is off their spacing' });
+      continue;
+    }
+    // 2. reread the value
+    const alt = q.label.alternatives.map((s) => ({ s, n: parseNumber(s) })).find((r) => r.n && fitsAt(r.n.value, q.tick.at));
+    if (alt) { out.pairs.push({ tick: q.tick, label: q.label, value: alt.n!.value, vetted: { read: q.label.str, how: 'reread' } }); continue; }
+    // 3. the mark is in the right place, the value is wrong: the value its neighbours give it
+    if (step !== null) {
+      const v = base + Math.round((valueAt(q.tick.at) - base) / step) * step;
+      out.pairs.push({ tick: q.tick, label: q.label, value: tidy(scale === 'log' ? 10 ** v : v), vetted: { read: q.label.str, how: 'reassigned' } });
+      continue;
+    }
+    // 4. none of these
+    out.aside.push({ label: q.label, reason: 'it does not fit the other labels, and no other read or value from its neighbours fits it' });
+  }
+  return out.pairs.length >= 2 ? out : null;
+}
+
 function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Label[], factors: readonly PlacedText[], k: number): AxisFromLabels {
   const tickBox = (t: Tick): Box => (axis === 'x' ? { x0: t.at, y0: t.from, x1: t.at, y1: t.to } : { x0: t.from, y0: t.at, x1: t.to, y1: t.at });
   // every run of every row, labels on either side, is a candidate axis
@@ -378,8 +490,19 @@ function readAxis(axis: 'x' | 'y', ticks: readonly Tick[], labels: readonly Labe
   const factor = factors.find((f) => f.box.x1 >= around.x0 - reach && f.box.x0 <= around.x1 + reach && f.box.y1 >= around.y0 - reach && f.box.y0 <= around.y1 + reach);
   if (factor) return no(`a scale factor (${factor.str.trim()}) is printed by the axis, so the labels are not the values`);
   if (pairs.length < 2) return no('only one label sits at a tick mark; two are needed');
-  if (!pick.scale) return no('the labels do not fit one linear or one log scale');
-  const log = pick.scale === 'log';
+  let scale = pick.scale;
+  if (!scale) {
+    const v = vetPairs(p.pairs, row, axis, k);
+    if (!v) return no('the labels do not fit one linear or one log scale');
+    scale = v.scale;
+    pairs.length = 0;
+    for (const q of v.pairs) {
+      pairs.push({ value: q.value, label: q.label.str, labelBox: q.label.box, tick: (axis === 'x' ? [q.tick.at, end(q.tick)] : [end(q.tick), q.tick.at]) as Pt, ...(q.vetted ? { vetted: q.vetted } : {}) });
+    }
+    pairs.sort((a, b) => a.value - b.value);
+    for (const a of v.aside) unused.push({ label: a.label.str, box: a.label.box, reason: a.reason });
+  }
+  const log = scale === 'log';
   const side = axis === 'x' ? (p.far ? 'bottom' : 'top') : p.far ? 'right' : 'left';
   const second = first(pick) && candidates.some((c) => !first(c) && reads(c)) ? (axis === 'x' ? 'top' : 'right') : null;
   return { axis, ok: true, log, pairs, unused, side, second };
