@@ -72,6 +72,11 @@ export function LegendCard(p: LegendCardProps): React.ReactElement {
           {p.expanded ? '▾' : '▸'}
         </button>
         <strong style={{ fontSize: theme.font.size.regular }}>Legend detection</strong>
+        {p.accepted !== null && (
+          <span data-testid="legend-status" style={{ fontSize: theme.font.size.small, color: theme.color.primary.main }}>
+            {p.accepted} series ✓
+          </span>
+        )}
       </div>
       {p.expanded && (
         <>

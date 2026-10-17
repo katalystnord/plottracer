@@ -178,6 +178,23 @@ import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type Pag
 import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
 import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
 import { LegendCard } from './panels/LegendCard.js';
+import { SeriesCard, type SeriesMethod, type SeriesRow } from './panels/SeriesCard.js';
+
+/** The tools a graph type offers the Series extraction card: its bar reader, Find
+ * lines, and By colour's Scattered points, as the Auto-extract card offers them. */
+function seriesMethodsFor(config: { id: string; autoExtractKind?: string }): SeriesMethod[] {
+  if (config.autoExtractKind === 'bounding-box') return ['bars'];
+  const out: SeriesMethod[] = [];
+  if (findLinesKind(config.id)) out.push('lines');
+  if (config.autoExtractKind !== 'along-axes') out.push('points');
+  return out;
+}
+/** The tool for a series: the graph type's own when it has one, else what the
+ * legend's sample shows (a line, a marker), else the first offered. */
+function defaultSeriesMethod(methods: readonly SeriesMethod[], sample: 'swatch' | 'line' | 'marker' | null): SeriesMethod {
+  const want: SeriesMethod | null = sample === 'line' ? 'lines' : sample === 'marker' ? 'points' : sample === 'swatch' ? 'bars' : null;
+  return want && methods.includes(want) ? want : methods[0] ?? 'points';
+}
 import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
 import { errorBarsInDrawing, findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
@@ -1078,6 +1095,12 @@ export function Workspace() {
   const [legendNotice, setLegendNotice] = useState<string | null>(null);
   const [legendAccepted, setLegendAccepted] = useState<number | null>(null);
   const [legendExpanded, setLegendExpanded] = useState(true);
+  /** The Series extraction card: one row per series the accepted legend named. */
+  const [seriesRows, setSeriesRows] = useState<SeriesRow[] | null>(null);
+  const [seriesResults, setSeriesResults] = useState<(string | null)[] | null>(null);
+  const [seriesBusy, setSeriesBusy] = useState(false);
+  const [seriesAccepted, setSeriesAccepted] = useState(false);
+  const [seriesExpanded, setSeriesExpanded] = useState(true);
   /** The box gesture is armed for the legend: other drags and clicks step aside. */
   const legendMarking = cropMode && cropIntent === 'legend';
   // Resizable right sidebar (checkpoint 60): the drag handle on its left edge
@@ -1465,6 +1488,7 @@ export function Workspace() {
   const [colorTraceColor, setColorTraceColor] = useState('#000000');
   const [colorTraceTolerance, setColorTraceTolerance] = useState(settings.colourTolerance);
   const [colorTraceInfo, setColorTraceInfo] = useState<string | null>(null);
+  const setColorTraceInfoState = setColorTraceInfo;
   /**
    * Change one or more Settings (S2): applied at once, written back, and - for
    * a STARTING value - pushed into the tool it starts, so the card the user is
@@ -2176,6 +2200,10 @@ export function Workspace() {
     setLegendNotice(null);
     setLegendAccepted(null);
     setLegendBusy(false);
+    setSeriesRows(null);
+    setSeriesResults(null);
+    setSeriesAccepted(false);
+    setSeriesBusy(false);
   }, [session]);
 
   /** Legend detection: arm Mask an area's box gesture to mark the legend. */
@@ -2233,7 +2261,17 @@ export function Workspace() {
     });
     s.setActiveDataset(0);
     maskArea(box);
+    // the Series extraction card's rows: each series with the tool its legend
+    // sample and the graph type point to
+    const methods = seriesMethodsFor(s.getConfig());
+    setSeriesRows(entries.map((e, i) => ({ index: i, name: e.name.trim() || s.getDatasetInfos()[i]?.name || `Series ${i + 1}`, colour: e.colour, method: defaultSeriesMethod(methods, e.sample) })));
+    setSeriesResults(null);
+    setSeriesAccepted(false);
     setLegendAccepted(entries.length);
+    // folded once done, as the calibration card folds on success, so the cards
+    // stacked over the figure do not cover it; its header says it is done
+    setLegendExpanded(false);
+    setSeriesExpanded(true);
     setLegendBox(null);
     setLegendEntries(null);
   }, [legendBox, legendEntries, maskArea]);
@@ -6566,7 +6604,16 @@ export function Workspace() {
   // values) and an ungrouped series (a box-plot/error tuple has no place for a
   // bulk trace). 'curve' reduces the colour mask one-point-per-column; 'scatter'
   // reduces it one-point-per-marker (blob centroid) -- same filter, same preview.
-  const handleColorTrace = useCallback(() => {
+  /** What the last By colour trace said, for a caller that runs it (the Series
+   * extraction card) to show beside the series it filled. */
+  const colorTraceSaidRef = useRef<string>('');
+  /** By colour, with the colour and the shape given (its own button passes the
+   * card's; the Series extraction card passes each legend entry's). */
+  const colorTraceWith = useCallback((colourHex: string, traceShape: typeof colorTraceShape) => {
+    const setColorTraceInfo = (t: string | null) => {
+      colorTraceSaidRef.current = t ?? '';
+      setColorTraceInfoState(t);
+    };
     const refusal = colorTraceRefusal({
       isCalibrated: session.getAxes() !== null,
       autoExtractKind: config.autoExtractKind,
@@ -6583,10 +6630,10 @@ export function Workspace() {
     // be, so a value can be pasted in - and an unparseable one used to become
     // BLACK, which on a scientific figure traces the axis lines, the tick labels
     // and the title. Same door, same answer as grid removal.
-    const target = hexToRGB(colorTraceColor);
+    const target = hexToRGB(colourHex);
     if (!target) {
       setColorTraceInfo(
-        `"${colorTraceColor}" is not a colour - type a hex value such as #1f77b4, or use the eyedropper to pick the curve's own ink off the figure.`
+        `"${colourHex}" is not a colour - type a hex value such as #1f77b4, or use the eyedropper to pick the curve's own ink off the figure.`
       );
       return;
     }
@@ -6725,7 +6772,7 @@ export function Workspace() {
       commit();
       return;
     }
-    if (colorTraceShape === 'scatter') {
+    if (traceShape === 'scatter') {
       // ⚑ v2.7 V15: on a drawn figure the markers are read from the DRAWING -
       // one point at each marker's centre - when it holds any of that colour
       // in the region (or the figure); otherwise from the pixels, as always.
@@ -6768,7 +6815,8 @@ export function Workspace() {
     adoptTracedColour();
     setColorTraceInfo(curveTraceReport(result.points.length, result.matched, width, height));
     commit();
-  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceColor, colorTraceTolerance, colorTraceShape, colorTraceMinBlob, colorTraceRegion, commit]);
+  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, colorTraceRegion, commit]);
+  const handleColorTrace = useCallback(() => colorTraceWith(colorTraceColor, colorTraceShape), [colorTraceWith, colorTraceColor, colorTraceShape]);
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
   // open, filter the native-resolution pixels by the current colour + tolerance
@@ -7071,6 +7119,40 @@ export function Workspace() {
     return { text: `The Find lines card says: "${summary}"${placesText}` };
   }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
+
+  /** Read series (the Series extraction card): each row's EXISTING tool on its
+   * colour, into its series, one after another; each row keeps what its tool said. */
+  const readSeries = useCallback(async () => {
+    const rows = seriesRows;
+    if (!rows?.length) return;
+    setSeriesBusy(true);
+    const said: (string | null)[] = [];
+    try {
+      for (const r of rows) {
+        const s = sessionRef.current;
+        if (!r.colour) { said.push(null); continue; }
+        const hex = `#${r.colour.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+        s.setActiveDataset(r.index);
+        if (r.method === 'lines') {
+          const before = s.getDatasetInfos().length;
+          const res = await findLinesWith(hex);
+          // the first line went into this series (it was empty); further lines of
+          // the same colour are named after it, and all keep the legend's colour
+          const extra = s.getDatasetInfos().slice(before).map((d) => d.index);
+          extra.forEach((idx, k) => s.renameDataset(idx, `${r.name} ${k + 2}`));
+          for (const idx of [r.index, ...extra]) s.setDatasetColor(idx, r.colour);
+          said.push(res.text);
+        } else {
+          colorTraceWith(hex, r.method === 'points' ? 'scatter' : colorTraceShape);
+          said.push(colorTraceSaidRef.current || null);
+        }
+      }
+    } finally {
+      setSeriesBusy(false);
+    }
+    commit();
+    setSeriesResults(said);
+  }, [seriesRows, findLinesWith, colorTraceWith, colorTraceShape, commit]);
   const findLinesWithRef = useRef(findLinesWith);
   useEffect(() => {
     findLinesWithRef.current = findLinesWith;
@@ -10078,6 +10160,25 @@ export function Workspace() {
               onRead={() => void readLegend()}
               onEditName={(i, name) => setLegendEntries((es) => (es ? es.map((e, j) => (j === i ? { ...e, name } : e)) : es))}
               onAccept={acceptLegend}
+              endsButton={endsCardButton()}
+            />
+          )}
+          {/* The Series extraction card: the step after the legend. */}
+          {figureCaptured && axes && seriesRows && (
+            <SeriesCard
+              expanded={seriesExpanded}
+              onToggle={() => setSeriesExpanded((v) => !v)}
+              rows={seriesRows}
+              methods={seriesMethodsFor(config)}
+              onMethod={(i, m) => setSeriesRows((rs) => (rs ? rs.map((r, j) => (j === i ? { ...r, method: m } : r)) : rs))}
+              busy={seriesBusy}
+              results={seriesResults}
+              accepted={seriesAccepted}
+              onRead={() => void readSeries()}
+              onAccept={() => {
+                setSeriesAccepted(true);
+                setSeriesExpanded(false);
+              }}
               endsButton={endsCardButton()}
             />
           )}

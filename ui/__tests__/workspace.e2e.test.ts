@@ -12253,7 +12253,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('bar-off-baseline')).toMatch(/^1 bar .* does not reach the baseline/);
   }, 120000);
 
-  it('Legend detection: after calibration the card asks for the legend, Read legend reads it, the read is editable, and Accept names the series and keeps the swatches out of the bars', async () => {
+  it('Legend detection and Series extraction: after calibration the card asks for the legend, Read legend reads it, the read is editable, Accept names the series; the next card reads each series with its tool, the swatches left out', async () => {
     const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[] } };
     try {
       await app.evaluate(({ dialog }, f) => {
@@ -12301,22 +12301,35 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // the read is editable
     await page.getByTestId('legend-entry-name-0').fill('Group A');
     await page.getByRole('button', { name: 'Accept legend read', exact: true }).click();
+    // the card folds once done, as the calibration card does, and says so in its header
+    expect(await textOf('legend-status')).toBe('2 series ✓');
+    expect(await page.getByTestId('legend-line').count()).toBe(0);
+    await page.getByTestId('legend-fold').click();
     expect(await textOf('legend-line')).toBe('Legend accepted: 2 series named from it, and the legend is masked so no series tool reads it.');
+    await page.getByTestId('legend-fold').click();
     const names = await page.getByTestId('series-select').locator('option').allTextContents();
     expect(names.join(' | ')).toMatch(/Group A/);
     expect(names.join(' | ')).toMatch(/\bB\b/);
 
-    // the payoff: By colour reads the five blue bars, and not the legend's swatch
-    await page.getByTestId('series-select').selectOption({ index: 0 });
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-colour').click();
-    await page.getByTestId('color-trace-eyedropper').click();
-    const span = t.category.to[0] - t.category.from[0];
-    // the fourth category's blue bar (the Auto-extract card floats over the first ones)
-    const bar = vImg([t.category.from[0] + span * 0.66, (t.value[0]![1] * 2 + (t.value[1]![1] - t.value[0]![1]) * 0.3) / 2]);
-    await clickImagePixel(bar[0], bar[1]);
-    await page.getByTestId('color-trace-run').click();
-    await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 5 bars (one per drawn rectangle).');
+    // the next card: Series extraction, one row per series the legend named,
+    // each with the tool that will read it
+    expect(await textOf('series-line')).toBe('Read the 2 series the legend named, each with the tool shown.');
+    expect(await textOf('series-row-name-0')).toBe('Group A');
+    expect(await textOf('series-row-name-1')).toBe('B');
+    expect(await page.getByTestId('series-row-method-0').inputValue()).toBe('bars');
+    await page.getByRole('button', { name: 'Read series', exact: true }).click();
+    // each row says what its tool said: five bars each, the legend's swatch not among them
+    await expect.poll(() => textOf('series-row-result-1').catch(() => ''), { timeout: 30000 }).toBe('Read from the figure’s drawing: placed 5 bars (one per drawn rectangle).');
+    expect(await textOf('series-row-result-0')).toBe('Read from the figure’s drawing: placed 5 bars (one per drawn rectangle).');
+    // the last series read (B) is the active one; its five values, to 0.05 (clicked calibration)
+    const heightsB = (vTruth('bars-grouped') as unknown as { series: { heights: number[] }[] }).series[1]!.heights;
+    for (let i = 0; i < 5; i++) {
+      expect(Number((await textOf(`tuple-derived-${i}`)).replace(/[^0-9.eE+-]/g, ''))).toBeCloseTo(heightsB[i]!, 1);
+    }
+    await page.getByRole('button', { name: 'Accept series read', exact: true }).click();
+    expect(await textOf('series-status')).toBe('Read ✓');
+    await page.getByTestId('series-fold').click();
+    expect(await textOf('series-line')).toBe('Series read accepted. Each series can still be edited as usual; Undo takes a read back.');
   }, 180000);
 
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
