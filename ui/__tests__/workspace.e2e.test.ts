@@ -12253,6 +12253,72 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('bar-off-baseline')).toMatch(/^1 bar .* does not reach the baseline/);
   }, 120000);
 
+  it('Legend detection: after calibration the card asks for the legend, Read legend reads it, the read is editable, and Accept names the series and keeps the swatches out of the bars', async () => {
+    const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[] } };
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(VFIX, 'bars-grouped.pdf'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-bar').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const p1 = vImg([t.box[0]!, t.value[0]![1]]), p2 = vImg([t.box[0]!, t.value[1]![1]]);
+    await clickImagePixel(p1[0], p1[1]);
+    await confirmValue('0');
+    await clickImagePixel(p2[0], p2[1]);
+    await confirmValue(String(t.value[1]![0]));
+    if (/STARTS/.test(await textOf('tips-bar'))) {
+      const c1 = vImg(t.category.from);
+      await clickImagePixel(c1[0], c1[1]);
+    }
+    const cn = vImg(t.category.to);
+    await clickImagePixel(cn[0], cn[1]);
+    await confirmValue(String(t.category.count));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+
+    // the card after the calibration card asks for the legend; Read legend waits for it
+    expect(await textOf('legend-line')).toBe('Mark the legend, so its swatches and sample lines are not read as data.');
+    expect(await page.getByRole('button', { name: 'Read legend', exact: true }).isDisabled()).toBe(true);
+    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
+    expect(await textOf('tips-bar')).toMatch(/Mark the legend: drag a box from one corner of it to the opposite corner/);
+    const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
+    const from = await imageToLocal(...(vImg([lx0 - 3, ly1 + 3]) as [number, number]));
+    const to = await imageToLocal(...(vImg([lx1 + 3, ly0 - 3]) as [number, number]));
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    expect(await textOf('legend-line')).toBe('Legend marked. Read it to see what it says.');
+    await page.getByRole('button', { name: 'Read legend', exact: true }).click();
+    await expect.poll(() => page.getByTestId('legend-entry-name-1').inputValue().catch(() => ''), { timeout: 30000 }).toBe('B');
+    expect(await page.getByTestId('legend-entry-name-0').inputValue()).toBe('A');
+    // the read is editable
+    await page.getByTestId('legend-entry-name-0').fill('Group A');
+    await page.getByRole('button', { name: 'Accept legend read', exact: true }).click();
+    expect(await textOf('legend-line')).toBe('Legend accepted: 2 series named from it, and the legend is masked so no series tool reads it.');
+    const names = await page.getByTestId('series-select').locator('option').allTextContents();
+    expect(names.join(' | ')).toMatch(/Group A/);
+    expect(names.join(' | ')).toMatch(/\bB\b/);
+
+    // the payoff: By colour reads the five blue bars, and not the legend's swatch
+    await page.getByTestId('series-select').selectOption({ index: 0 });
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-colour').click();
+    await page.getByTestId('color-trace-eyedropper').click();
+    const span = t.category.to[0] - t.category.from[0];
+    // the fourth category's blue bar (the Auto-extract card floats over the first ones)
+    const bar = vImg([t.category.from[0] + span * 0.66, (t.value[0]![1] * 2 + (t.value[1]![1] - t.value[0]![1]) * 0.3) / 2]);
+    await clickImagePixel(bar[0], bar[1]);
+    await page.getByTestId('color-trace-run').click();
+    await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 5 bars (one per drawn rectangle).');
+  }, 180000);
+
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
     const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');
     await openDrawnFigure('lines-cross');

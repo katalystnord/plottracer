@@ -48,15 +48,24 @@ def save(fig, ax, name, series, horizontal=False, legend=None, extra=None):
         # the category axis runs where the bars stand: along 0
         category = {'from': pt([x0, 0.0]), 'to': pt([x1, 0.0]), 'count': len(series[0]['heights'])}
     swatches = []
+    legend_truth = None
     if legend is not None:
         for p in legend.get_patches():
             e = p.get_window_extent()
             swatches.append([round(v * k, 3) for v in (e.x0, e.y0, e.x1, e.y1)])
+        e = legend.get_window_extent()
+        legend_truth = {'box': [round(v * k, 3) for v in (e.x0, e.y0, e.x1, e.y1)],
+                        'entries': [{'name': t.get_text(), 'colour': rgb(matplotlib.colors.to_hex(p.get_facecolor())),
+                                     'text': [round(v * k, 3) for v in (lambda b: (b.x0, b.y0, b.x1, b.y1))(t.get_window_extent())]}
+                                    for t, p in zip(legend.get_texts(), legend.get_patches())]}
     truth = {'box': [round(v * k, 4) for v in (bb.x0, bb.y0, bb.x1, bb.y1)], 'horizontal': horizontal,
-             'value': value, 'category': category, 'series': series, 'swatches': swatches}
+             'value': value, 'category': category, 'series': series, 'swatches': swatches, 'legend': legend_truth}
     truth.update(extra or {})
     json.dump(truth, open(os.path.join(HERE, name + '.truth.json'), 'w'))
     fig.savefig(os.path.join(HERE, name + '.pdf'))
+    if legend is not None:
+        # the same figure as a PICTURE (page points x 2 = pixels), for the legend read on pixels
+        fig.savefig(os.path.join(HERE, name + '.png'), dpi=144)
     plt.close(fig)
 
 

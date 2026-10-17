@@ -209,3 +209,31 @@ export async function readLabelCrop(crop: { data: Uint8ClampedArray; width: numb
   if (answer.error !== undefined) return { error: answer.error };
   return { text: answer.text ?? '', confidence: typeof answer.confidence === 'number' ? answer.confidence / 100 : null };
 }
+
+/**
+ * v2.7 Legend detection: every word in a region of the picture, with its box in
+ * the PICTURE's pixels, for the legend to be read on a picture
+ * (`engine/legendRead.ts` readLegendFromPixels). One read of the whole region,
+ * as the band read does.
+ */
+export async function readRegionWords(
+  src: Uint8ClampedArray,
+  width: number,
+  height: number,
+  rect: CropRect
+): Promise<{ text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }[] | OcrFailure> {
+  const api = window.electronAPI;
+  if (!api) return { error: NO_BRIDGE };
+  const crop = cropForOcr(src, width, height, rect, 0);
+  if (!crop) return { error: 'That box is not inside the figure.' };
+  const enc = encodeCrop(crop);
+  if (!enc) return { error: 'Could not prepare the box to be read.' };
+  const answer = await api.readText(enc.base64);
+  if (answer.error !== undefined) return { error: answer.error };
+  // the crop's own frame -> the picture's (the crop may be scaled)
+  const sx = rect.width / crop.width, sy = rect.height / crop.height;
+  return (answer.words ?? []).map((w) => ({
+    text: w.text,
+    bbox: { x0: rect.x + w.bbox.x0 * sx, y0: rect.y + w.bbox.y0 * sy, x1: rect.x + w.bbox.x1 * sx, y1: rect.y + w.bbox.y1 * sy },
+  }));
+}

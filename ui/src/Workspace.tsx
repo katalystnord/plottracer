@@ -33,7 +33,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, readRegionWords } from './ocrClient.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -177,6 +177,8 @@ import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
 import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type PageText } from '../../engine/pdfDrawing.js';
 import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
 import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
+import { LegendCard } from './panels/LegendCard.js';
+import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
 import { errorBarsInDrawing, findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import { barsFromDrawing } from '../../engine/barsFromDrawing.js';
@@ -1067,7 +1069,17 @@ export function Workspace() {
    * tool that looks different and means nearly the same thing. Mirror, don't
    * merely match.
    */
-  const [cropIntent, setCropIntent] = useState<'crop' | 'mask'>('crop');
+  const [cropIntent, setCropIntent] = useState<'crop' | 'mask' | 'legend'>('crop');
+  /** The Legend detection card (David, 2026-10-17): the marked box, what Read
+   * legend found (editable), and whether it was accepted. */
+  const [legendBox, setLegendBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [legendEntries, setLegendEntries] = useState<LegendEntry[] | null>(null);
+  const [legendBusy, setLegendBusy] = useState(false);
+  const [legendNotice, setLegendNotice] = useState<string | null>(null);
+  const [legendAccepted, setLegendAccepted] = useState<number | null>(null);
+  const [legendExpanded, setLegendExpanded] = useState(true);
+  /** The box gesture is armed for the legend: other drags and clicks step aside. */
+  const legendMarking = cropMode && cropIntent === 'legend';
   // Resizable right sidebar (checkpoint 60): the drag handle on its left edge
   // adjusts this width (fed to the shell grid as a CSS variable), clamped so it
   // can't swallow the canvas or shrink below the controls' minimum.
@@ -2154,6 +2166,77 @@ export function Workspace() {
     applyPixelTransform(masked, false);
     return null;
   }, [applyPixelTransform]);
+
+  // a new figure starts the legend card afresh: the session IS the figure, and
+  // the card's read belongs to the figure it was taken from
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on a new figure, once per session
+    setLegendBox(null);
+    setLegendEntries(null);
+    setLegendNotice(null);
+    setLegendAccepted(null);
+    setLegendBusy(false);
+  }, [session]);
+
+  /** Legend detection: arm Mask an area's box gesture to mark the legend. */
+  const startLegendMark = useCallback(() => {
+    setCropIntent('legend');
+    setCropRect(null);
+    setCropMode(true);
+    setLegendEntries(null);
+    setLegendNotice(null);
+  }, []);
+
+  /** Read legend: from the figure's drawing when it is drawn, else from the
+   * picture (PaddleOCR's words and the colour beside each). Shown, not applied. */
+  const readLegend = useCallback(async () => {
+    const box = legendBox;
+    const img = imageCanvasRef.current?.getImageData();
+    if (!box || !img) return;
+    const b = { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
+    const k = figureKindRef.current;
+    const read = pageDrawingReadRef.current;
+    let entries: LegendEntry[] = [];
+    if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
+      const prov = provenanceRef.current;
+      const placed = placeDrawing(prov, read.drawing, read.text);
+      if (placed) entries = readLegendFromDrawing(placed, placeTextItems(prov, read.items), b);
+    }
+    if (!entries.length) {
+      setLegendBusy(true);
+      try {
+        const words = await readRegionWords(img.data, img.width, img.height, box);
+        if (isOcrFailure(words)) {
+          setLegendNotice(words.error);
+          return;
+        }
+        entries = readLegendFromPixels(words, img.data, img.width, img.height, b);
+      } finally {
+        setLegendBusy(false);
+      }
+    }
+    setLegendEntries(entries);
+    setLegendNotice(entries.length ? null : 'No legend entries were found in that box - mark it again round the legend.');
+  }, [legendBox]);
+
+  /** Accept legend read: mask the legend as Mask an area does (so no series
+   * tool reads it), and name and colour one series per entry. */
+  const acceptLegend = useCallback(() => {
+    const box = legendBox;
+    const entries = legendEntries;
+    if (!box || !entries?.length) return;
+    const s = sessionRef.current;
+    entries.forEach((e, i) => {
+      if (i >= s.getDatasetInfos().length) s.addDataset();
+      if (e.name.trim()) s.renameDataset(i, e.name);
+      if (e.colour) s.setDatasetColor(i, e.colour);
+    });
+    s.setActiveDataset(0);
+    maskArea(box);
+    setLegendAccepted(entries.length);
+    setLegendBox(null);
+    setLegendEntries(null);
+  }, [legendBox, legendEntries, maskArea]);
 
   const applyCrop = useCallback(() => {
     const img = imageCanvasRef.current?.getImageData();
@@ -7935,6 +8018,11 @@ export function Workspace() {
         color: theme.color.primary.main,
       });
     }
+    // the Legend detection card's marked box, until the read is accepted
+    if (legendBox) {
+      const { x, y, width: w, height: h } = legendBox;
+      list.push({ id: 'legend-box', points: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }], closed: true, label: 'Legend', labelAt: { x, y: y - 4 }, color: theme.color.primary.main });
+    }
     // v2.7 V5: each label read from the figure joined to its own tick mark, in
     // its axis's calibration colour, while the read is offered; a number with
     // no tick mark at it is marked not used, in grey
@@ -7953,7 +8041,7 @@ export function Workspace() {
       }
     }
     return list;
-  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps]);
+  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps, legendBox]);
 
   // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
   // nothing if only its author knows it is possible -- that is the "shortcut-only
@@ -9974,6 +10062,25 @@ export function Workspace() {
               </button>
             )}
           </div>
+          {/* The Legend detection card (David, 2026-10-17): the step after the
+              calibration, before the series, as the automated extraction does. */}
+          {figureCaptured && axes && (
+            <LegendCard
+              expanded={legendExpanded}
+              onToggle={() => setLegendExpanded((v) => !v)}
+              marking={cropMode && cropIntent === 'legend'}
+              marked={legendBox !== null}
+              entries={legendEntries}
+              busy={legendBusy}
+              notice={legendNotice}
+              accepted={legendAccepted}
+              onMark={startLegendMark}
+              onRead={() => void readLegend()}
+              onEditName={(i, name) => setLegendEntries((es) => (es ? es.map((e, j) => (j === i ? { ...e, name } : e)) : es))}
+              onAccept={acceptLegend}
+              endsButton={endsCardButton()}
+            />
+          )}
           {hasMultipleFigures && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -10407,7 +10514,7 @@ export function Workspace() {
               disabled={!canvasHasImage}
               onStartCrop={startCrop}
               onStartMask={startMask}
-              cropIntent={cropIntent}
+              cropIntent={cropIntent === 'legend' ? 'crop' : cropIntent}
               cropArmed={cropMode}
               cropPending={cropRect ? { width: cropRect.width, height: cropRect.height } : null}
               onApplyCrop={applyCrop}
@@ -10491,7 +10598,7 @@ export function Workspace() {
           onMeasureVertexClick={mode === 'measure' ? handleMeasureVertexClick : undefined}
           selectedMeasureVertex={activeMeasure}
           maskOverlay={eyedropper ? null : (colorTraceMask?.canvas ?? null)}
-          onImageClick={handleImageClick}
+          onImageClick={legendMarking ? undefined : handleImageClick}
           onMarkerDragEnd={handleMarkerDragEnd}
           onMarkerClick={handleMarkerClick}
           leftButtonPans={mode === 'pan' && eyedropper === null}
@@ -10503,19 +10610,30 @@ export function Workspace() {
           onLinkDragMove={handleLinkDragMove}
           onLinkDrag={handleLinkDrag}
           onLinkDragCancel={handleLinkDragCancel}
-          cropMode={mode === 'image-edit' ? cropMode : false}
+          cropMode={mode === 'image-edit' || cropIntent === 'legend' ? cropMode : false}
           // v2.0 pre-launch audit: a stray click used to set a 0x0 pending
           // rect here (no guard at all, unlike onRegionRect/onSelectRect's
           // own, inconsistent ones) -- applyCrop then silently no-op'd with
           // no message explaining why Apply did nothing. ImageCanvas.tsx's
           // endDrag now applies one click-vs-drag guard for all three.
-          onCropRect={(r) => setCropRect(r)}
+          onCropRect={(r) => {
+            // the Legend detection card's box: taken as drawn, nothing painted yet
+            if (cropIntent === 'legend') {
+              setLegendBox(r);
+              setCropMode(false);
+              setCropRect(null);
+              setCropIntent('crop');
+              setLegendNotice(null);
+              return;
+            }
+            setCropRect(r);
+          }}
           cropRect={mode === 'image-edit' ? cropRect : null}
           // Direct marquee (v1.2): the region drag is live whenever By-colour is
           // active, EXCEPT while the eyedropper is armed (that click samples a
           // colour). A bare click in this mode is already a no-op (see
           // handleImageClick), so an always-live drag clobbers nothing.
-          regionMode={(mode === 'color-trace' || (mode === 'eraser' && !!findLinesKind(config.id))) && eyedropper === null}
+          regionMode={!legendMarking && (mode === 'color-trace' || (mode === 'eraser' && !!findLinesKind(config.id))) && eyedropper === null}
           // v2.0 pre-launch audit: the click-vs-drag guard (a zero-area region
           // would match nothing) is now ImageCanvas.tsx's own job, consolidated
           // with crop/select's identical guard -- see its endDrag comment.
@@ -10555,7 +10673,7 @@ export function Workspace() {
           // Bar capture (v2.0): live whenever Add points is active on a plain Bar
           // series, except while the eyedropper is armed -- same exception
           // regionMode makes above, same reason (that click samples a colour).
-          boxMode={
+          boxMode={!legendMarking &&
             // ⚑ Bar capture is a DRAG-BOX, so in boxMode a plain click is one
             // CORNER of a bar and never reaches onImageClick at all.
             // ⚑ The category-axis exception is GONE with the mode it guarded: the
@@ -10578,9 +10696,9 @@ export function Workspace() {
           // card's own button - but `boxMode` above IS live at the same time on
           // a bar chart, so which one wins is settled by the routing order in
           // ImageCanvas's `endDrag`, where it cannot be got wrong by a caller.
-          bandMode={ocrArmed}
+          bandMode={!legendMarking && ocrArmed}
           onBandRect={(r) => void readCategoryLabels(r)}
-          selectMode={mode === 'select' ? selectSubMode : null}
+          selectMode={!legendMarking && mode === 'select' ? selectSubMode : null}
           // v2.0 pre-launch audit: same consolidated guard as onRegionRect
           // above -- a tiny drag is a click, and handleImageClick already
           // cleared the selection for that.
@@ -11616,7 +11734,7 @@ export function Workspace() {
                 tells it to click, so arming the band read has to say what to
                 drag and where. A refusal replaces it in the same place, because
                 a refusal is about the gesture just made. */}
-            {ocrError ?? guidanceTip}
+            {ocrError ?? (cropMode && cropIntent === 'legend' ? 'Mark the legend: drag a box from one corner of it to the opposite corner.' : guidanceTip)}
           </span>
         </span>
         {/* ⚑ THE KEY-TIPS' OWN AFFORDANCE (v1.6). Badges that appear on Alt are only
