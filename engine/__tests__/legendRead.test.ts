@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { readDrawing, readTextItems, type PdfTextItem } from '../pdfDrawing.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../drawingPlacement.js';
 import type { Provenance } from '../projectFile.js';
-import { readLegendFromDrawing, readLegendFromPixels } from '../legendRead.js';
+import { readLegendFromDrawing, readLegendFromPixels, whitenColour } from '../legendRead.js';
 import { readPng } from './helpers/readPng.js';
 
 const FIX = join(__dirname, 'fixtures/vector');
@@ -75,5 +75,24 @@ describe('Read legend, on a picture', () => {
       expect(e.colour, `entry ${i} has a colour`).not.toBeNull();
       expect(Math.hypot(e.colour![0] - want[0]!, e.colour![1] - want[1]!, e.colour![2] - want[2]!), `entry ${i} colour`).toBeLessThan(12);
     });
+  });
+});
+
+describe('Read legend on a picture: the samples are not read as text', () => {
+  it('a "word" with no letter or digit (two swatches read as "=") is not an entry', () => {
+    const t = JSON.parse(readFileSync(join(FIX, 'bars-grouped.truth.json'), 'utf8'));
+    const img = readPng(join(FIX, 'bars-grouped.png'));
+    const H = img.height, k = 2;
+    const px = (b: number[]): Box => ({ x0: b[0]! * k, y0: H - b[3]! * k, x1: b[2]! * k, y1: H - b[1]! * k });
+    const lb = t.legend.box as number[];
+    // what the reader returned once in the full suite: the two swatches as "="
+    const words = [{ text: '=', bbox: px([lb[0]! + 2, lb[1]! + 4, lb[0]! + 32, lb[3]! - 4]) }];
+    expect(readLegendFromPixels(words, img.data, img.width, img.height, px(lb))).toEqual([]);
+  });
+
+  it('before the read, strongly coloured pixels (swatches, coloured sample lines) are turned white and dark text is kept', () => {
+    const rgba = new Uint8ClampedArray([31, 119, 180, 255, 255, 127, 14, 255, 20, 20, 20, 255, 128, 128, 128, 255]);
+    whitenColour(rgba);
+    expect([...rgba]).toEqual([255, 255, 255, 255, 255, 255, 255, 255, 20, 20, 20, 255, 128, 128, 128, 255]);
   });
 });

@@ -22,6 +22,8 @@ export interface SeriesRow {
   method: SeriesMethod;
 }
 export interface SeriesCardProps {
+  /** A box is being drawn: the card lets the drag through. */
+  passThrough?: boolean;
   expanded: boolean;
   onToggle: () => void;
   rows: SeriesRow[];
@@ -51,6 +53,7 @@ export function SeriesCard(p: SeriesCardProps): React.ReactElement {
     <div
       data-testid="series-card"
       style={{
+        pointerEvents: p.passThrough ? 'none' : 'auto',
         background: theme.color.background.primary,
         border: `1px solid ${theme.color.border.regular}`,
         borderRadius: 8,

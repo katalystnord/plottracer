@@ -2,6 +2,7 @@ import { cropForOcr, upscaleForOcr } from '../../engine/ocrRegion.js';
 import type { CropRect } from '../../engine/imageEdit.js';
 import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
 import { wordsToTicks } from '../../engine/ocrWordsToTicks.js';
+import { whitenColour } from '../../engine/legendRead.js';
 
 /**
  * Turning one dragged band into a proposal per category (v2.4).
@@ -220,12 +221,14 @@ export async function readRegionWords(
   src: Uint8ClampedArray,
   width: number,
   height: number,
-  rect: CropRect
+  rect: CropRect,
+  opts: { whitenColour?: boolean } = {}
 ): Promise<{ text: string; bbox: { x0: number; y0: number; x1: number; y1: number } }[] | OcrFailure> {
   const api = window.electronAPI;
   if (!api) return { error: NO_BRIDGE };
   const crop = cropForOcr(src, width, height, rect, 0);
   if (!crop) return { error: 'That box is not inside the figure.' };
+  if (opts.whitenColour) whitenColour(crop.data);
   const enc = encodeCrop(crop);
   if (!enc) return { error: 'Could not prepare the box to be read.' };
   const answer = await api.readText(enc.base64);

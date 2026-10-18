@@ -90,7 +90,8 @@ export function readLegendFromDrawing(d: PlacedDrawing, text: readonly PlacedTex
 }
 
 export function readLegendFromPixels(words: readonly OcrWord[], rgba: Uint8ClampedArray | Uint8Array, width: number, height: number, box: Box): LegendEntry[] {
-  const lines = linesOf(words.filter((w) => inside(w.bbox, box)).map((w) => ({ text: w.text, box: w.bbox, size: w.bbox.y1 - w.bbox.y0 })));
+  // a "word" with no letter or digit is a sample read as text ("=", "-"), not a name
+  const lines = linesOf(words.filter((w) => inside(w.bbox, box) && /[\p{L}\p{N}]/u.test(w.text)).map((w) => ({ text: w.text, box: w.bbox, size: w.bbox.y1 - w.bbox.y0 })));
   const out: LegendEntry[] = [];
   for (const l of lines) {
     const h = l.box.y1 - l.box.y0;
@@ -114,4 +115,15 @@ export function readLegendFromPixels(words: readonly OcrWord[], rgba: Uint8Clamp
     out.push({ name: l.text, colour, sample: null, textBox: l.box });
   }
   return out;
+}
+
+/** Before the text reader sees a legend on a picture: strongly COLOURED pixels
+ * (a swatch, a coloured sample line) turned white, so they cannot be read as
+ * glyphs (two swatches stacked once read as "="). Legend text is dark and
+ * unsaturated, and is kept. In place. */
+export function whitenColour(rgba: Uint8ClampedArray | Uint8Array): void {
+  for (let i = 0; i < rgba.length; i += 4) {
+    const r = rgba[i]!, g = rgba[i + 1]!, b = rgba[i + 2]!;
+    if (Math.max(r, g, b) - Math.min(r, g, b) > 60) rgba[i] = rgba[i + 1] = rgba[i + 2] = 255;
+  }
 }

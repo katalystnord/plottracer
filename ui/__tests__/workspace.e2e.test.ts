@@ -6253,8 +6253,9 @@ describe('Workspace: mouse model + context menu', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await refreshCanvasBox();
-    // A corner unlikely to be under a calibration handle or point.
-    await page.mouse.click(canvasBox.x + 550, canvasBox.y + 60, { button: 'right' });
+    // Empty canvas, clear of the calibration handles and of the cards along
+    // the top (the folded calibration and legend cards).
+    await page.mouse.click(canvasBox.x + 550, canvasBox.y + 230, { button: 'right' });
     await page.getByTestId('ctx-fit-view').waitFor({ state: 'visible' });
     expect(await page.getByTestId('ctx-reset-zoom').isVisible()).toBe(true);
     await page.getByTestId('ctx-reset-zoom').click();
@@ -12285,10 +12286,12 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
 
-    // the card after the calibration card asks for the legend; Read legend waits for it
-    expect(await textOf('legend-line')).toBe('Mark the legend, so its swatches and sample lines are not read as data.');
-    expect(await page.getByRole('button', { name: 'Read legend', exact: true }).isDisabled()).toBe(true);
+    // the card after the calibration card starts folded, its header offering to
+    // mark the legend; marking opens it, and Read legend waits for the box
+    expect(await page.getByTestId('legend-line').count()).toBe(0);
     await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
+    expect(await textOf('legend-line')).toBe('Draw a box round the legend on the figure.');
+    expect(await page.getByRole('button', { name: 'Read legend', exact: true }).isDisabled()).toBe(true);
     expect(await textOf('tips-bar')).toMatch(/Mark the legend: drag a box from one corner of it to the opposite corner/);
     const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
     const from = await imageToLocal(...(vImg([lx0 - 3, ly1 + 3]) as [number, number]));
@@ -12420,7 +12423,14 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const to = await imageToLocal(...px([lx1 + 3, ly0 - 3]));
     await dragMarker(from.lx, from.ly, to.lx, to.ly);
     await page.getByRole('button', { name: 'Read legend', exact: true }).click();
-    await expect.poll(() => page.getByTestId('legend-entry-name-1').inputValue().catch(() => ''), { timeout: 60000 }).toBe('B');
+    try {
+      await expect.poll(() => page.getByTestId('legend-entry-name-1').inputValue().catch(() => ''), { timeout: 60000 }).toBe('B');
+    } catch (e) {
+      // say what the card shows when the read does not come back (seen only in the full suite)
+      await page.screenshot({ path: path.join(os.tmpdir(), 'plottracer-legend-picture-fail.png') });
+      console.log('LEGEND-PICTURE notice:', await textOf('legend-notice').catch(() => '(none)'), '| read button:', await textOf('legend-read').catch(() => '(none)'));
+      throw e;
+    }
     expect(await page.getByTestId('legend-entry-name-0').inputValue()).toBe('A');
     // on a picture the sample's kind is not claimed: no "swatch" beside the names
     expect(await textOf('legend-entries')).not.toMatch(/swatch/);

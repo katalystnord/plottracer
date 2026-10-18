@@ -17,6 +17,8 @@ import type { LegendEntry } from '../../../engine/legendRead.js';
  * there is a read to show, so it never covers the figure the box is drawn on.
  */
 export interface LegendCardProps {
+  /** A box is being drawn (crop, mask, the legend): the card lets the drag through. */
+  passThrough?: boolean;
   expanded: boolean;
   onToggle: () => void;
   /** The box gesture is armed: the next drag on the figure marks the legend. */
@@ -50,6 +52,7 @@ export function LegendCard(p: LegendCardProps): React.ReactElement {
     <div
       data-testid="legend-card"
       style={{
+        pointerEvents: p.passThrough ? 'none' : 'auto',
         background: theme.color.background.primary,
         border: `1px solid ${theme.color.border.regular}`,
         borderRadius: 8,
@@ -72,11 +75,15 @@ export function LegendCard(p: LegendCardProps): React.ReactElement {
           {p.expanded ? '▾' : '▸'}
         </button>
         <strong style={{ fontSize: theme.font.size.regular }}>Legend detection</strong>
-        {p.accepted !== null && (
+        {p.accepted !== null ? (
           <span data-testid="legend-status" style={{ fontSize: theme.font.size.small, color: theme.color.primary.main }}>
             {p.accepted} series ✓
           </span>
-        )}
+        ) : !p.expanded ? (
+          <button type="button" data-testid="legend-open" onClick={p.onMark} style={{ fontSize: 12 }}>
+            Mark the legend
+          </button>
+        ) : null}
       </div>
       {p.expanded && (
         <>

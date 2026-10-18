@@ -1094,7 +1094,10 @@ export function Workspace() {
   const [legendBusy, setLegendBusy] = useState(false);
   const [legendNotice, setLegendNotice] = useState<string | null>(null);
   const [legendAccepted, setLegendAccepted] = useState<number | null>(null);
-  const [legendExpanded, setLegendExpanded] = useState(true);
+  // ⚑ FOLDED until asked for, as the calibration card folds once calibrated
+  // (checkpoint 86): open, it sat over the top of the plot on every calibrated
+  // figure, where points are placed by hand
+  const [legendExpanded, setLegendExpanded] = useState(false);
   /** The Series extraction card: one row per series the accepted legend named. */
   const [seriesRows, setSeriesRows] = useState<SeriesRow[] | null>(null);
   const [seriesResults, setSeriesResults] = useState<(string | null)[] | null>(null);
@@ -2200,6 +2203,7 @@ export function Workspace() {
     setLegendNotice(null);
     setLegendAccepted(null);
     setLegendBusy(false);
+    setLegendExpanded(false);
     setSeriesRows(null);
     setSeriesResults(null);
     setSeriesAccepted(false);
@@ -2208,6 +2212,7 @@ export function Workspace() {
 
   /** Legend detection: arm Mask an area's box gesture to mark the legend. */
   const startLegendMark = useCallback(() => {
+    setLegendExpanded(true);
     setCropIntent('legend');
     setCropRect(null);
     setCropMode(true);
@@ -2233,7 +2238,7 @@ export function Workspace() {
     if (!entries.length) {
       setLegendBusy(true);
       try {
-        const words = await readRegionWords(img.data, img.width, img.height, box);
+        const words = await readRegionWords(img.data, img.width, img.height, box, { whitenColour: true });
         if (isOcrFailure(words)) {
           setLegendNotice(words.error);
           return;
@@ -10159,6 +10164,7 @@ export function Workspace() {
               calibration, before the series, as the automated extraction does. */}
           {figureCaptured && axes && (
             <LegendCard
+              passThrough={cropMode}
               expanded={legendExpanded}
               onToggle={() => setLegendExpanded((v) => !v)}
               marking={cropMode && cropIntent === 'legend'}
@@ -10177,6 +10183,7 @@ export function Workspace() {
           {/* The Series extraction card: the step after the legend. */}
           {figureCaptured && axes && seriesRows && (
             <SeriesCard
+              passThrough={cropMode}
               expanded={seriesExpanded}
               onToggle={() => setSeriesExpanded((v) => !v)}
               rows={seriesRows}
