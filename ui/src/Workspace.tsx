@@ -9449,7 +9449,8 @@ export function Workspace() {
               <button
                 type="button"
                 data-testid="accept-graph-axis"
-                disabled={!labelAxes?.points}
+                // enabled only where applyLabelAxes would act: an offer, and no point placed yet
+                disabled={!labelAxes?.points || session.getCurrentStep()?.key !== 'x1'}
                 onClick={applyLabelAxes}
                 style={{ fontSize: 12 }}
               >

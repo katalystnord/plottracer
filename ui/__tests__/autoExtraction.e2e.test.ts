@@ -163,6 +163,12 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     expect(await page.getByRole('button', { name: 'Accept suggested graph axis' }).isDisabled()).toBe(false);
     await page.getByRole('button', { name: 'Accept suggested graph axis' }).click();
     expect(await text('calibrated-status')).toBe('4/4 set');
+    // ⚑ Accept is never enabled where it would do nothing (David, 2026-10-18: "when I click
+    // [Accept...] nothing happens"): reading again after accepting offers the axes, but the points
+    // are already placed, so Accept stays greyed
+    await page.getByRole('button', { name: 'Read graph axis' }).click();
+    await page.getByTestId('label-axes-x').waitFor();
+    expect(await page.getByRole('button', { name: 'Accept suggested graph axis' }).isDisabled()).toBe(true);
     // case 12 (leave keeps what was accepted) before case 11, which undoes it
     await card.getByRole('button', { name: 'Leave automatic extraction mode' }).click();
     await page.getByTestId('manual-hint').waitFor();
