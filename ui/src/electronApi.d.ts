@@ -77,6 +77,11 @@ declare global {
        * gesture, the axis's quarter turn and which category the answer belongs
        * to all stay on this side. See ui/electron-ocr.cjs.
        */
+      /**
+       * Automatic graph extraction (v2.7): the graph-type models' raw logits for a captured
+       * figure, or a refusal sentence. engine/figureType.ts turns them into the suggestion.
+       */
+      classifyFigure: (pngBase64: string) => Promise<{ own?: number[]; docling?: number[]; error?: string }>;
       readText: (pngBase64: string, options?: { detectorBoxes?: boolean }) => Promise<{
         text?: string;
         confidence?: number;

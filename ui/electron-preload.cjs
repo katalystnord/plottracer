@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // or `{ error }`. See ui/electron-ocr.cjs.
   // `options.detectorBoxes` (v2.7): the crop is already isolated and margined (contour labels).
   readText: (pngBase64, options) => ipcRenderer.invoke('ocr:readText', pngBase64, options),
+  // Automatic graph extraction (v2.7): the captured figure's PNG bytes in, the two graph-type
+  // models' logits out (`{ own, docling }` or `{ error }`). See ui/electron-figtype.cjs.
+  classifyFigure: (pngBase64) => ipcRenderer.invoke('figtype:classify', pngBase64),
 
   // Settings (v2.7). Read synchronously once, for the first render; written back
   // on every change. See ui/electron-settings.cjs and ui/src/settings.ts.

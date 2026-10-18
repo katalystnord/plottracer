@@ -47,6 +47,9 @@ files:
   - ui/electron-*.cjs
   # ⚑ The OCR models (v2.7): read by electron-ocr-worker.cjs from beside it.
   - ui/ocr-model/**/*
+  # ⚑ The graph-type models (v2.7, Automatic graph extraction), with their LICENSE and NOTICE:
+  # read by electron-figtype.cjs in the same worker.
+  - ui/figtype-model/**/*
   - "!ui/electron-dev.cjs"
   - "!ui/electron-start.cjs"
   - build/icons/**/*

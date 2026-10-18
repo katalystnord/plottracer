@@ -96,6 +96,35 @@ function readText(pngBase64, timeoutMs = READ_TIMEOUT_MS, options = {}) {
   })
 }
 
+/**
+ * The graph-type models' raw logits for one captured figure (Automatic graph extraction, v2.7):
+ * `{ own, docling }`, or `{ error }` with a sentence. Same thread, same bound and the same rule as
+ * `readText`: a refusal is a value, never a hang. engine/figureType.ts turns the logits into the
+ * suggestion.
+ */
+function classifyFigure(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const id = nextId++
+    let timer = null
+    pending.set(id, (answer) => {
+      if (timer) clearTimeout(timer)
+      // the worker words its errors for the text reader; this request is about the graph type
+      resolve(answer && answer.error ? { error: answer.error.replace(/^Could not read the text:/, 'Could not read the graph type:') } : answer)
+    })
+    timer = setTimeout(() => {
+      if (!pending.has(id)) return
+      dropWorker(
+        `The graph type reader did not answer within ${Math.round(timeoutMs / 1000)} seconds, so it was stopped. Try again, or choose the graph type yourself.`
+      )
+    }, timeoutMs)
+    try {
+      getWorker().postMessage({ id, kind: 'figtype', pngBase64: String(pngBase64) })
+    } catch (e) {
+      dropWorker(`Could not read the graph type: ${e && e.message ? e.message : String(e)}`)
+    }
+  })
+}
+
 /** Let the reader's thread go when the app is quitting. */
 async function shutdownOcr() {
   const w = worker
@@ -104,4 +133,4 @@ async function shutdownOcr() {
   if (w) await w.terminate()
 }
 
-module.exports = { readText, shutdownOcr }
+module.exports = { readText, classifyFigure, shutdownOcr }

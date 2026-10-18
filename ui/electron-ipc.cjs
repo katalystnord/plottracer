@@ -137,6 +137,13 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
     return readText(pngBase64, undefined, options)
   })
 
+  // The graph-type models' logits for a captured figure (v2.7, Automatic graph extraction). Same
+  // worker and same lazy start as the OCR; engine/figureType.ts turns them into the suggestion.
+  ipcMain.handle('figtype:classify', async (_event, pngBase64) => {
+    const { classifyFigure } = require('./electron-ocr.cjs')
+    return classifyFigure(pngBase64)
+  })
+
   // ⚑ The OCR engine runs in a worker THREAD, which keeps the event loop alive.
   // Released here rather than in each entry point, for the reason this whole
   // file exists: main and dev cannot drift apart if they share the registration.

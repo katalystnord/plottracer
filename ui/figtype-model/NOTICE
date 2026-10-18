@@ -1,0 +1,21 @@
+PlotTracer graph-type suggestion: models
+========================================
+
+These two image classifiers suggest a captured figure's graph type in Automatic graph extraction
+(beta). They run offline, inside PlotTracer, on ONNX Runtime Web (see ../ocr-model/NOTICE).
+
+docling.onnx is DocumentFigureClassifier v2.5 from the Docling project, unchanged.
+
+  DocumentFigureClassifier v2.5 - Copyright The Docling Contributors.
+  Licensed under the MIT License (see LICENSE in this folder, the Docling project's own licence;
+  the model's repository declares MIT and carries no licence file of its own).
+  https://huggingface.co/docling-project/DocumentFigureClassifier-v2.5
+  (revision f859dfbff5c9916cd996942d4b0db7fa25808220, model.onnx,
+  sha256 27ffc48c27ae4e12c99b6f6de0dd730005245e47b70dd0c1339e62cbac3ec4c0)
+
+own.onnx is Katalyst Nord AB's fine-tune of the same model (EfficientNet-B0), trained on figures
+PlotTracer generates itself, to say whether a figure is a chart, a heatmap or neither. It is part of
+PlotTracer and is distributed under PlotTracer's licence (AGPL-3.0); the model it was fine-tuned from
+remains under the MIT License above. It is reproduced by plottracer-ref research/v2.7-figclass
+(setup.sh, gen.py, train.py --scheme gate, export.py).
+  sha256 2c56f4e7a55beec75ad02350d93923af19b7dfd989af6ed38d075662c461159b
