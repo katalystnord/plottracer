@@ -50,7 +50,7 @@ describe('step 1: the graph type', () => {
   it('case 3: automatic opens the full Graph type card and the step guide card, with no Previous or Next', () => {
     const v = view(step1);
     expect(v.graphTypeCardOpen).toBe(true);
-    expect(v.stepGuide).toEqual({ instruction: 'Please select graph type.', leave: 'Leave automatic extraction' });
+    expect(v.stepGuide).toEqual({ instruction: 'Please select graph type.', leave: 'Leave automated mode' });
     expect(v.axesCard).toBeNull();
     expect(v.choiceCard).toBeNull();
   });
@@ -99,23 +99,46 @@ describe('step 1: the graph type', () => {
 describe('the axes card', () => {
   const axes = nextAutoFlow(nextAutoFlow(start, { kind: 'automatic' }), { kind: 'type', type: 'xy' });
 
-  it('case 9 (revised, David 2026-10-18): XY clicked shows the calibration card with [< Previous] [Leave automatic extraction mode] in a row, Read and Accept graph axis points each explained, and no Next', () => {
+  it('case 9 (revised, David 2026-10-18): XY clicked shows the calibration card at its axis points stage: [< Previous] [Leave automated mode] in a row, Read and Accept graph axis points each explained, and no Next', () => {
     const v = view(axes);
     expect(v.axesCard).toEqual({
-      leave: 'Leave automatic extraction mode',
+      stage: 'points',
+      leave: 'Leave automated mode',
       read: { label: 'Read graph axis', explanation: 'Finds the tick marks and labels on both axes and suggests the calibration.' },
       accept: {
         label: 'Accept graph axis points',
-        explanation: 'Calibrates with the suggestion and moves on to the next step. Select an axis point first to adjust it.',
+        explanation: 'Accepts the axis points and moves on to the tick marks. Select an axis point first to adjust it.',
       },
     });
     expect(v.graphTypeCardOpen).toBe(false);
   });
 
-  it('accepting the graph axis points, while the later steps are not built, hands over to the manual path with everything kept', () => {
-    const v = view(nextAutoFlow(axes, { kind: 'accepted' }));
+  it('the calibration card holds two acceptances (David): accepting the axis points shows its tick marks stage, with no Read', () => {
+    const ticks = nextAutoFlow(axes, { kind: 'accepted-points' });
+    const v = view(ticks);
+    expect(v.axesCard).toEqual({
+      stage: 'ticks',
+      leave: 'Leave automated mode',
+      read: null,
+      accept: {
+        label: 'Accept tick marks',
+        explanation: 'Check the tick marks found on both axes, then accept them to complete the calibration.',
+      },
+    });
+  });
+
+  it('accepting the tick marks completes the calibration; while the legend step is not built, the walk hands over to the manual path', () => {
+    const v = view(nextAutoFlow(nextAutoFlow(axes, { kind: 'accepted-points' }), { kind: 'accepted-ticks' }));
     expect(v.calibrationCard).toBe(true);
     expect(v.axesCard).toBeNull();
+  });
+
+  it('accepting the tick marks does nothing before the axis points are accepted', () => {
+    expect(nextAutoFlow(axes, { kind: 'accepted-ticks' })).toEqual(axes);
+  });
+
+  it('Previous at the tick marks stage goes back to the axis points stage', () => {
+    expect(nextAutoFlow(nextAutoFlow(axes, { kind: 'accepted-points' }), { kind: 'previous' })).toEqual(axes);
   });
 
   it('case 11: Previous on the axes card goes back to the graph type step', () => {

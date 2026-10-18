@@ -4792,33 +4792,37 @@ export function Workspace() {
    * at them. The result is only OFFERED (the card shows it, the canvas joins
    * each label to its tick); Apply is what fills the walk (V6).
    */
-  const readAxesFromFigureLabels = useCallback(() => {
+  const readAxesFromFigureLabels = useCallback((): AxesFromLabels | null => {
     const read = pageDrawingReadRef.current;
     const img = imageCanvasRef.current?.getImageData();
-    if (!read || !img) return;
+    if (!read || !img) return null;
     const prov = provenanceRef.current;
     const placed = placeDrawing(prov, read.drawing, read.text);
     const text = placeTextItems(prov, read.items).filter((t) => {
       const cx = (t.box.x0 + t.box.x1) / 2, cy = (t.box.y0 + t.box.y1) / 2;
       return cx >= 0 && cy >= 0 && cx <= img.width && cy <= img.height;
     });
-    if (!placed) return;
+    if (!placed) return null;
     // V10: a drawn figure with no text in it draws its labels as shapes
     if (!text.some((t) => /\d/.test(t.str))) {
       setLabelAxes(null);
       setLabelAxesNotice('The labels are drawn as shapes, so they cannot be read from the drawing. Calibrate by hand instead.');
-      return;
+      return null;
     }
     setLabelAxesNotice(null);
-    setLabelAxes(readAxesFromLabels(placed, text, { width: img.width, height: img.height }));
+    const axesRead = readAxesFromLabels(placed, text, { width: img.width, height: img.height });
+    setLabelAxes(axesRead);
+    return axesRead;
   }, []);
 
   /** V6: fill X1, X2, Y1 and Y2 with the offered ticks and values, exactly as
    * the clicks and typed values would, and the Log boxes with what was read. */
-  const applyLabelAxes = useCallback(() => {
-    const read = labelAxes;
-    if (!read?.points || !read.x.ok || !read.y.ok) return;
-    if (session.getCurrentStep()?.key !== 'x1') return;
+  /** Place the read's X1, X2, Y1 and Y2 as calibration points, exactly as the clicks and typed values
+   * would: the same handles, draggable to adjust. Shared by the manual offer's Apply and the
+   * automatic path's Read graph axis. False when there is nothing to place. */
+  const placeLabelAxes = useCallback((read: AxesFromLabels | null): boolean => {
+    if (!read?.points || !read.x.ok || !read.y.ok) return false;
+    if (session.getCurrentStep()?.key !== 'x1') return false;
     session.setOption('isLogX', String(read.x.log));
     session.setOption('isLogY', String(read.y.log));
     const [x1, x2, y1, y2] = read.points;
@@ -4829,10 +4833,14 @@ export function Workspace() {
     // X1 and Y1 were placed at their own ticks, so the box saying they are
     // one point would no longer be true
     setCommonOrigin(false);
-    setLabelAxes(null);
     setDataValueInputs([]);
     commit();
-  }, [labelAxes, session, commit]);
+    return true;
+  }, [session, commit]);
+  /** V6: the manual offer's Apply. */
+  const applyLabelAxes = useCallback(() => {
+    if (placeLabelAxes(labelAxes)) setLabelAxes(null);
+  }, [labelAxes, placeLabelAxes]);
 
   // ⚑⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7 - docs/v2.7-figure-type.md. Which card shows is
   // decided in engine/autoExtraction.ts; these only carry out each card's buttons.
@@ -4881,25 +4889,35 @@ export function Workspace() {
     autoStep({ kind: 'back-to-types' });
     openGraphTypeCard();
   }, [autoStep, openGraphTypeCard]);
-  /** [Accept graph axis points]: the read fills the calibration points, the calibration runs, and the
-   * walk moves on. Interim, until the tick marks acceptance and the legend step exist: it hands over
-   * to the manual path, keeping everything (docs/v2.7-figure-type.md). */
+  /** The calibration card's two acceptances (David, 2026-10-18): [Accept graph axis points] moves on to
+   * the tick marks; [Accept tick marks] runs the calibration and, until the legend step exists, hands
+   * over to the manual path, keeping everything (docs/v2.7-figure-type.md). */
   const acceptGraphAxis = useCallback(() => {
-    applyLabelAxes();
-    runCalibration();
-    autoStep({ kind: 'accepted' });
-  }, [applyLabelAxes, runCalibration, autoStep]);
+    if (autoFlowRef.current.path === 'automatic' && autoFlowRef.current.step === 'axes' && autoFlowRef.current.stage === 'ticks') {
+      // [Accept tick marks]: the calibration is complete (David: the card is completed with the final
+      // acceptance)
+      runCalibration();
+      setLabelAxes(null);
+      autoStep({ kind: 'accepted-ticks' });
+    } else {
+      autoStep({ kind: 'accepted-points' });
+    }
+  }, [runCalibration, autoStep]);
   /** [< Previous]: undo the last step and go back one step in the chain (David, 2026-10-17). */
   const previousAutoStep = useCallback(() => {
+    // undo until the walk stands where one step back puts it (tick marks -> axis points -> graph type)
+    const target = nextAutoFlow(autoFlowRef.current, { kind: 'previous' });
     for (;;) {
       const snap = history.undo();
       if (!snap) break;
       restoreDoc(snap);
-      if (snap.autoFlow?.path === 'automatic' && snap.autoFlow.step === 'type') break;
+      if (JSON.stringify(snap.autoFlow) === JSON.stringify(target)) break;
     }
-    setLabelAxes(null);
     setReadAxisNotice(null);
-    openGraphTypeCard();
+    if (target.path === 'automatic' && target.step === 'type') {
+      setLabelAxes(null);
+      openGraphTypeCard();
+    }
   }, [history, restoreDoc, openGraphTypeCard]);
   /** [Read graph axis]: the axes read from the figure's own labels, offered for [Accept]. */
   const readGraphAxis = useCallback(() => {
@@ -4910,16 +4928,20 @@ export function Workspace() {
       return;
     }
     if (kind !== 'drawn' && kind !== 'partly') {
-      setReadAxisNotice('Reading the axes of a picture comes with the detector, which is not built yet. Leave automatic extraction mode to calibrate by hand.');
+      setReadAxisNotice('Reading the axes of a picture comes with the detector, which is not built yet. Leave automated mode to calibrate by hand.');
       return;
     }
     if (session.getSteps()[0]?.key !== 'x1') {
-      setReadAxisNotice('Reading the axes from the labels is not available for this graph type yet. Leave automatic extraction mode to calibrate by hand.');
+      setReadAxisNotice('Reading the axes from the labels is not available for this graph type yet. Leave automated mode to calibrate by hand.');
       return;
     }
     setReadAxisNotice(null);
-    readAxesFromFigureLabels();
-  }, [session, readAxesFromFigureLabels]);
+    // ⚑ The suggested axis points ARE calibration points, so they are placed as the app's own
+    // calibration handles (David, 2026-10-18: "you are NOT using the axis points here... REUSE
+    // MECHANICS IN THE SOFTWARE"). A second read replaces the points of the first.
+    if (Object.keys(session.getPlacedPoints()).length > 0 && !session.isCalibrated()) session.reset();
+    placeLabelAxes(readAxesFromFigureLabels());
+  }, [session, readAxesFromFigureLabels, placeLabelAxes]);
 
   const setGlobalField = useCallback(
     (key: string, value: string) => {
@@ -8717,6 +8739,13 @@ export function Workspace() {
     // ⚑ The tips bar is an instruction, so it must not instruct while nothing
     // can be done - see the input's own memo.
     marksHidden,
+    automaticStage: !autoView.axesCard || axes
+      ? null
+      : autoView.axesCard.stage === 'ticks'
+        ? 'ticks'
+        : Object.keys(placedPoints).length === steps.length
+          ? 'points'
+          : 'read',
     heatmapHasGrid: heatmapShownGrid !== null,
     heatmapHasCells: heatmapCells.length > 0,
     // ⚑ The caliper is drawn only for a SINGLE picked cell, and the tip names it
@@ -9460,7 +9489,7 @@ export function Workspace() {
             </span>
           )}
           {/* ⚑ THE AUTOMATIC PATH'S CALIBRATION CARD (David, 2026-10-18), under the foldable header and
-              folding with it: [< Previous] [Leave automatic extraction mode] [Reset calibration] in one
+              folding with it: [< Previous] [Leave automated mode] [Reset calibration] in one
               row; [Read graph axis] and [Accept graph axis points], each with its explanation, Accept
               teal when it can be used (the card-ending teal, as Calibrate); no Next, Accept moves the
               walk on; and at the bottom, with a warning triangle, only what the figure does not show.
@@ -9479,12 +9508,16 @@ export function Workspace() {
                   Reset calibration
                 </button>
               </span>
-              <button type="button" data-testid="read-graph-axis" onClick={readGraphAxis} style={{ fontSize: 12 }}>
-                {autoView.axesCard.read.label}
-              </button>
-              <span data-testid="read-graph-axis-explanation" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-                {autoView.axesCard.read.explanation}
-              </span>
+              {autoView.axesCard.read && (
+                <>
+                  <button type="button" data-testid="read-graph-axis" onClick={readGraphAxis} style={{ fontSize: 12, alignSelf: 'flex-start' }}>
+                    {autoView.axesCard.read.label}
+                  </button>
+                  <span data-testid="read-graph-axis-explanation" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                    {autoView.axesCard.read.explanation}
+                  </span>
+                </>
+              )}
               {readAxisNotice && (
                 <span data-testid="read-axis-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
                   {readAxisNotice}
@@ -9496,15 +9529,17 @@ export function Workspace() {
                 </span>
               )}
               {(() => {
-                // enabled only where it acts: an offer, and no point placed yet
-                const ready = Boolean(labelAxes?.points) && session.getCurrentStep()?.key === 'x1';
+                // enabled only where it acts: the axis points all placed (by the read, or adjusted), or,
+                // at the tick marks stage, the calibration not yet run
+                const ready =
+                  !axes && (autoView.axesCard.stage === 'ticks' || Object.keys(placedPoints).length === steps.length);
                 return (
                   <button
                     type="button"
                     data-testid="accept-graph-axis"
                     disabled={!ready}
                     onClick={acceptGraphAxis}
-                    style={ready ? { ...endsCardButton() } : { fontSize: 12 }}
+                    style={{ ...(ready ? endsCardButton() : { fontSize: 12 }), alignSelf: 'flex-start' }}
                   >
                     {autoView.axesCard.accept.label}
                   </button>
@@ -11005,7 +11040,7 @@ export function Workspace() {
           ]}
         </Menu>
         {/* ⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7: the step guide card, in the lower right corner
-            of the canvas while its step lasts (David, 2026-10-16/18): [Leave automatic extraction]
+            of the canvas while its step lasts (David, 2026-10-16/18): [Leave automated mode]
             in its top left, the instruction in its middle, no Previous or Next. */}
         {autoView.stepGuide && (
           <div

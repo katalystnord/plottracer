@@ -1248,3 +1248,19 @@ describe('the tips bar for a type with capture labels', () => {
     expect(tip).toContain('filling Median');
   });
 });
+
+describe('the automatic path\'s calibration card names its own next press (v2.7)', () => {
+  // ⚑ Found by walking the built flow: with the four axis points placed by Read graph axis, the tips
+  // bar said "press Calibrate", a button the automatic card does not have.
+  it('axis points not yet placed: Read graph axis', () => {
+    expect(guidanceTip(base({ automaticStage: 'read' }))).toMatch(/Read graph axis/);
+  });
+  it('the axis points placed: check them, then Accept graph axis points; never Calibrate', () => {
+    const t = guidanceTip(base({ automaticStage: 'points' }));
+    expect(t).toMatch(/Accept graph axis points/);
+    expect(t).not.toMatch(/Calibrate/);
+  });
+  it('the tick marks stage: Accept tick marks', () => {
+    expect(guidanceTip(base({ automaticStage: 'ticks' }))).toMatch(/Accept tick marks/);
+  });
+});

@@ -56,6 +56,12 @@ export interface GuidanceTipInput {
    */
   marksHidden?: boolean;
   /**
+   * Where the automatic path's calibration card stands (v2.7), or absent off that path: 'read' before
+   * the axis points are placed, 'points' once they are, 'ticks' at the tick marks stage. The card's own
+   * buttons are what moves it on, so the tip names them, never the manual walk's Calibrate.
+   */
+  automaticStage?: 'read' | 'points' | 'ticks' | null;
+  /**
    * The figure has a category axis to place, and the walk has not placed it.
    *
    * ⚑ While that is true, capture STANDS DOWN - a bar-family figure cannot be
@@ -182,6 +188,15 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
   // that surprises you.
   if (input.marksHidden === true) {
     return 'Marks are hidden - the figure is shown on its own. Press the eye button, top right, to bring them back.';
+  }
+  if (input.automaticStage === 'read') {
+    return 'Press Read graph axis to find the axis points and tick marks, or click the axis points yourself.';
+  }
+  if (input.automaticStage === 'points') {
+    return 'Check the axis points on the figure, drag one to adjust it, then press Accept graph axis points.';
+  }
+  if (input.automaticStage === 'ticks') {
+    return 'Check the tick marks on both axes, then press Accept tick marks to complete the calibration.';
   }
   // Checked first: it overrides every capture message, because for as long as it
   // is true no click can capture anything.

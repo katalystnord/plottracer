@@ -103,7 +103,7 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     expect(await text('step-guide-instruction')).toBe('Please select graph type.');
     // (while the Graph type card is open the rest of the window is behind its pop-over, as for every
     // fold-out in the app, so the guide card's controls are looked up by test id here)
-    expect(await text('leave-automatic')).toBe('Leave automatic extraction');
+    expect(await text('leave-automatic')).toBe('Leave automated mode');
     expect(await guide.locator('button').count()).toBe(1); // no Previous or Next
     // lower right corner of the canvas
     const canvas = (await page.locator('canvas').first().boundingBox())!;
@@ -150,7 +150,7 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     await page.getByRole('button', { name: 'Try automatic graph extraction (beta)' }).click();
     await page.getByTestId('step-guide-card').waitFor();
     await page.keyboard.press('Escape'); // the Graph type card is a fold-out; the guide card stays
-    await page.getByRole('button', { name: 'Leave automatic extraction' }).click();
+    await page.getByRole('button', { name: 'Leave automated mode' }).click();
     await page.getByTestId('reset-calibration').waitFor();
     expect(await page.getByTestId('capture-figure').count()).toBe(0); // still captured
   });
@@ -162,7 +162,7 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     await page.getByTestId('axes-option-xy').click();
     const card = page.getByTestId('axes-card');
     await card.waitFor();
-    // case 9: the header on top; then [< Previous] [Leave automatic extraction mode] [Reset calibration]
+    // case 9: the header on top; then [< Previous] [Leave automated mode] [Reset calibration]
     // in one row; Read and Accept graph axis points, each explained; no Next
     expect(await text('calibrated-status')).toBe('0/4 set');
     const row = await Promise.all(['auto-previous', 'leave-automatic', 'reset-calibration'].map((id) => page.getByTestId(id).boundingBox()));
@@ -171,6 +171,14 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     expect(row[0]!.x).toBeLessThan(row[1]!.x);
     expect(row[1]!.x).toBeLessThan(row[2]!.x);
     expect((await page.getByTestId('calib-fold').boundingBox())!.y).toBeLessThan(row[0]!.y);
+    // David, 2026-10-18: the row fits inside the card, and Read and Accept are their own size, not
+    // the card's full width
+    const bar = (await page.getByTestId('calibration-bar').boundingBox())!;
+    expect(row[2]!.x + row[2]!.width).toBeLessThanOrEqual(bar.x + bar.width);
+    const cardWidth = (await card.boundingBox())!.width;
+    for (const id of ['read-graph-axis', 'accept-graph-axis']) {
+      expect((await page.getByTestId(id).boundingBox())!.width, id).toBeLessThan(cardWidth * 0.75);
+    }
     expect(await page.getByRole('button', { name: 'Accept graph axis points' }).isDisabled()).toBe(true);
     expect(await text('read-graph-axis-explanation')).not.toBe('');
     expect(await text('accept-graph-axis-explanation')).not.toBe('');
@@ -183,14 +191,18 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     expect(await card.count()).toBe(0);
     await page.getByTestId('calib-fold').click();
     await card.waitFor();
-    // case 10: Read graph axis (the PDF's drawing is read after capture; the card says if not yet)
+    // case 10: Read graph axis places the suggested axis points as the app's own calibration handles
+    // (David, 2026-10-18: "you are NOT using the axis points here... REUSE MECHANICS IN THE SOFTWARE")
     expect(await violetPixels()).toBe(0);
-    const accept = page.getByRole('button', { name: 'Accept graph axis points' });
+    expect(await text('tips-bar')).toMatch(/Read graph axis/);
+    const accept = page.getByTestId('accept-graph-axis');
     for (let i = 0; i < 20 && (await accept.isDisabled()); i++) {
       await page.getByRole('button', { name: 'Read graph axis' }).click();
       await page.waitForTimeout(500);
     }
-    expect(await accept.isDisabled()).toBe(false);
+    expect(await text('calibrated-status')).toBe('4/4 set');
+    expect(await text('tips-bar')).toMatch(/Accept graph axis points/);
+    expect(await text('tips-bar')).not.toMatch(/Calibrate/);
     // the values read are not listed in the card (David: "they are printed on the graph instead"),
     // and nothing needs a warning on this figure
     expect(await page.getByTestId('label-axes-offer').count()).toBe(0);
@@ -198,10 +210,23 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     // the tick marks read are drawn with the app's own tick mark graphics, in its structure violet
     expect(await violetPixels()).toBeGreaterThan(50);
     // teal when it can be used: the card-ending teal, as Calibrate
+    expect(await accept.textContent()).toBe('Accept graph axis points');
     expect(await accept.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe('rgb(239, 239, 239)');
-    // case 12 interim: Accept calibrates, and hands over to the manual path with everything kept
+    // the first acceptance: on to the tick marks, which stay drawn; no Read at this stage
     await accept.click();
-    await page.getByTestId('manual-hint').count();
+    expect(await accept.textContent()).toBe('Accept tick marks');
+    expect(await page.getByTestId('read-graph-axis').count()).toBe(0);
+    expect(await text('tips-bar')).toMatch(/Accept tick marks/);
+    expect(await violetPixels()).toBeGreaterThan(50);
+    expect(await text('calibrated-status')).toBe('4/4 set');
+    // Previous goes back one stage, to the axis points, which are kept
+    await page.getByRole('button', { name: '< Previous' }).click();
+    expect(await accept.textContent()).toBe('Accept graph axis points');
+    expect(await text('calibrated-status')).toBe('4/4 set');
+    await accept.click();
+    // the final acceptance completes the calibration; the legend step is not built, so the walk
+    // hands over to the manual path with everything kept
+    await accept.click();
     expect(await text('calibrated-status')).toBe('Calibrated ✓');
     expect(await card.count()).toBe(0);
   });
@@ -223,6 +248,7 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     const card = (await page.getByTestId('axes-card').boundingBox())!;
     const w = (await page.getByTestId('label-axes-warnings').boundingBox())!;
     expect(Math.abs(card.y + card.height - (w.y + w.height))).toBeLessThan(4);
+    // only one axis was read, so there are no axis points to accept
     expect(await page.getByRole('button', { name: 'Accept graph axis points' }).isDisabled()).toBe(true);
   });
 
@@ -232,7 +258,7 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     await page.getByTestId('axes-type-panel').waitFor();
     await page.getByTestId('axes-option-xy').click();
     await page.getByTestId('axes-card').waitFor();
-    await page.getByRole('button', { name: 'Leave automatic extraction mode' }).click();
+    await page.getByRole('button', { name: 'Leave automated mode' }).click();
     await page.getByTestId('manual-hint').waitFor();
     expect(await page.getByTestId('axes-card').count()).toBe(0);
   });

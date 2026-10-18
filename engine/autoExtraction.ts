@@ -21,7 +21,9 @@ export type AutoFlow =
   | { path: 'automatic'; step: 'type' }
   /** A type with no automatic workflow was clicked. */
   | { path: 'automatic'; step: 'apology'; type: string }
-  | { path: 'automatic'; step: 'axes' };
+  /** The calibration card (David, 2026-10-18): two acceptances in turn, first the axis points, then
+   * the tick marks (categories for Bar and Histogram); the second completes the calibration. */
+  | { path: 'automatic'; step: 'axes'; stage: 'points' | 'ticks' };
 
 export type AutoEvent =
   | { kind: 'automatic' }
@@ -30,29 +32,34 @@ export type AutoEvent =
   /** A graph type clicked on the Graph type card during the automatic path. */
   | { kind: 'type'; type: string }
   | { kind: 'back-to-types' }
-  /** "Leave automatic extraction": the manual path, keeping everything accepted so far. */
+  /** "Leave automated mode": the manual path, keeping everything accepted so far. */
   | { kind: 'leave' }
   | { kind: 'previous' }
-  /** [Accept graph axis points]. Interim, until the tick marks acceptance and the legend step exist:
-   * the calibration is done, and the walk hands over to the manual path, keeping everything. */
-  | { kind: 'accepted' };
+  /** [Accept graph axis points]: on to the tick marks. */
+  | { kind: 'accepted-points' }
+  /** [Accept tick marks]: the calibration is complete. Interim, until the legend step exists: the walk
+   * hands over to the manual path, keeping everything. */
+  | { kind: 'accepted-ticks' };
 
 export function nextAutoFlow(f: AutoFlow, e: AutoEvent): AutoFlow {
   switch (e.kind) {
     case 'manual':
     case 'leave':
       return { path: 'manual' };
-    case 'accepted':
-      return f.path === 'automatic' && f.step === 'axes' ? { path: 'manual' } : f;
+    case 'accepted-points':
+      return f.path === 'automatic' && f.step === 'axes' && f.stage === 'points' ? { ...f, stage: 'ticks' } : f;
+    case 'accepted-ticks':
+      return f.path === 'automatic' && f.step === 'axes' && f.stage === 'ticks' ? { path: 'manual' } : f;
     case 'automatic':
       return f.path === 'unchosen' ? { path: 'automatic', step: 'type' } : f;
     case 'type':
       if (f.path !== 'automatic' || f.step !== 'type') return f;
-      return AUTOMATIC_TYPES.includes(e.type) ? { path: 'automatic', step: 'axes' } : { path: 'automatic', step: 'apology', type: e.type };
+      return AUTOMATIC_TYPES.includes(e.type) ? { path: 'automatic', step: 'axes', stage: 'points' } : { path: 'automatic', step: 'apology', type: e.type };
     case 'back-to-types':
       return f.path === 'automatic' && f.step === 'apology' ? { path: 'automatic', step: 'type' } : f;
     case 'previous':
-      return f.path === 'automatic' && f.step === 'axes' ? { path: 'automatic', step: 'type' } : f;
+      if (f.path !== 'automatic' || f.step !== 'axes') return f;
+      return f.stage === 'ticks' ? { ...f, stage: 'points' } : { path: 'automatic', step: 'type' };
   }
 }
 
@@ -81,9 +88,9 @@ export interface AutoExtractionView {
   /** The apology card in the centre of the canvas, or null. */
   apology: { text: string; back: string; manual: string } | null;
   /** The automatic path's calibration card (David, 2026-10-18), or null: under its foldable header, a
-   * row of [< Previous] [Leave automatic extraction mode] [Reset calibration], then [Read graph axis]
+   * row of [< Previous] [Leave automated mode] [Reset calibration], then [Read graph axis]
    * and [Accept graph axis points], each with its explanation. No Next: Accept moves the walk on. */
-  axesCard: { leave: string; read: ExplainedButton; accept: ExplainedButton } | null;
+  axesCard: { stage: 'points' | 'ticks'; leave: string; read: ExplainedButton | null; accept: ExplainedButton } | null;
 }
 
 // ⚑ The four explanations are Claude's wording, built to be seen and changed (docs/v2.7-figure-type.md,
@@ -101,12 +108,22 @@ const CHOICE: NonNullable<AutoExtractionView['choiceCard']> = {
     explanation: 'You choose the graph type and click the calibration points yourself. Works for every graph type.',
   },
 };
-const AXES: NonNullable<AutoExtractionView['axesCard']> = {
-  leave: 'Leave automatic extraction mode',
+const POINTS: NonNullable<AutoExtractionView['axesCard']> = {
+  stage: 'points',
+  leave: 'Leave automated mode',
   read: { label: 'Read graph axis', explanation: 'Finds the tick marks and labels on both axes and suggests the calibration.' },
   accept: {
     label: 'Accept graph axis points',
-    explanation: 'Calibrates with the suggestion and moves on to the next step. Select an axis point first to adjust it.',
+    explanation: 'Accepts the axis points and moves on to the tick marks. Select an axis point first to adjust it.',
+  },
+};
+const TICKS: NonNullable<AutoExtractionView['axesCard']> = {
+  stage: 'ticks',
+  leave: 'Leave automated mode',
+  read: null,
+  accept: {
+    label: 'Accept tick marks',
+    explanation: 'Check the tick marks found on both axes, then accept them to complete the calibration.',
   },
 };
 
@@ -123,7 +140,7 @@ export function autoExtractionView(f: AutoFlow, figureCaptured: boolean): AutoEx
       return { ...none, calibrationCard: true, manualHint: 'Start by selecting the appropriate graph type.' };
     case 'automatic':
       if (f.step === 'type') {
-        return { ...none, graphTypeCardOpen: true, stepGuide: { instruction: 'Please select graph type.', leave: 'Leave automatic extraction' } };
+        return { ...none, graphTypeCardOpen: true, stepGuide: { instruction: 'Please select graph type.', leave: 'Leave automated mode' } };
       }
       if (f.step === 'apology') {
         return {
@@ -135,6 +152,6 @@ export function autoExtractionView(f: AutoFlow, figureCaptured: boolean): AutoEx
           },
         };
       }
-      return { ...none, axesCard: AXES };
+      return { ...none, axesCard: f.stage === 'ticks' ? TICKS : POINTS };
   }
 }
