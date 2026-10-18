@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ozoneArgs } from './e2eContainment.js';
+import { suggestGraphType } from '../../engine/figureType.js';
 
 /**
  * ⚑⚑⚑ DRIVES THE PACKAGED BINARY, NOT THE REPO (v2.4).
@@ -24,6 +25,7 @@ import { ozoneArgs } from './e2eContainment.js';
  *   · XLSX export (exceljs)          - 7.5MB, no longer shipped, lazy-loaded
  *   · reading a label (onnxruntime-web) - the one package that IS still shipped,
  *                                        as one wasm build and three model files
+ *   · the graph-type suggestion (v2.7)  - two more model files, in the same worker
  *
  * ⚑ RUN IT AFTER A PACKAGE BUILD:
  *
@@ -157,6 +159,21 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     );
     expect(answer.error, 'the packaged app could not start its OCR engine').toBeUndefined();
     expect(answer.text?.trim()).toBe('Flax');
+  }, 120000);
+
+  it('suggests a graph type, with both classifier models and Docling\'s licence in the package (v2.7)', async () => {
+    const app = path.join(path.dirname(BINARY), 'resources/app');
+    for (const f of ['own.onnx', 'docling.onnx', 'LICENSE', 'NOTICE']) {
+      expect(fs.existsSync(path.join(app, 'ui/figtype-model', f)), `ui/figtype-model/${f} is missing from the package`).toBe(true);
+    }
+    // Straight at the worker boundary, as for OCR above; the cards are walked in autoExtraction.e2e.
+    const png = fs.readFileSync(path.join(REPO_ROOT, 'samples/bar-tensile-strength.png')).toString('base64');
+    const answer = await page.evaluate(
+      (b64) => (window as unknown as { electronAPI: { classifyFigure: (s: string) => Promise<{ own?: number[]; docling?: number[]; error?: string }> } }).electronAPI.classifyFigure(b64),
+      png
+    );
+    expect(answer.error, 'the packaged app could not run the graph-type models').toBeUndefined();
+    expect(suggestGraphType(answer.own!, answer.docling!).type).toBe('bar');
   }, 120000);
 
   it('finds lines, with the Find lines worker inlined into the packaged page', async () => {
