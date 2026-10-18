@@ -55,8 +55,11 @@ export function positionLoupe(
   containerWidth: number,
   containerHeight: number,
   offset: LoupeOffset = DEFAULT_LOUPE_OFFSET,
-  avoid?: AvoidRect | null
+  avoid?: AvoidRect | readonly AvoidRect[] | null
 ): LoupePosition {
+  // ⚑ More than one card can float over the canvas at once (v2.7: the calibration card along the
+  // top, a tool card down the left), and the loupe must stay clear of every one of them.
+  const rects: readonly AvoidRect[] = !avoid ? [] : Array.isArray(avoid) ? avoid : [avoid as AvoidRect];
   const rawLeft = cursorX + offset.dx;
   const rawTop = cursorY + offset.dy - loupeHeight;
 
@@ -69,8 +72,9 @@ export function positionLoupe(
   const left = clampLeft(rawLeft);
   const top = clampTop(rawTop);
 
+  const clear = (c: LoupePosition) => rects.every((r) => !overlaps(c.left, c.top, loupeWidth, loupeHeight, r));
   // No card open, or the default spot is already clear -> use it unchanged.
-  if (!avoid || !overlaps(left, top, loupeWidth, loupeHeight, avoid)) {
+  if (clear({ left, top })) {
     return { left, top };
   }
 
@@ -81,15 +85,19 @@ export function positionLoupe(
   // card is so large no candidate is fully clear (the loupe still tracks the
   // cursor's zoom -- only its panel moved).
   const gap = 12;
-  const rightOfCard: LoupePosition = { left: clampLeft(avoid.left + avoid.width + gap), top };
-  const candidates: LoupePosition[] = [
-    rightOfCard,
-    { left, top: clampTop(avoid.top + avoid.height + gap) }, // below card
-    { left, top: clampTop(avoid.top - loupeHeight - gap) }, // above card
-    { left: clampLeft(avoid.left - loupeWidth - gap), top }, // left of card
+  const around = (r: AvoidRect): LoupePosition[] => [
+    { left: clampLeft(r.left + r.width + gap), top }, // right of the card
+    { left, top: clampTop(r.top + r.height + gap) }, // below card
+    { left, top: clampTop(r.top - loupeHeight - gap) }, // above card
+    { left: clampLeft(r.left - loupeWidth - gap), top }, // left of card
   ];
-  for (const c of candidates) {
-    if (!overlaps(c.left, c.top, loupeWidth, loupeHeight, avoid)) return c;
+  // the cards the default spot runs into first, then the others, so a single card dodges as before
+  const hit = rects.filter((r) => overlaps(left, top, loupeWidth, loupeHeight, r));
+  const order = [...hit, ...rects.filter((r) => !hit.includes(r))];
+  for (const r of order) {
+    for (const c of around(r)) {
+      if (clear(c)) return c;
+    }
   }
-  return rightOfCard;
+  return around(hit[0]!)[0]!;
 }

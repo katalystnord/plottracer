@@ -1,5 +1,6 @@
 import React from 'react';
 import { theme } from '../theme.js';
+import { WarningIcon } from '../icons.js';
 import type { AxesFromLabels, AxisFromLabels } from '../../../engine/labelCalibration.js';
 
 /**
@@ -16,6 +17,10 @@ export interface LabelAxesOfferProps {
   /** Its own Apply and Cancel; false where the card carries the action itself (the automatic
    * path's axes card, whose [Accept suggested graph axis] is this Apply). */
   actions?: boolean;
+  /** 'warnings': only what the figure itself does not show, each line with a warning triangle, for
+   * the bottom of the automatic path's calibration card (David, 2026-10-18: the values read are
+   * printed on the graph, "printing the numbers here again is just confusing"). */
+  variant?: 'offer' | 'warnings';
 }
 
 const name = (a: AxisFromLabels) => a.axis.toUpperCase();
@@ -38,7 +43,40 @@ function unusedLine(a: AxisFromLabels): string | null {
   return parts.length ? `Not used on ${name(a)}: ${parts.join('; ')}.` : null;
 }
 
-export function LabelAxesOffer({ read, onApply, onCancel, actions = true }: LabelAxesOfferProps): React.ReactElement {
+/** Each label the vetting changed, as a sentence: what the figure shows and what was read. */
+function correctedLines(a: AxisFromLabels): string[] {
+  return a.pairs
+    .filter((p) => p.vetted)
+    .map((p) => `${name(a)}: ${p.value} was read as "${p.vetted!.read}" and corrected from ${p.vetted!.how === 'reread' ? 'another read of the label' : 'its neighbours'}.`);
+}
+
+function Warnings({ read }: { read: AxesFromLabels }): React.ReactElement | null {
+  const axes = [read.x, read.y];
+  const lines: { id: string; text: string }[] = [];
+  for (const a of axes) {
+    if (!a.ok) lines.push({ id: `label-axes-${a.axis}`, text: `${name(a)} could not be read: ${a.reason}.` });
+    else {
+      correctedLines(a).forEach((t, i) => lines.push({ id: `label-axes-corrected-${a.axis}-${i}`, text: t }));
+      if (a.second) lines.push({ id: `label-axes-second-${a.axis}`, text: `A second ${name(a)} axis along the ${a.second} is not read; data plotted against it needs calibrating by hand.` });
+    }
+    const unused = unusedLine(a);
+    if (unused) lines.push({ id: `label-axes-unused-${a.axis}`, text: unused });
+  }
+  if (lines.length === 0) return null;
+  return (
+    <div data-testid="label-axes-warnings" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+      {lines.map((l) => (
+        <span key={l.id} data-testid={l.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+          <span style={{ color: theme.color.error, flexShrink: 0, display: 'inline-flex' }}><WarningIcon size={14} /></span>
+          <span>{l.text}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function LabelAxesOffer({ read, onApply, onCancel, actions = true, variant = 'offer' }: LabelAxesOfferProps): React.ReactElement | null {
+  if (variant === 'warnings') return <Warnings read={read} />;
   const axes = [read.x, read.y];
   const small = { fontSize: theme.font.size.small, color: theme.color.text.secondary } as const;
   return (

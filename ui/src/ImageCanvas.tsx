@@ -570,6 +570,9 @@ interface ImageCanvasProps {
    * while the cursor is over it (click-through cards leak hover to the canvas).
    * Null when no card is open. */
   loupeHideRect?: AvoidRect | null;
+  /** Other cards floating over the canvas (the calibration card along its top), in container
+   * coordinates: the loupe dodges them and hides while the cursor is over one, as for the left card. */
+  floatingCardRects?: readonly AvoidRect[];
 }
 
 export interface ImageCanvasHandle {
@@ -643,7 +646,7 @@ export interface ImageCanvasHandle {
 }
 
 export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(function ImageCanvas(
-  { sharpLayer, points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, extraSelected, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect },
+  { sharpLayer, points, seriesLines, calibrationPreview, boxPlotGlyphs, candlestickGlyphs, tupleGlyphs, aidGlyphs, errorBarGlyphs, curveFitLine, onCurveFitClick, geometryOverlay, challengeReveal, gridOverlay, gridSelection, keyCursor, keySpan, onKeyCursorDrag, onKeyCursorDragEnd, measureOverlays, maskOverlay, onImageClick, onMarkerDragEnd, onMarkerClick, leftButtonPans = false, marksHidden = false, onPointContextMenu, onMeasureContextMenu, onCanvasContextMenu, onMeasureVertexClick, selectedMeasureVertex, cropMode, onCropRect, cropRect, regionMode, onRegionRect, regionRect, heldBackRects, extraSelected, boxMode, onBoxRect, bandMode, onBandRect, selectMode, onSelectRect, onSelectLasso, linkSnap, onLinkDragMove, onLinkDrag, onLinkDragCancel, previewRotationDeg = 0, onStatusChange, beforeOpenImage, onImageOpened, onPdfBytes, crosshairCursor, avoidRect, loupeHideRect, floatingCardRects },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2992,12 +2995,8 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
           // colour by eye and cannot see the band at 1:1. The hide exists for a
           // cursor RESTING over a card, which is not what this is.
           (keyCursorDragging ||
-            !(
-              loupeHideRect &&
-              hover.x >= loupeHideRect.left &&
-              hover.x <= loupeHideRect.left + loupeHideRect.width &&
-              hover.y >= loupeHideRect.top &&
-              hover.y <= loupeHideRect.top + loupeHideRect.height
+            ![...(loupeHideRect ? [loupeHideRect] : []), ...(floatingCardRects ?? [])].some(
+              (r) => hover.x >= r.left && hover.x <= r.left + r.width && hover.y >= r.top && hover.y <= r.top + r.height
             )) && (
             <Loupe
               image={image}
@@ -3007,7 +3006,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
               containerHeight={container.clientHeight}
               getOverlayCanvas={getOverlayCanvas}
               overlayVersion={points}
-              avoid={avoidRect}
+              avoid={floatingCardRects?.length ? [...(avoidRect ? [avoidRect] : []), ...floatingCardRects] : avoidRect}
             />
           )}
         {hoverImagePoint && (() => {

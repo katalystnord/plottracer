@@ -12,17 +12,33 @@ const view = (f: AutoFlow, captured = true) => autoExtractionView(f, captured);
 describe('the choice between automatic and manual extraction', () => {
   it('case 1: a figure just captured shows the choice card in the calibration card\'s place', () => {
     const v = view(start);
-    expect(v.choiceCard).toBe(true);
+    expect(v.choiceCard).not.toBeNull();
     expect(v.calibrationCard).toBe(false);
   });
 
+  it('the choice card (David, 2026-10-18): "Graph extraction workflow", the automatic button plain and the manual one primary, each with its explanation', () => {
+    expect(view(start).choiceCard).toEqual({
+      title: 'Graph extraction workflow',
+      automatic: {
+        label: 'Try automatic graph extraction (beta)',
+        primary: false,
+        explanation: 'Experimental: PlotTracer suggests the graph type and reads the axes for you to check and accept. Not every graph type is supported yet.',
+      },
+      manual: {
+        label: 'Go to manual guided extraction',
+        primary: true,
+        explanation: 'You choose the graph type and click the calibration points yourself. Works for every graph type.',
+      },
+    });
+  });
+
   it('before a figure is captured there is no choice card (today\'s "Capture figure first")', () => {
-    expect(view(start, false).choiceCard).toBe(false);
+    expect(view(start, false).choiceCard).toBeNull();
   });
 
   it('case 2: manual guided extraction shows today\'s calibration card with the hint line', () => {
     const v = view(nextAutoFlow(start, { kind: 'manual' }));
-    expect(v.choiceCard).toBe(false);
+    expect(v.choiceCard).toBeNull();
     expect(v.calibrationCard).toBe(true);
     expect(v.manualHint).toBe('Start by selecting the appropriate graph type.');
   });
@@ -35,8 +51,8 @@ describe('step 1: the graph type', () => {
     const v = view(step1);
     expect(v.graphTypeCardOpen).toBe(true);
     expect(v.stepGuide).toEqual({ instruction: 'Please select graph type.', leave: 'Leave automatic extraction' });
-    expect(v.previousNext).toBe(false);
-    expect(v.choiceCard).toBe(false);
+    expect(v.axesCard).toBeNull();
+    expect(v.choiceCard).toBeNull();
   });
 
   it('case 5: a type with no automatic extraction yet closes the Graph type card and shows the apology card; the step guide card is gone', () => {
@@ -73,7 +89,7 @@ describe('step 1: the graph type', () => {
   });
 
   it('XY, Bar and Histogram have an automatic workflow; the others do not (David, 2026-10-18)', () => {
-    for (const t of ['xy', 'bar', 'histogram']) expect(view(nextAutoFlow(step1, { kind: 'type', type: t })).axesCard).toBe(true);
+    for (const t of ['xy', 'bar', 'histogram']) expect(view(nextAutoFlow(step1, { kind: 'type', type: t })).axesCard).not.toBeNull();
     for (const t of ['pie', 'heatmap', 'boxplot', 'map', 'polar', 'ternary', 'spider', 'contour']) {
       expect(view(nextAutoFlow(step1, { kind: 'type', type: t })).apology).not.toBeNull();
     }
@@ -83,23 +99,34 @@ describe('step 1: the graph type', () => {
 describe('the axes card', () => {
   const axes = nextAutoFlow(nextAutoFlow(start, { kind: 'automatic' }), { kind: 'type', type: 'xy' });
 
-  it('case 9: XY clicked shows the axes card with Previous and Next, and no step guide or Graph type card', () => {
+  it('case 9 (revised, David 2026-10-18): XY clicked shows the calibration card with [< Previous] [Leave automatic extraction mode] in a row, Read and Accept graph axis points each explained, and no Next', () => {
     const v = view(axes);
-    expect(v.axesCard).toBe(true);
-    expect(v.previousNext).toBe(true);
+    expect(v.axesCard).toEqual({
+      leave: 'Leave automatic extraction mode',
+      read: { label: 'Read graph axis', explanation: 'Finds the tick marks and labels on both axes and suggests the calibration.' },
+      accept: {
+        label: 'Accept graph axis points',
+        explanation: 'Calibrates with the suggestion and moves on to the next step. Select an axis point first to adjust it.',
+      },
+    });
     expect(v.graphTypeCardOpen).toBe(false);
-    expect(v.leave).toBe('Leave automatic extraction mode');
+  });
+
+  it('accepting the graph axis points, while the later steps are not built, hands over to the manual path with everything kept', () => {
+    const v = view(nextAutoFlow(axes, { kind: 'accepted' }));
+    expect(v.calibrationCard).toBe(true);
+    expect(v.axesCard).toBeNull();
   });
 
   it('case 11: Previous on the axes card goes back to the graph type step', () => {
     const v = view(nextAutoFlow(axes, { kind: 'previous' }));
     expect(v.graphTypeCardOpen).toBe(true);
-    expect(v.axesCard).toBe(false);
+    expect(v.axesCard).toBeNull();
   });
 
   it('case 12: leave automatic extraction mode on the axes card shows the manual guided path', () => {
     const v = view(nextAutoFlow(axes, { kind: 'leave' }));
     expect(v.calibrationCard).toBe(true);
-    expect(v.axesCard).toBe(false);
+    expect(v.axesCard).toBeNull();
   });
 });

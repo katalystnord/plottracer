@@ -57,7 +57,7 @@ interface LoupeProps {
   /** The open tool card / rail rectangle (container-local) the loupe hops clear
    * of, so it never hides behind or draws over the card in use (David: "overlay
    * + dodge"). Null when nothing is open worth avoiding. */
-  avoid?: AvoidRect | null;
+  avoid?: AvoidRect | readonly AvoidRect[] | null;
 }
 
 export function Loupe({

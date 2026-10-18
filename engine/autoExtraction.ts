@@ -32,13 +32,18 @@ export type AutoEvent =
   | { kind: 'back-to-types' }
   /** "Leave automatic extraction": the manual path, keeping everything accepted so far. */
   | { kind: 'leave' }
-  | { kind: 'previous' };
+  | { kind: 'previous' }
+  /** [Accept graph axis points]. Interim, until the tick marks acceptance and the legend step exist:
+   * the calibration is done, and the walk hands over to the manual path, keeping everything. */
+  | { kind: 'accepted' };
 
 export function nextAutoFlow(f: AutoFlow, e: AutoEvent): AutoFlow {
   switch (e.kind) {
     case 'manual':
     case 'leave':
       return { path: 'manual' };
+    case 'accepted':
+      return f.path === 'automatic' && f.step === 'axes' ? { path: 'manual' } : f;
     case 'automatic':
       return f.path === 'unchosen' ? { path: 'automatic', step: 'type' } : f;
     case 'type':
@@ -51,9 +56,20 @@ export function nextAutoFlow(f: AutoFlow, e: AutoEvent): AutoFlow {
   }
 }
 
+/** A button and the explanation under it. */
+export interface ExplainedButton {
+  label: string;
+  explanation: string;
+}
+
 export interface AutoExtractionView {
-  /** "Graph extraction": [Try automatic graph extraction (beta)] / [Go to manual guided extraction]. */
-  choiceCard: boolean;
+  /** "Graph extraction workflow" (David, 2026-10-18), or null. Only the manual button is the teal
+   * primary one: the automatic one "is experimental for now". */
+  choiceCard: {
+    title: string;
+    automatic: ExplainedButton & { primary: boolean };
+    manual: ExplainedButton & { primary: boolean };
+  } | null;
   /** Today's calibration card (the manual path). */
   calibrationCard: boolean;
   /** The italic line under "Calibration" on the manual path, or null. */
@@ -64,23 +80,45 @@ export interface AutoExtractionView {
   stepGuide: { instruction: string; leave: string } | null;
   /** The apology card in the centre of the canvas, or null. */
   apology: { text: string; back: string; manual: string } | null;
-  /** The axes card (in the calibration card's place). */
-  axesCard: boolean;
-  /** The axes card's own leave button text, or null where no card carries one. */
-  leave: string | null;
-  /** [< Previous] [Next >] on the card. */
-  previousNext: boolean;
+  /** The automatic path's calibration card (David, 2026-10-18), or null: under its foldable header, a
+   * row of [< Previous] [Leave automatic extraction mode] [Reset calibration], then [Read graph axis]
+   * and [Accept graph axis points], each with its explanation. No Next: Accept moves the walk on. */
+  axesCard: { leave: string; read: ExplainedButton; accept: ExplainedButton } | null;
 }
+
+// ⚑ The four explanations are Claude's wording, built to be seen and changed (docs/v2.7-figure-type.md,
+// "Still open"); the titles, labels and layout are David's.
+const CHOICE: NonNullable<AutoExtractionView['choiceCard']> = {
+  title: 'Graph extraction workflow',
+  automatic: {
+    label: 'Try automatic graph extraction (beta)',
+    primary: false,
+    explanation: 'Experimental: PlotTracer suggests the graph type and reads the axes for you to check and accept. Not every graph type is supported yet.',
+  },
+  manual: {
+    label: 'Go to manual guided extraction',
+    primary: true,
+    explanation: 'You choose the graph type and click the calibration points yourself. Works for every graph type.',
+  },
+};
+const AXES: NonNullable<AutoExtractionView['axesCard']> = {
+  leave: 'Leave automatic extraction mode',
+  read: { label: 'Read graph axis', explanation: 'Finds the tick marks and labels on both axes and suggests the calibration.' },
+  accept: {
+    label: 'Accept graph axis points',
+    explanation: 'Calibrates with the suggestion and moves on to the next step. Select an axis point first to adjust it.',
+  },
+};
 
 export function autoExtractionView(f: AutoFlow, figureCaptured: boolean): AutoExtractionView {
   const none: AutoExtractionView = {
-    choiceCard: false, calibrationCard: false, manualHint: null, graphTypeCardOpen: false, stepGuide: null,
-    apology: null, axesCard: false, leave: null, previousNext: false,
+    choiceCard: null, calibrationCard: false, manualHint: null, graphTypeCardOpen: false, stepGuide: null,
+    apology: null, axesCard: null,
   };
   if (!figureCaptured) return { ...none, calibrationCard: true }; // today's "Capture figure first"
   switch (f.path) {
     case 'unchosen':
-      return { ...none, choiceCard: true };
+      return { ...none, choiceCard: CHOICE };
     case 'manual':
       return { ...none, calibrationCard: true, manualHint: 'Start by selecting the appropriate graph type.' };
     case 'automatic':
@@ -97,6 +135,6 @@ export function autoExtractionView(f: AutoFlow, figureCaptured: boolean): AutoEx
           },
         };
       }
-      return { ...none, axesCard: true, leave: 'Leave automatic extraction mode', previousNext: true };
+      return { ...none, axesCard: AXES };
   }
 }

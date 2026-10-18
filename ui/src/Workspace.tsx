@@ -277,6 +277,7 @@ import type { AnyAxes } from '../../core/plotData.js';
 import { measurementValue } from '../../core/measurementValues.js';
 import { makeDisplayRounder } from '../../core/displayPrecision.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
+import { labelTickGlyphs } from '../../engine/labelTickOverlay.js';
 import { calibrationCardModel } from '../../engine/calibrationCardModel.js';
 import { autoExtractionView, nextAutoFlow, type AutoEvent, type AutoFlow } from '../../engine/autoExtraction.js';
 import { clampPanelWidth, defaultPanelWidthFor, readStoredPanelWidth, writePanelWidth } from './panelWidth.js';
@@ -733,6 +734,9 @@ export function Workspace() {
   // The open card's OWN rect (no rail union) -- the loupe hides while the cursor
   // is over it (click-through cards leak hover to the canvas).
   const [cardRect, setCardRect] = useState<AvoidRect | null>(null);
+  /** The calibration card floating over the top of the canvas (v2.7: the loupe was drawn over it). */
+  const calibCardRef = useRef<HTMLDivElement>(null);
+  const [calibCardRect, setCalibCardRect] = useState<AvoidRect | null>(null);
   const [version, setVersion] = useState(0);
   /**
    * ⚑⚑ THE ONE FACT A CANDLESTICK FIGURE CAN NEED FROM ITS READER: is our
@@ -760,6 +764,18 @@ export function Workspace() {
     const region = canvasRegionRef.current;
     const row = railRowRef.current;
     const wrap = cardWrapRef.current;
+    // The calibration card, wherever a tool card is open or not: the loupe stays clear of it too.
+    const calib = calibCardRef.current;
+    if (region && calib && calib.offsetHeight > 0 && getComputedStyle(calib).visibility !== 'hidden') {
+      const rr0 = region.getBoundingClientRect();
+      const c = calib.getBoundingClientRect();
+      const next: AvoidRect = { left: c.left - rr0.left, top: c.top - rr0.top, width: c.width, height: c.height };
+      setCalibCardRect((prev) =>
+        prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height ? prev : next
+      );
+    } else {
+      setCalibCardRect((prev) => (prev === null ? prev : null));
+    }
     // A card is open iff the (now absolutely-positioned) wrapper has real content.
     const cardOpen = !!wrap && wrap.offsetHeight > 0;
     if (!region || !row || !cardOpen) {
@@ -857,6 +873,7 @@ export function Workspace() {
     if (canvasRegionRef.current) ro.observe(canvasRegionRef.current);
     if (railRowRef.current) ro.observe(railRowRef.current);
     if (cardWrapRef.current) ro.observe(cardWrapRef.current);
+    if (calibCardRef.current) ro.observe(calibCardRef.current);
     window.addEventListener('resize', measureAvoid);
     return () => {
       ro.disconnect();
@@ -4864,6 +4881,14 @@ export function Workspace() {
     autoStep({ kind: 'back-to-types' });
     openGraphTypeCard();
   }, [autoStep, openGraphTypeCard]);
+  /** [Accept graph axis points]: the read fills the calibration points, the calibration runs, and the
+   * walk moves on. Interim, until the tick marks acceptance and the legend step exist: it hands over
+   * to the manual path, keeping everything (docs/v2.7-figure-type.md). */
+  const acceptGraphAxis = useCallback(() => {
+    applyLabelAxes();
+    runCalibration();
+    autoStep({ kind: 'accepted' });
+  }, [applyLabelAxes, runCalibration, autoStep]);
   /** [< Previous]: undo the last step and go back one step in the chain (David, 2026-10-17). */
   const previousAutoStep = useCallback(() => {
     for (;;) {
@@ -8025,16 +8050,13 @@ export function Workspace() {
         color: theme.color.primary.main,
       });
     }
-    // v2.7 V5: each label read from the figure joined to its own tick mark, in
-    // its axis's calibration colour, while the read is offered; a number with
-    // no tick mark at it is marked not used, in grey
+    // v2.7 V5: while the read is offered, a number with no tick mark at it is
+    // marked not used, in grey. The tick marks read are drawn with the app's own
+    // tick mark graphics, in `allAidGlyphs` (engine/labelTickOverlay.ts; David,
+    // 2026-10-18: "Why are you not using the same tick mark graphics that we had
+    // developed before?")
     if (labelAxes) {
       for (const a of [labelAxes.x, labelAxes.y]) {
-        const colour = steps.find((st) => st.key === (a.axis === 'x' ? 'x1' : 'y1'))?.color;
-        a.pairs.forEach((p, i) => {
-          const at = { x: (p.labelBox.x0 + p.labelBox.x1) / 2, y: (p.labelBox.y0 + p.labelBox.y1) / 2 };
-          list.push({ id: `label-axes-${a.axis}-${i}`, points: [{ x: p.tick[0], y: p.tick[1] }, at], label: p.label, labelAt: at, ...(colour ? { color: colour } : {}) });
-        });
         a.unused.forEach((u, i) => {
           if (u.label === null) return;
           const at = { x: (u.box.x0 + u.box.x1) / 2, y: (u.box.y0 + u.box.y1) / 2 };
@@ -8043,7 +8065,7 @@ export function Workspace() {
       }
     }
     return list;
-  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps]);
+  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes]);
 
   // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
   // nothing if only its author knows it is possible -- that is the "shortcut-only
@@ -8110,9 +8132,11 @@ export function Workspace() {
   const allTupleGlyphs = useMemo(() => tupleGlyphs, [tupleGlyphs]);
   /** ⚑ ONE AID LAYER, two contributors - a bar chart's marked category axis and
    * a heatmap's grid - because they are the same thing fed a different axis. */
+  const floatingCardRects = useMemo<AvoidRect[]>(() => (calibCardRect ? [calibCardRect] : []), [calibCardRect]);
+  const labelTicks = useMemo<AidGlyph[]>(() => (labelAxes ? labelTickGlyphs(labelAxes) : []), [labelAxes]);
   const allAidGlyphs = useMemo<AidGlyph[]>(
-    () => [...categoryGlyphs, ...heatmapGridGlyphs],
-    [categoryGlyphs, heatmapGridGlyphs]
+    () => [...categoryGlyphs, ...heatmapGridGlyphs, ...labelTicks],
+    [categoryGlyphs, heatmapGridGlyphs, labelTicks]
   );
 
   const seriesLines = useMemo<SeriesLine[]>(
@@ -9281,6 +9305,7 @@ export function Workspace() {
               </button>
             )}
             <div
+              ref={calibCardRef}
               data-testid="calibration-bar"
               style={{
                 ...(autoView.graphTypeCardOpen || autoView.apology ? { visibility: 'hidden' as const } : {}),
@@ -9330,25 +9355,30 @@ export function Workspace() {
               </BottomBarButton>
             </div>
           )}
-          {/* ⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7: after capture, the choice (David, 2026-10-16:
-              the title and two buttons, stacked, full width, equal weight, nothing else). */}
+          {/* ⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7: after capture, the choice (David, 2026-10-18),
+              built from the capture card's own pieces - the bold title, the grey explanation, the
+              primary button - because that card "has a clear message, and it is easy to see what to
+              do and where to click". Only the manual button is the teal primary one: the automatic one
+              is experimental for now. */}
           {autoView.choiceCard && (
-            <div data-testid="graph-extraction-choice" style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 300 }}>
-              <strong style={{ fontSize: theme.font.size.regular }}>Graph extraction</strong>
-              <button type="button" data-testid="choose-automatic" onClick={() => void chooseAutomatic()} style={{ fontSize: 13, padding: '5px 10px' }}>
-                Try automatic graph extraction (beta)
-              </button>
-              <button type="button" data-testid="choose-manual" onClick={() => autoStep({ kind: 'manual' })} style={{ fontSize: 13, padding: '5px 10px' }}>
-                Go to manual guided extraction
-              </button>
-            </div>
-          )}
-          {/* The axes card's [Leave automatic extraction mode], in its top left corner (David). */}
-          {autoView.axesCard && autoView.leave && (
-            <div style={{ display: 'flex' }}>
-              <button type="button" data-testid="leave-automatic" onClick={() => autoStep({ kind: 'leave' })} style={{ fontSize: 12 }}>
-                {autoView.leave}
-              </button>
+            <div data-testid="graph-extraction-choice" style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 340, maxWidth: '100%' }}>
+              <strong style={{ fontSize: theme.font.size.regular }}>{autoView.choiceCard.title}</strong>
+              {([['automatic', autoView.choiceCard.automatic], ['manual', autoView.choiceCard.manual]] as const).map(([k, b]) => (
+                <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+                  <BottomBarButton
+                    type="button"
+                    data-testid={`choose-${k}`}
+                    {...(b.primary ? { 'data-variant': 'primary' } : {})}
+                    onClick={() => (k === 'automatic' ? void chooseAutomatic() : autoStep({ kind: 'manual' }))}
+                    style={{ justifyContent: 'center' }}
+                  >
+                    {b.label}
+                  </BottomBarButton>
+                  <span data-testid={`choose-${k}-explanation`} style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                    {b.explanation}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
           {/* Header row: fold toggle, title, status, reset. */}
@@ -9394,7 +9424,7 @@ export function Workspace() {
                 {cardModel.foldedLine.secondStage}
               </span>
             )}
-            {!isCalibrating && !axes && (
+            {!isCalibrating && !axes && !autoView.axesCard && (
               // ⛑ THE SAME TEAL AS THE OTHER TWO. This ends the calibration
               // walk and auto-folds its card (checkpoint 86) - the identical
               // role Done and Read cells play - and it was the plainest control
@@ -9409,6 +9439,8 @@ export function Workspace() {
                 Calibrate
               </button>
             )}
+            {/* the automatic card carries Reset calibration in its row of buttons below (David) */}
+            {!autoView.axesCard && (
             <button
               type="button"
               data-testid="reset-calibration"
@@ -9417,6 +9449,7 @@ export function Workspace() {
             >
               Reset calibration
             </button>
+            )}
           </div>
           )}
           {/* The manual path's one addition (David, 2026-10-16): the hint, in italics, under "Calibration".
@@ -9426,15 +9459,32 @@ export function Workspace() {
               {autoView.manualHint}
             </span>
           )}
-          {/* ⚑ THE AXES CARD (David, 2026-10-18), top to bottom under the header: [Read graph axis],
-              [Accept suggested graph axis] greyed until there is a suggestion, the italic line, and
-              [< Previous] [Next >]. No Common origin, Log X, Log Y or Skip rotation: the read sets the
-              log boxes itself. The suggestion is today's label read (V5), shown without its own buttons. */}
-          {autoView.axesCard && (
-            <div data-testid="axes-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, minWidth: 300 }}>
+          {/* ⚑ THE AUTOMATIC PATH'S CALIBRATION CARD (David, 2026-10-18), under the foldable header and
+              folding with it: [< Previous] [Leave automatic extraction mode] [Reset calibration] in one
+              row; [Read graph axis] and [Accept graph axis points], each with its explanation, Accept
+              teal when it can be used (the card-ending teal, as Calibrate); no Next, Accept moves the
+              walk on; and at the bottom, with a warning triangle, only what the figure does not show.
+              The values read are not listed: the tick marks are drawn on the figure. No Common origin,
+              Log X, Log Y or Skip rotation: the read sets the log boxes itself. */}
+          {autoView.axesCard && calibExpanded && (
+            <div data-testid="axes-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, width: 340, maxWidth: '100%' }}>
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button type="button" data-testid="auto-previous" onClick={previousAutoStep} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                  &lt; Previous
+                </button>
+                <button type="button" data-testid="leave-automatic" onClick={() => autoStep({ kind: 'leave' })} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                  {autoView.axesCard.leave}
+                </button>
+                <button type="button" data-testid="reset-calibration" onClick={reset} style={{ fontSize: 12, whiteSpace: 'nowrap', marginLeft: 'auto' }}>
+                  Reset calibration
+                </button>
+              </span>
               <button type="button" data-testid="read-graph-axis" onClick={readGraphAxis} style={{ fontSize: 12 }}>
-                Read graph axis
+                {autoView.axesCard.read.label}
               </button>
+              <span data-testid="read-graph-axis-explanation" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                {autoView.axesCard.read.explanation}
+              </span>
               {readAxisNotice && (
                 <span data-testid="read-axis-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
                   {readAxisNotice}
@@ -9445,29 +9495,25 @@ export function Workspace() {
                   {labelAxesNotice}
                 </span>
               )}
-              {labelAxes && <LabelAxesOffer read={labelAxes} onApply={applyLabelAxes} onCancel={() => setLabelAxes(null)} actions={false} />}
-              <button
-                type="button"
-                data-testid="accept-graph-axis"
-                // enabled only where applyLabelAxes would act: an offer, and no point placed yet
-                disabled={!labelAxes?.points || session.getCurrentStep()?.key !== 'x1'}
-                onClick={applyLabelAxes}
-                style={{ fontSize: 12 }}
-              >
-                Accept suggested graph axis
-              </button>
-              <span style={{ fontSize: theme.font.size.small, fontStyle: 'italic', color: theme.color.text.secondary }}>
-                Select an axis point to adjust it.
+              {(() => {
+                // enabled only where it acts: an offer, and no point placed yet
+                const ready = Boolean(labelAxes?.points) && session.getCurrentStep()?.key === 'x1';
+                return (
+                  <button
+                    type="button"
+                    data-testid="accept-graph-axis"
+                    disabled={!ready}
+                    onClick={acceptGraphAxis}
+                    style={ready ? { ...endsCardButton() } : { fontSize: 12 }}
+                  >
+                    {autoView.axesCard.accept.label}
+                  </button>
+                );
+              })()}
+              <span data-testid="accept-graph-axis-explanation" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                {autoView.axesCard.accept.explanation}
               </span>
-              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <button type="button" data-testid="auto-previous" onClick={previousAutoStep} style={{ fontSize: 12 }}>
-                  &lt; Previous
-                </button>
-                {/* Interim in phase 1: there is no next card yet (docs/v2.7-figure-type.md). */}
-                <button type="button" data-testid="auto-next" disabled title="The next card comes in the next phase" style={{ fontSize: 12 }}>
-                  Next &gt;
-                </button>
-              </span>
+              {labelAxes && <LabelAxesOffer read={labelAxes} onApply={acceptGraphAxis} onCancel={() => setLabelAxes(null)} variant="warnings" />}
             </div>
           )}
           {/* Point matrix: laid out as a grid with 2 columns, so an XY graph
@@ -10783,6 +10829,7 @@ export function Workspace() {
           crosshairCursor={mode !== 'pan' || eyedropper !== null}
           avoidRect={avoidRect}
           loupeHideRect={cardRect}
+          floatingCardRects={floatingCardRects}
         />
         {/* Canvas right-click quick menu (mouse model). Anchored at the click via
             anchorPosition; closes on outside-click / Escape (MUI's own onClose).

@@ -80,3 +80,29 @@ describe('positionLoupe - dodging an open card (David: "overlay + dodge")', () =
     expect(withNull).toEqual(without);
   });
 });
+
+describe('positionLoupe - more than one card open (v2.7)', () => {
+  // ⚑ David, 2026-10-18, a screenshot: the magnifier drawn over the calibration card, hiding its
+  // buttons. The calibration card floats over the top of the canvas; the loupe dodged only the left
+  // fold-out card, so it never knew the calibration card was there.
+  const W = 1000, H = 800, L = 150;
+  const overlaps = (p: { left: number; top: number }, r: { left: number; top: number; width: number; height: number }) =>
+    p.left < r.left + r.width && p.left + L > r.left && p.top < r.top + r.height && p.top + L > r.top;
+  const calibrationCard = { left: 330, top: 8, width: 340, height: 230 };
+  const leftCard = { left: 0, top: 0, width: 260, height: 500 };
+
+  it('a cursor just below the calibration card puts the loupe clear of it', () => {
+    const p = positionLoupe(400, 260, L, L, W, H, undefined, [calibrationCard]);
+    expect(overlaps(p, calibrationCard)).toBe(false);
+  });
+
+  it('with the left card open as well, the loupe is clear of both', () => {
+    const p = positionLoupe(300, 260, L, L, W, H, undefined, [leftCard, calibrationCard]);
+    expect(overlaps(p, leftCard)).toBe(false);
+    expect(overlaps(p, calibrationCard)).toBe(false);
+  });
+
+  it('nothing in the way: the default spot, as with no card', () => {
+    expect(positionLoupe(800, 600, L, L, W, H, undefined, [calibrationCard])).toEqual(positionLoupe(800, 600, L, L, W, H));
+  });
+});
