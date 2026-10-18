@@ -12379,6 +12379,58 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(series.filter((t) => /\(80\)/.test(t))).toHaveLength(2);
   }, 180000);
 
+  it('Legend and Series cards on a PICTURE: the legend is read with PaddleOCR and the colour beside each name, and the bars from the pixels', async () => {
+    // bars-grouped.png: the same figure as a picture, 2 px per point, y down
+    const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[]; entries: { colour: number[] }[] } };
+    const H = 432, k = 2;
+    const px = (p: readonly number[]): [number, number] => [p[0]! * k, H - p[1]! * k];
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(VFIX, 'bars-grouped.png'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-bar').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const p1 = px([t.box[0]!, t.value[0]![1]]), p2 = px([t.box[0]!, t.value[1]![1]]);
+    await clickImagePixel(p1[0], p1[1]);
+    await confirmValue('0');
+    await clickImagePixel(p2[0], p2[1]);
+    await confirmValue(String(t.value[1]![0]));
+    if (/STARTS/.test(await textOf('tips-bar'))) {
+      const c1 = px(t.category.from);
+      await clickImagePixel(c1[0], c1[1]);
+    }
+    const cn = px(t.category.to);
+    await clickImagePixel(cn[0], cn[1]);
+    await confirmValue(String(t.category.count));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+
+    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
+    const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
+    const from = await imageToLocal(...px([lx0 - 3, ly1 + 3]));
+    const to = await imageToLocal(...px([lx1 + 3, ly0 - 3]));
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    await page.getByRole('button', { name: 'Read legend', exact: true }).click();
+    await expect.poll(() => page.getByTestId('legend-entry-name-1').inputValue().catch(() => ''), { timeout: 60000 }).toBe('B');
+    expect(await page.getByTestId('legend-entry-name-0').inputValue()).toBe('A');
+    // on a picture the sample's kind is not claimed: no "swatch" beside the names
+    expect(await textOf('legend-entries')).not.toMatch(/swatch/);
+    await page.getByRole('button', { name: 'Accept legend read', exact: true }).click();
+    await page.getByRole('button', { name: 'Read series', exact: true }).click();
+    await page.getByTestId('series-accept').waitFor({ timeout: 60000 });
+    expect(await textOf('series-row-result-0')).toMatch(/^Placed 5 bars/);
+    expect(await textOf('series-row-result-1')).toMatch(/^Placed 5 bars/);
+  }, 180000);
+
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
     const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');
     await openDrawnFigure('lines-cross');
