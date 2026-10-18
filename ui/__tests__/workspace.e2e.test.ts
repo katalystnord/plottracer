@@ -12332,6 +12332,53 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('series-line')).toBe('Series read accepted. Each series can still be edited as usual; Undo takes a read back.');
   }, 180000);
 
+  /** The legend and series cards on a drawn line figure: mark the legend from
+   * its truth box, read it, accept it, then read the series. Returns what each
+   * series row said. */
+  async function legendThenSeries(name: string): Promise<{ names: string[]; methods: string[]; said: string[] }> {
+    await openDrawnFigure(name);
+    const [lx0, ly0, lx1, ly1] = (vTruth(name) as unknown as { legend_box: [number, number, number, number] }).legend_box;
+    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
+    const from = await imageToLocal(...(vImg([lx0 - 3, ly1 + 3]) as [number, number]));
+    const to = await imageToLocal(...(vImg([lx1 + 3, ly0 - 3]) as [number, number]));
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    await page.getByRole('button', { name: 'Read legend', exact: true }).click();
+    await page.getByTestId('legend-entry-name-0').waitFor({ timeout: 30000 });
+    await page.getByRole('button', { name: 'Accept legend read', exact: true }).click();
+    const rows = await page.getByTestId('series-rows').locator('[data-testid^="series-row-name-"]').count();
+    const names: string[] = [], methods: string[] = [];
+    for (let i = 0; i < rows; i++) {
+      names.push(await textOf(`series-row-name-${i}`));
+      methods.push(await page.getByTestId(`series-row-method-${i}`).inputValue());
+    }
+    await page.getByRole('button', { name: 'Read series', exact: true }).click();
+    await page.getByTestId('series-accept').waitFor({ timeout: 60000 });
+    const said: string[] = [];
+    for (let i = 0; i < rows; i++) said.push(await textOf(`series-row-result-${i}`).catch(() => ''));
+    return { names, methods, said };
+  }
+
+  it('Legend and Series cards on a line chart: each legend line names its series, and Find lines reads each line into it', async () => {
+    const r = await legendThenSeries('lines-legend-colour');
+    expect(r.names).toEqual(['Control', 'Treated']);
+    expect(r.methods).toEqual(['lines', 'lines']);
+    for (const t of r.said) expect(t).toMatch(/^Read from the figure’s drawing: 1 line found/);
+    const series = (await page.getByTestId('series-select').locator('option').allTextContents()).join(' | ');
+    expect(series).toMatch(/Control \(\d+\)/);
+    expect(series).toMatch(/Treated \(\d+\)/);
+    expect(series).not.toMatch(/Control 2|Treated 2/);
+  }, 180000);
+
+  it('Legend and Series cards, two series in ONE ink: the colour is read once, and the second row says colour cannot tell them apart - never the data twice', async () => {
+    const r = await legendThenSeries('lines-legend');
+    expect(r.names).toEqual(['series 1', 'series 2']);
+    expect(r.said[0]).toMatch(/^Read from the figure’s drawing: 2 lines found/);
+    expect(r.said[1]).toBe('Same colour as series 1, so colour cannot tell them apart: its lines were all read into series 1 and the series after it. Move each to its own series in the series list.');
+    const series = await page.getByTestId('series-select').locator('option').allTextContents();
+    // the two drawn lines, once each: 80 points apiece
+    expect(series.filter((t) => /\(80\)/.test(t))).toHaveLength(2);
+  }, 180000);
+
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
     const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');
     await openDrawnFigure('lines-cross');

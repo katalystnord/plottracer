@@ -6940,7 +6940,7 @@ export function Workspace() {
     };
   }, [canvasView, figureKindText, provenance]);
 
-  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number] } = {}): Promise<{ text: string; error?: boolean }> => {
+  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number] } = {}): Promise<{ text: string; error?: boolean; summary?: string }> => {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = imageCanvasRef.current?.getImageData();
     const target = hexToRGB(colour);
@@ -7116,7 +7116,7 @@ export function Workspace() {
     setFindLinesBusy(null);
     commit();
     const placesText = places.length ? `\nPlaces to check:\n${places.map((pl) => `  - ${pl.kind} at (${Math.round(pl.at[0])}, ${Math.round(pl.at[1])}): ${pl.text}`).join('\n')}` : '';
-    return { text: `The Find lines card says: "${summary}"${placesText}` };
+    return { text: `The Find lines card says: "${summary}"${placesText}`, summary };
   }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
 
@@ -7128,9 +7128,20 @@ export function Workspace() {
     setSeriesBusy(true);
     const said: (string | null)[] = [];
     try {
+      // ⚑ A COLOUR IS NEVER READ TWICE. Two legend entries in one ink (two
+      // black lines told apart by nothing a colour reader sees) would each read
+      // BOTH lines, and the data would come back twice. The second row says so
+      // instead; which line is which is the user's to say.
+      const readBy: { colour: [number, number, number]; name: string }[] = [];
       for (const r of rows) {
         const s = sessionRef.current;
         if (!r.colour) { said.push(null); continue; }
+        const first = readBy.find((q) => Math.hypot(q.colour[0] - r.colour![0], q.colour[1] - r.colour![1], q.colour[2] - r.colour![2]) < 40);
+        if (first) {
+          said.push(`Same colour as ${first.name}, so colour cannot tell them apart: its lines were all read into ${first.name} and the series after it. Move each to its own series in the series list.`);
+          continue;
+        }
+        readBy.push({ colour: r.colour, name: r.name });
         const hex = `#${r.colour.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
         s.setActiveDataset(r.index);
         if (r.method === 'lines') {
@@ -7141,7 +7152,7 @@ export function Workspace() {
           const extra = s.getDatasetInfos().slice(before).map((d) => d.index);
           extra.forEach((idx, k) => s.renameDataset(idx, `${r.name} ${k + 2}`));
           for (const idx of [r.index, ...extra]) s.setDatasetColor(idx, r.colour);
-          said.push(res.text);
+          said.push(res.summary ?? res.text);
         } else {
           colorTraceWith(hex, r.method === 'points' ? 'scatter' : colorTraceShape);
           said.push(colorTraceSaidRef.current || null);

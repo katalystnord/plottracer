@@ -100,6 +100,15 @@ for k, y in enumerate(ys):
 leg = ax.legend(loc='upper left')
 save(fig, ax, 'lines-legend', [np.c_[x, y] for y in ys], legend=leg)
 
+# Legend + Series cards on a line chart: two lines in their own colours, and a
+# legend whose sample lines are drawn like their series
+fig, ax = plt.subplots(figsize=(4, 3))
+ys = [np.sin(x / 2) * 2 + 5, 0.5 * x + 1]
+for y, c, n in zip(ys, ['#1f77b4', '#d62728'], ['Control', 'Treated']):
+    ax.plot(x, y, color=c, label=n)
+leg = ax.legend(loc='upper left')
+save(fig, ax, 'lines-legend-colour', [np.c_[x, y] for y in ys], legend=leg)
+
 # V28: one series drawn twice, a dotted path and a solid one about a point
 # apart (as arXiv 2610.13680 p43 does), plus a series painted twice exactly
 fig, ax = plt.subplots(figsize=(4, 3))
