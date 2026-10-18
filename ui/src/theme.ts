@@ -83,6 +83,10 @@ export const theme = {
       active: '#525252',
     },
     error: '#f40724',
+    /** Automatic graph extraction (v2.7): the graph type the figure looks like, highlighted on
+     * the Graph type card (David: "highlight that option in green"). Its own colour, because a
+     * selected card is teal and a suggestion is not a selection. */
+    suggested: '#2e9d4f',
     /** Marker/box-glyph outline + label fill, and a placed-but-unconfirmed
      * calibration point's ("?") fill, on the canvas overlay -- see header
      * comment for why these are dark/light rather than following the page

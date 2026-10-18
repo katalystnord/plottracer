@@ -45,6 +45,7 @@ describe.runIf(RUN)('swatch hold-back offer shot', () => {
     await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId('axes-option-bar').click();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(300);
     let box = (await page.locator('canvas').first().boundingBox())!;
     const refresh = async () => { box = (await page.locator('canvas').first().boundingBox())!; };

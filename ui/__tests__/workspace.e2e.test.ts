@@ -301,6 +301,7 @@ async function resetWorkspace(
     // Establish the figure-of-record (checkpoint 103) -- the confirm is
     // auto-accepted by the beforeEach dialog handler. Whole-image = no-op crop.
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     // reset-calibration lives on the card only AFTER capture (v0.8: pre-capture
     // the card is the Capture prompt). A no-op on a fresh figure, kept for the
@@ -2221,20 +2222,21 @@ describe('Workspace: Map axes', () => {
 
 describe('Workspace: Circular Chart Recorder axes', () => {
   // Same fixture as engine/__tests__/calibrationSession.test.ts's CCR
-  // describe block: (T0,R0)=(200,200) t0/r0=1; (T0,R1)=(400,200) click-only;
-  // (T0,R2)=(300,100) r2=10; (T1,R2)=(200,400) click-only; (T2,R2)=(400,400)
-  // click-only. Not hand-verified for exact math here -- that's
+  // describe block, moved 40px down so no click lands under the open
+  // calibration card (v2.7 gave it a line): (T0,R0)=(200,240) t0/r0=1;
+  // (T0,R1)=(400,240) click-only; (T0,R2)=(300,140) r2=10; (T1,R2)=(200,440)
+  // click-only; (T2,R2)=(400,440) click-only. Not hand-verified for exact math here -- that's
   // core/__tests__/crossCheck.test.ts's job (see calibrationSession.ts's
   // header comment) -- these tests exercise the click-walk/global-field/
   // live-recalibration plumbing only.
   async function calibrateCCRStandard() {
-    await clickAt(200, 200); // (T0,R0)
+    await clickAt(200, 240); // (T0,R0)
     await confirmValues(['2024/01/01 00:00', '1']);
-    await clickAt(400, 200); // (T0,R1) -- click-only
-    await clickAt(300, 100); // (T0,R2)
+    await clickAt(400, 240); // (T0,R1) -- click-only
+    await clickAt(300, 140); // (T0,R2)
     await confirmValue('10');
-    await clickAt(200, 400); // (T1,R2) -- click-only
-    await clickAt(400, 400); // (T2,R2) -- click-only
+    await clickAt(200, 440); // (T1,R2) -- click-only
+    await clickAt(400, 440); // (T2,R2) -- click-only
     await page.locator('[data-testid="global-field-startTime"]').click({ timeout: 5000 });
     await page.keyboard.type('2024/01/01 00:00');
     await page.getByTestId('run-calibration').click();
@@ -2245,21 +2247,21 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     await resetWorkspace('ccr');
     expect(await textOf('tips-bar')).toMatch(/1\/5 - \(T0,R0\)/);
 
-    await clickAt(200, 200); // (T0,R0): 2 values
+    await clickAt(200, 240); // (T0,R0): 2 values
     await confirmValues(['2024/01/01 00:00', '1']);
     expect(await textOf('tips-bar')).toMatch(/2\/5 - \(T0,R1\)/);
 
-    await clickAt(400, 200); // (T0,R1): click-only, advances immediately
+    await clickAt(400, 240); // (T0,R1): click-only, advances immediately
     expect(await textOf('tips-bar')).toMatch(/3\/5 - \(T0,R2\)/);
 
-    await clickAt(300, 100); // (T0,R2): 1 value
+    await clickAt(300, 140); // (T0,R2): 1 value
     await confirmValue('10');
     expect(await textOf('tips-bar')).toMatch(/4\/5 - \(T1,R2\)/);
 
-    await clickAt(200, 400); // (T1,R2): click-only
+    await clickAt(200, 440); // (T1,R2): click-only
     expect(await textOf('tips-bar')).toMatch(/5\/5 - \(T2,R2\)/);
 
-    await clickAt(400, 400); // (T2,R2): click-only, walk complete
+    await clickAt(400, 440); // (T2,R2): click-only, walk complete
     expect(await page.locator('[data-testid="global-field-startTime"]').isVisible()).toBe(true);
 
     // Calibrate is clickable but must fail cleanly while the global field
@@ -2279,7 +2281,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     // Query point deliberately not any handle's own pixel (see the note on
     // shared-handle clicks in the XY describe block above) and chosen to
     // keep the pen/chart law-of-cosines term inside acos's valid domain.
-    await clickAt(300, 320);
+    await clickAt(300, 360);
     const cells = await rowCells();
     expect(cells).toHaveLength(2);
     // Time is date-calibrated (T0 was typed as a real date), so the table
@@ -2294,7 +2296,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     await resetWorkspace('ccr');
     await calibrateCCRStandard();
 
-    await clickAt(300, 320);
+    await clickAt(300, 360);
     const before = await rowCells();
 
     // (T0,R1) only feeds the pen circle (time/angle), never the chart
@@ -2307,7 +2309,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     // genuinely can't see arbitrarily far from the chart circle's own
     // radius here).
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
-    await dragMarker(400, 200, 420, 220);
+    await dragMarker(400, 240, 420, 260);
 
     const after = await rowCells();
     expect(Number(after[1])).toBeCloseTo(Number(before[1]), 6); // r unchanged
@@ -2755,6 +2757,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // Capture the figure first (checkpoint 103 -- a PDF page is un-captured until
     // you frame a figure on it), then calibrate the (baked) page 2 and save.
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
     const savePath = tempFilePath('zip');
@@ -2784,6 +2787,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('open-image-button').click();
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
 
@@ -2835,6 +2839,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       // Before capture the card is the capture step: it says nothing about the figure yet.
       expect(await page.getByTestId('figure-kind').count()).toBe(0);
       await page.getByTestId('capture-figure').click();
+      await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
       await page.waitForTimeout(100);
     };
     const kindText = async () => {
@@ -2883,6 +2888,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       await page.getByTestId('open-image-button').click();
       await waitForImageFitted();
       await page.getByTestId('capture-figure').click();
+      await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
       // the line comes once the page's drawing is read; a card folded by the
       // last calibration opens again with its fold arrow
       const line = page.getByTestId('figure-kind');
@@ -2931,10 +2937,12 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await textOf('label-axes-second-y')).toBe('A second Y axis along the right is not read; data plotted against it needs calibrating by hand.');
     expect(await page.getByTestId('label-axes-second-x').count()).toBe(0);
 
-    // V8: an axis that cannot be read says why, and nothing can be applied
+    // V8: an axis that cannot be read says why, and nothing can be applied. ⚑ CHANGED (David,
+    // 2026-10-17): its X labels 0, 2, 4, 9, 8, 10 are vetted, the misprinted 9 corrected from its
+    // neighbours and shown as read; its Y still has a single label, so nothing can be applied.
     await openAndCapture(fixture('labels-refused'));
     await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
-    expect(await textOf('label-axes-x')).toBe('X could not be read: the labels do not fit one linear or one log scale.');
+    expect(await textOf('label-axes-x')).toBe('X: 0, 2, 4, 6 (read as "9"), 8, 10');
     expect(await textOf('label-axes-y')).toBe('Y could not be read: only one label sits at a tick mark; two are needed.');
     expect(await page.getByRole('button', { name: 'Apply', exact: true }).isDisabled()).toBe(true);
     // Cancel takes the offer away; calibrating by hand is unchanged
@@ -2955,6 +2963,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     // Capture the page as the figure, calibrate, and save the project.
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
     const savePath = tempFilePath('zip');
@@ -3898,6 +3907,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     // Capture figure 1 (page 1) and calibrate it.
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
@@ -3920,6 +3930,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // The second figure is a fresh, un-captured page: capture it too.
     await page.getByTestId('capture-figure').waitFor({ state: 'visible' });
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
 
     // Flip back to figure 1: the jumper updates AND figure 1's own calibration is
@@ -3962,6 +3973,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     // Figure 1: capture, calibrate, one point at (5, 5).
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
     await clickAt(250, 175); // reads (5, 5)
@@ -3974,6 +3986,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(100);
     await page.getByTestId('capture-figure').waitFor({ state: 'visible' });
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
 
@@ -4032,6 +4045,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
     // Figure 1: capture + calibrate on page 1.
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
 
@@ -4045,6 +4059,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('pdf-next').click();
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
 
@@ -5187,6 +5202,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await page.getByTestId('example-scatter').click();
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(100);
     await calibrateXYStandard();
 
@@ -6451,6 +6467,7 @@ describe('Workspace: capture figure (checkpoint 102)', () => {
     // Capture (confirm auto-accepted). The whole fitted image IS the figure, so
     // this is a no-op crop: it establishes the figure-of-record without cropping.
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(200);
     expect(await page.getByTestId('capture-figure').count()).toBe(0); // captured -> button gone
     expect(await page.getByTestId('mode-calibrate').isDisabled()).toBe(false); // now enabled
@@ -7593,6 +7610,7 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     await page.getByTestId('mode-image-edit').click();
     await page.getByTestId('image-edit-card').waitFor({ state: 'detached' });
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(200);
     expect(await page.getByTestId('capture-figure').count()).toBe(0); // captured
 
@@ -12094,6 +12112,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId('axes-option-xy').click();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const [bx0, by0, bx1, by1] = vTruth(boxFrom).box as [number, number, number, number];
     const o = vImg([bx0, by0]), xr = vImg([bx1, by0]), yt = vImg([bx0, by1]);
@@ -12267,6 +12286,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId('axes-option-contour').click();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     // the option the type offers, then the walk it adds - prompt for prompt
     await page.getByTestId('calib-option-hasColourKey').check();
@@ -12312,6 +12332,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('help-panel').waitFor({ state: 'detached' });
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const a = truth.calibration.anchors;
     await clickImagePixel(a.x1.px, a.x1.py);
@@ -12348,6 +12369,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('help-panel').waitFor({ state: 'detached' });
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
     await clickImagePixel(a.x1.px, a.x1.py);
@@ -12460,6 +12482,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('help-panel').waitFor({ state: 'detached' });
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
     await clickImagePixel(a.x1.px, a.x1.py);
@@ -12515,6 +12538,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('help-panel').waitFor({ state: 'detached' });
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
     await clickImagePixel(a.x1.px, a.x1.py);
@@ -12590,6 +12614,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await waitForImageFitted();
     expect(await textOf('axes-type-trigger')).toContain('Contour');
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
 
     // Calibrate where the prompts say: two known X values, then the shared
@@ -12872,6 +12897,7 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('help-panel').waitFor({ state: 'detached' });
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const a = truth.calibration.anchors;
     await toLocal(a.x1.px, a.x1.py);
@@ -13038,6 +13064,7 @@ describe('Workspace: Settings (v2.7)', () => {
     await waitForImageFitted();
     // the person captures and calibrates where the prompts say (gate 4)
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const [bx0, by0, bx1, by1] = vt.box as [number, number, number, number];
     const o = img([bx0, by0]), xr = img([bx1, by0]), yt = img([bx0, by1]);
@@ -13128,6 +13155,7 @@ describe('Workspace: Settings (v2.7)', () => {
     // the person calibrates where the prompts say (gate 4)
     expect(await textOf('tips-bar')).toMatch(/then press Capture/);
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(150);
     const a = truth.calibration.anchors;
     expect(await textOf('tips-bar')).toMatch(/X1: Click the pixel position of a known X value/);

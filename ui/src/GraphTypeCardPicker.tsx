@@ -1,5 +1,5 @@
 import styled from '@emotion/styled';
-import { theme } from './theme.js';
+import { theme, withAlpha } from './theme.js';
 import { FloatingPanel } from './FloatingPanel.js';
 import { GRAPH_TYPE_ICONS } from './icons.js';
 
@@ -33,6 +33,9 @@ export interface GraphTypeCardPickerProps {
   options: readonly GraphTypeOption[];
   value: string;
   onChange: (id: string) => void;
+  /** Automatic graph extraction (v2.7): the type the figure looks like, highlighted green, or
+   * null. An offer only: the user still clicks a type. */
+  suggested?: string | null;
 }
 
 const LabelledRow = styled('div')({
@@ -56,15 +59,17 @@ const Grid = styled('div')({
   width: 340,
 });
 
-const Card = styled('button')<{ active: boolean }>(({ active }) => ({
+const Card = styled('button')<{ active: boolean; suggested: boolean }>(({ active, suggested }) => ({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   gap: 4,
-  padding: '8px 4px',
+  padding: suggested ? '7px 3px' : '8px 4px',
   borderRadius: theme.border.radius.regular,
-  border: `1px solid ${active ? theme.color.primary.main : theme.color.border.regular}`,
-  background: active ? theme.color.primary.clicked : theme.color.background.primary,
+  border: suggested
+    ? `2px solid ${theme.color.suggested}`
+    : `1px solid ${active ? theme.color.primary.main : theme.color.border.regular}`,
+  background: active ? theme.color.primary.clicked : suggested ? withAlpha(theme.color.suggested, 0.12) : theme.color.background.primary,
   color: active ? theme.color.background.primary : theme.color.text.primary,
   cursor: 'pointer',
   fontSize: 11,
@@ -77,7 +82,7 @@ const Card = styled('button')<{ active: boolean }>(({ active }) => ({
   },
 }));
 
-export function GraphTypeCardPicker({ options, value, onChange }: GraphTypeCardPickerProps) {
+export function GraphTypeCardPicker({ options, value, onChange, suggested = null }: GraphTypeCardPickerProps) {
   const active = options.find((o) => o.id === value);
   const ActiveIcon = active ? GRAPH_TYPE_ICONS[active.id] : undefined;
   return (
@@ -100,6 +105,8 @@ export function GraphTypeCardPicker({ options, value, onChange }: GraphTypeCardP
                   type="button"
                   data-testid={`axes-option-${opt.id}`}
                   active={opt.id === value}
+                  suggested={opt.id === suggested}
+                  data-suggested={opt.id === suggested ? 'true' : undefined}
                   aria-pressed={opt.id === value}
                   title={opt.label}
                   onClick={() => {

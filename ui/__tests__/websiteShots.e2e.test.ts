@@ -517,6 +517,7 @@ describe.runIf(RUN)('website gallery shots', () => {
         await page.getByTestId('axes-type-trigger').click();
         await page.getByTestId(`axes-option-${card.type}`).click();
         await page.getByTestId('capture-figure').click();
+        await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
         await page.waitForTimeout(400);
 
         const truth = JSON.parse(

@@ -33,7 +33,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, suggestTypeForFigure } from './ocrClient.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -278,6 +278,7 @@ import { measurementValue } from '../../core/measurementValues.js';
 import { makeDisplayRounder } from '../../core/displayPrecision.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
 import { calibrationCardModel } from '../../engine/calibrationCardModel.js';
+import { autoExtractionView, nextAutoFlow, type AutoEvent, type AutoFlow } from '../../engine/autoExtraction.js';
 import { clampPanelWidth, defaultPanelWidthFor, readStoredPanelWidth, writePanelWidth } from './panelWidth.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
@@ -521,6 +522,8 @@ interface DocSnapshot {
   /** Crop/PDF-source provenance (checkpoint 95), so undoing a crop also rolls
    * back its provenance entry rather than leaving a phantom "cropped from …". */
   provenance: Provenance;
+  /** Automatic graph extraction's path and step (v2.7), so undo steps back across a step. */
+  autoFlow?: AutoFlow;
 }
 
 /**
@@ -1017,6 +1020,23 @@ export function Workspace() {
   // document's figure-of-record has been established -- the user framed the whole
   // figure and captured it as the working image. Reset with the document.
   const [figureCaptured, setFigureCaptured] = useState(false);
+  // Automatic graph extraction (beta), v2.7 (docs/v2.7-figure-type.md): which path the user chose
+  // after capture and which step it is on. Decided in engine/autoExtraction.ts; held in a ref too,
+  // because every undo snapshot carries it (a step is one history entry, so Previous and Ctrl+Z
+  // step back across the same thing).
+  const [autoFlow, setAutoFlowState] = useState<AutoFlow>({ path: 'unchosen' });
+  const autoFlowRef = useRef<AutoFlow>({ path: 'unchosen' });
+  const applyAutoFlow = useCallback((f: AutoFlow) => {
+    autoFlowRef.current = f;
+    setAutoFlowState(f);
+  }, []);
+  /** The graph type the figure looks like (highlighted green), and why there is none if it failed. */
+  const [suggestedType, setSuggestedType] = useState<string | null>(null);
+  const [suggestNotice, setSuggestNotice] = useState<string | null>(null);
+  /** Whether the suggestion has come back (for tests: "no type green" means answered, not pending). */
+  const [suggestPending, setSuggestPending] = useState(false);
+  /** The axes card's interim line where [Read graph axis] cannot read this figure yet. */
+  const [readAxisNotice, setReadAxisNotice] = useState<string | null>(null);
   // Multi-figure session (checkpoint 110, design §1/§8). `figuresRef` holds every
   // figure IN ORDER when there is more than one; it stays empty while there is a
   // single figure (the live refs simply ARE it), so a single-figure session is
@@ -2013,6 +2033,7 @@ export function Workspace() {
       axesTypeId: sessionRef.current.getConfig().id,
       imageSrc: imageSrcOverride !== undefined ? imageSrcOverride : imageCanvasRef.current?.getImageDataURL() ?? null,
       provenance: provenanceRef.current,
+      autoFlow: autoFlowRef.current,
     }),
     []
   );
@@ -3498,6 +3519,7 @@ export function Workspace() {
       applyMeasurements(snapshot.measurements);
       applyMeasureScale(snapshot.scale);
       applyProvenance(snapshot.provenance); // roll a crop's provenance back with it
+      if (snapshot.autoFlow) applyAutoFlow(snapshot.autoFlow); // the automatic path's step rolls back too
       setPending([]); // any in-progress measurement is abandoned by the restore
       // Undo/redo across an IMAGE edit (rotate/flip/crop/deskew/grid-removal):
       // reload the snapshot's baked raster, but only when it actually differs, so
@@ -3520,7 +3542,7 @@ export function Workspace() {
       syncAfterRestore();
       bump();
     },
-    [applyMeasurements, applyMeasureScale, applyProvenance, restoreHeatmapGrid, setPending, setColorTraceRegion, syncAfterRestore, bump]
+    [applyMeasurements, applyMeasureScale, applyProvenance, applyAutoFlow, restoreHeatmapGrid, setPending, setColorTraceRegion, syncAfterRestore, bump]
   );
   // ⚑ Undo/redo wait while Find lines is reading labels (audit B2): its result
   // is applied in one step when the reads are in, and an undo underneath it
@@ -3874,6 +3896,10 @@ export function Workspace() {
       clearMeasurements();
       applyProvenance({}); // a new figure has its own (empty) origin
       setFigureCaptured(false); // a new document's figure-of-record isn't captured yet (ckpt 102)
+      applyAutoFlow({ path: 'unchosen' }); // a new figure asks again: automatic or manual
+      setSuggestedType(null);
+      setSuggestNotice(null);
+      setReadAxisNotice(null);
       applyPdfState(null); // a genuinely new document is not a live PDF page (openPdf re-sets it after)
       swapSession(id, new CalibrationSession(ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG));
       setMode('calibrate');
@@ -3882,7 +3908,7 @@ export function Workspace() {
       markClean();
       bump();
     },
-    [history, bump, markClean, clearMeasurements, captureDoc, swapSession, applyProvenance, applyPdfState]
+    [history, bump, markClean, clearMeasurements, captureDoc, swapSession, applyProvenance, applyPdfState, applyAutoFlow]
   );
 
   const resetForNewImage = useCallback(() => {
@@ -4066,12 +4092,16 @@ export function Workspace() {
       loadImage: (dataURL, name) =>
         imageCanvasRef.current?.loadImageFromSrc(dataURL, name) ?? Promise.resolve(),
       clearImage: () => imageCanvasRef.current?.clearImage(),
-      setFigureCaptured: (captured) => setFigureCaptured(captured),
+      setFigureCaptured: (captured) => {
+        setFigureCaptured(captured);
+        // an agent drives today's walk, so its captured figure is on the manual path
+        applyAutoFlow(captured ? { path: 'manual' } : { path: 'unchosen' });
+      },
       setCalibrationExpanded: (expanded) => setCalibExpanded(expanded),
       setMode: (m) => setMode(m),
       bump: () => bump(),
     }),
-    [resetDocument, closePdf, clearFiguresToSingle, confirmDiscardIfDirty, bump]
+    [resetDocument, closePdf, clearFiguresToSingle, confirmDiscardIfDirty, bump, applyAutoFlow]
   );
 
   const game = useTraceChallenge(
@@ -4786,6 +4816,85 @@ export function Workspace() {
     setDataValueInputs([]);
     commit();
   }, [labelAxes, session, commit]);
+
+  // ⚑⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7 - docs/v2.7-figure-type.md. Which card shows is
+  // decided in engine/autoExtraction.ts; these only carry out each card's buttons.
+  /** Open the Graph type card the way a person does: by its trigger button (as F1 does Help's). */
+  const openGraphTypeCard = useCallback(() => {
+    window.setTimeout(() => document.querySelector<HTMLButtonElement>('[data-testid="axes-type-trigger"]')?.click(), 0);
+  }, []);
+  /** One step of the automatic path, as one history entry (not unsaved work: it changes no data).
+   * Choosing a path after capture is where the session starts, so, like capture itself, it resets
+   * history: Ctrl+Z never brings the choice card back. */
+  const autoStep = useCallback(
+    (e: AutoEvent) => {
+      const choosing = autoFlowRef.current.path === 'unchosen';
+      applyAutoFlow(nextAutoFlow(autoFlowRef.current, e));
+      if (choosing) history.reset(captureDoc());
+      else history.commit(captureDoc());
+      bump();
+    },
+    [applyAutoFlow, history, captureDoc, bump]
+  );
+  const chooseAutomatic = useCallback(async () => {
+    autoStep({ kind: 'automatic' });
+    setSuggestedType(null);
+    setSuggestNotice(null);
+    openGraphTypeCard();
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return;
+    setSuggestPending(true);
+    const r = await suggestTypeForFigure(img);
+    setSuggestPending(false);
+    if (isOcrFailure(r)) setSuggestNotice(r.error);
+    else setSuggestedType(r.type);
+  }, [autoStep, openGraphTypeCard]);
+  /** A graph type clicked on the Graph type card during the automatic path: it becomes the type,
+   * as on the manual path, and the path moves on (the axes card, or the apology card). */
+  const chooseTypeAutomatic = useCallback(
+    (id: string) => {
+      const placedAny = Object.keys(session.getPlacedPoints()).length > 0;
+      if (id !== axesTypeId && (!placedAny || confirmDiscardIfDirty())) changeAxesType(id);
+      setReadAxisNotice(null);
+      autoStep({ kind: 'type', type: id });
+    },
+    [session, axesTypeId, confirmDiscardIfDirty, changeAxesType, autoStep]
+  );
+  const backToGraphTypes = useCallback(() => {
+    autoStep({ kind: 'back-to-types' });
+    openGraphTypeCard();
+  }, [autoStep, openGraphTypeCard]);
+  /** [< Previous]: undo the last step and go back one step in the chain (David, 2026-10-17). */
+  const previousAutoStep = useCallback(() => {
+    for (;;) {
+      const snap = history.undo();
+      if (!snap) break;
+      restoreDoc(snap);
+      if (snap.autoFlow?.path === 'automatic' && snap.autoFlow.step === 'type') break;
+    }
+    setLabelAxes(null);
+    setReadAxisNotice(null);
+    openGraphTypeCard();
+  }, [history, restoreDoc, openGraphTypeCard]);
+  /** [Read graph axis]: the axes read from the figure's own labels, offered for [Accept]. */
+  const readGraphAxis = useCallback(() => {
+    const kind = figureKindRef.current?.kind;
+    if (kind === undefined && provenanceRef.current.source?.pageTransform) {
+      // a PDF page's drawing is read after capture; it is not a picture, just not read yet
+      setReadAxisNotice("The figure's drawing is still being read. Press Read graph axis again in a moment.");
+      return;
+    }
+    if (kind !== 'drawn' && kind !== 'partly') {
+      setReadAxisNotice('Reading the axes of a picture comes with the detector, which is not built yet. Leave automatic extraction mode to calibrate by hand.');
+      return;
+    }
+    if (session.getSteps()[0]?.key !== 'x1') {
+      setReadAxisNotice('Reading the axes from the labels is not available for this graph type yet. Leave automatic extraction mode to calibrate by hand.');
+      return;
+    }
+    setReadAxisNotice(null);
+    readAxesFromFigureLabels();
+  }, [session, readAxesFromFigureLabels]);
 
   const setGlobalField = useCallback(
     (key: string, value: string) => {
@@ -5544,6 +5653,7 @@ export function Workspace() {
       applyPdfState(null); // a saved project is a baked image, not a live PDF
       closePdf(); // release any PDF that was open before this project loaded (T4)
       setFigureCaptured(true); // a loaded/imported figure IS the figure-of-record (ckpt 103)
+      applyAutoFlow({ path: 'manual' }); // a loaded figure carries its own calibration: today's card
       const loadedMeasurements = fig.measurements ?? [];
       applyMeasurements(loadedMeasurements);
       applyMeasureScale(fig.measureScale ?? null);
@@ -5559,7 +5669,7 @@ export function Workspace() {
       bump();
       return true;
     },
-    [history, bump, markClean, applyMeasurements, applyMeasureScale, resetPerFigureUI, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle, measureIdRef]
+    [history, bump, markClean, applyMeasurements, applyMeasureScale, resetPerFigureUI, captureDoc, applyProvenance, applyPdfState, closePdf, clearFiguresToSingle, measureIdRef, applyAutoFlow]
   );
 
   // === Multi-figure session (checkpoint 110, design §1/§8) ===
@@ -5579,6 +5689,7 @@ export function Workspace() {
       // Per-figure document state.
       applyProvenance(rec.provenance);
       setFigureCaptured(rec.figureCaptured);
+      applyAutoFlow(rec.figureCaptured ? { path: 'manual' } : { path: 'unchosen' });
       applyMeasurements(rec.measurements);
       applyMeasureScale(rec.measureScale);
       setSourcePdf(rec.sourcePdf);
@@ -5599,7 +5710,7 @@ export function Workspace() {
       if (fromPersistedSource) markClean();
       bump();
     },
-    [history, bump, markClean, captureDoc, applyProvenance, applyMeasurements, applyMeasureScale, setSourcePdf, applyPdfState, resetPerFigureUI]
+    [history, bump, markClean, captureDoc, applyProvenance, applyMeasurements, applyMeasureScale, setSourcePdf, applyPdfState, resetPerFigureUI, applyAutoFlow]
   );
 
   /** Switch the active figure. Stashes the live state back into the current slot
@@ -7535,6 +7646,9 @@ export function Workspace() {
   const secondStageSummary = heatmapActive ? `${heatmapCells.length} cells read` : undefined;
   /** The stage's summary line - the sibling of `heatmapGridSummary`. */
   const categoryStageSummary = categoryStageLine(categoryStage.count, categoryStage.marked, categoryStage.declared);
+  // Automatic graph extraction (v2.7): which card shows (engine/autoExtraction.ts).
+  const autoView = autoExtractionView(autoFlow, figureCaptured);
+  const manualCard = autoView.calibrationCard;
   const cardModel = calibrationCardModel({
     ...(config.secondStage ? { secondStage: config.secondStage } : {}),
     figureCaptured,
@@ -8957,8 +9071,15 @@ export function Workspace() {
         <TopBarGroup>
           <GraphTypeCardPicker
             options={ALL_AXES_TYPE_CONFIGS}
-            value={axesTypeId}
+            // At the automatic path's graph type step nothing is shown as selected: the user always
+            // clicks a type, suggested or not (David, 2026-10-16).
+            value={autoView.graphTypeCardOpen ? '' : axesTypeId}
+            suggested={autoView.graphTypeCardOpen ? suggestedType : null}
             onChange={(id) => {
+              if (autoView.graphTypeCardOpen) {
+                chooseTypeAutomatic(id);
+                return;
+              }
               if (id !== axesTypeId && confirmDiscardIfDirty()) changeAxesType(id);
             }}
           />
@@ -9162,6 +9283,7 @@ export function Workspace() {
             <div
               data-testid="calibration-bar"
               style={{
+                ...(autoView.graphTypeCardOpen || autoView.apology ? { visibility: 'hidden' as const } : {}),
                 position: 'relative',
                 maxWidth: 'calc(100% - 16px)',
                 // Frosted glass ONLY once calibration is locked in (axes built) --
@@ -9208,8 +9330,29 @@ export function Workspace() {
               </BottomBarButton>
             </div>
           )}
+          {/* ⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7: after capture, the choice (David, 2026-10-16:
+              the title and two buttons, stacked, full width, equal weight, nothing else). */}
+          {autoView.choiceCard && (
+            <div data-testid="graph-extraction-choice" style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 300 }}>
+              <strong style={{ fontSize: theme.font.size.regular }}>Graph extraction</strong>
+              <button type="button" data-testid="choose-automatic" onClick={() => void chooseAutomatic()} style={{ fontSize: 13, padding: '5px 10px' }}>
+                Try automatic graph extraction (beta)
+              </button>
+              <button type="button" data-testid="choose-manual" onClick={() => autoStep({ kind: 'manual' })} style={{ fontSize: 13, padding: '5px 10px' }}>
+                Go to manual guided extraction
+              </button>
+            </div>
+          )}
+          {/* The axes card's [Leave automatic extraction mode], in its top left corner (David). */}
+          {autoView.axesCard && autoView.leave && (
+            <div style={{ display: 'flex' }}>
+              <button type="button" data-testid="leave-automatic" onClick={() => autoStep({ kind: 'leave' })} style={{ fontSize: 12 }}>
+                {autoView.leave}
+              </button>
+            </div>
+          )}
           {/* Header row: fold toggle, title, status, reset. */}
-          {figureCaptured && (
+          {figureCaptured && (manualCard || autoView.axesCard) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               type="button"
@@ -9276,11 +9419,61 @@ export function Workspace() {
             </button>
           </div>
           )}
+          {/* The manual path's one addition (David, 2026-10-16): the hint, in italics, under "Calibration".
+              Part of the card's body, so a folded card hides it like the rest. */}
+          {autoView.manualHint && calibExpanded && (
+            <span data-testid="manual-hint" style={{ fontSize: theme.font.size.small, fontStyle: 'italic', color: theme.color.text.secondary }}>
+              {autoView.manualHint}
+            </span>
+          )}
+          {/* ⚑ THE AXES CARD (David, 2026-10-18), top to bottom under the header: [Read graph axis],
+              [Accept suggested graph axis] greyed until there is a suggestion, the italic line, and
+              [< Previous] [Next >]. No Common origin, Log X, Log Y or Skip rotation: the read sets the
+              log boxes itself. The suggestion is today's label read (V5), shown without its own buttons. */}
+          {autoView.axesCard && (
+            <div data-testid="axes-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, minWidth: 300 }}>
+              <button type="button" data-testid="read-graph-axis" onClick={readGraphAxis} style={{ fontSize: 12 }}>
+                Read graph axis
+              </button>
+              {readAxisNotice && (
+                <span data-testid="read-axis-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                  {readAxisNotice}
+                </span>
+              )}
+              {labelAxesNotice && (
+                <span data-testid="label-axes-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                  {labelAxesNotice}
+                </span>
+              )}
+              {labelAxes && <LabelAxesOffer read={labelAxes} onApply={applyLabelAxes} onCancel={() => setLabelAxes(null)} actions={false} />}
+              <button
+                type="button"
+                data-testid="accept-graph-axis"
+                disabled={!labelAxes?.points}
+                onClick={applyLabelAxes}
+                style={{ fontSize: 12 }}
+              >
+                Accept suggested graph axis
+              </button>
+              <span style={{ fontSize: theme.font.size.small, fontStyle: 'italic', color: theme.color.text.secondary }}>
+                Select an axis point to adjust it.
+              </span>
+              <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <button type="button" data-testid="auto-previous" onClick={previousAutoStep} style={{ fontSize: 12 }}>
+                  &lt; Previous
+                </button>
+                {/* Interim in phase 1: there is no next card yet (docs/v2.7-figure-type.md). */}
+                <button type="button" data-testid="auto-next" disabled title="The next card comes in the next phase" style={{ fontSize: 12 }}>
+                  Next &gt;
+                </button>
+              </span>
+            </div>
+          )}
           {/* Point matrix: laid out as a grid with 2 columns, so an XY graph
               reads as one row per axis (X1 X2 / Y1 Y2). Values are entered right
               here in the card, not the right panel -- the active point (after
               its pixel is clicked) shows an inline input. */}
-          {figureCaptured && calibExpanded && figureKindText && (
+          {figureCaptured && calibExpanded && manualCard && figureKindText && (
             <span data-testid="figure-kind" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
               {figureKindText}
             </span>
@@ -9288,7 +9481,7 @@ export function Workspace() {
           {/* v2.7 V5: a drawn figure's axes can be READ from its own labels.
               Offered before the walk starts, beside the line that says the
               figure is drawn; calibrating by hand is unchanged (V6). */}
-          {figureCaptured && calibExpanded && !axes && !labelAxes && steps[0]?.key === 'x1' && Object.keys(placedPoints).length === 0
+          {figureCaptured && calibExpanded && manualCard && !axes && !labelAxes && steps[0]?.key === 'x1' && Object.keys(placedPoints).length === 0
             && (figureKindRef.current?.kind === 'drawn' || figureKindRef.current?.kind === 'partly') && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <button type="button" data-testid="read-axes-from-labels" onClick={readAxesFromFigureLabels} style={{ fontSize: 12 }}>
@@ -9301,10 +9494,10 @@ export function Workspace() {
               )}
             </span>
           )}
-          {figureCaptured && calibExpanded && labelAxes && (
+          {figureCaptured && calibExpanded && manualCard && labelAxes && (
             <LabelAxesOffer read={labelAxes} onApply={applyLabelAxes} onCancel={() => setLabelAxes(null)} />
           )}
-          {figureCaptured && calibExpanded && (
+          {figureCaptured && calibExpanded && manualCard && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>
               {steps.map((step, i) => {
                 const placed = placedPoints[step.key];
@@ -9433,7 +9626,7 @@ export function Workspace() {
               already know it exists to wait for it. The count and the floor are
               stated in words for the same reason, so nothing about the shape has to
               be inferred from whether a button happens to be greyed. */}
-          {figureCaptured && calibExpanded && repeatingStep && !axes && (
+          {figureCaptured && calibExpanded && manualCard && repeatingStep && !axes && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
               <button
                 type="button"
@@ -9482,7 +9675,7 @@ export function Workspace() {
               option nobody should choose is an option that should not be there.
               ⚑ XY keeps it: that type really does have figures whose axes do not
               meet, so there it is a genuine question. */}
-          {figureCaptured && calibExpanded && config.commonOrigin && !config.commonOriginAlways && !axes && (
+          {figureCaptured && calibExpanded && manualCard && config.commonOrigin && !config.commonOriginAlways && !axes && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: theme.color.text.secondary, cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -9563,7 +9756,7 @@ export function Workspace() {
               stage's controls, gated on `cardModel.showsSecondStage`. Character
               for character the arrangement `heatmap-grid-panel` uses fifty lines
               below, because it is the same card. */}
-          {gamePhase === null && categoryStage.supported && cardModel.showsSecondStageHeader && (
+          {manualCard && gamePhase === null && categoryStage.supported && cardModel.showsSecondStageHeader && (
             <div
               data-testid="category-ticks-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
@@ -9669,7 +9862,7 @@ export function Workspace() {
               about the click WALK (X1 and Y1 share a pixel), which only happens
               while placing calibration points, so post-calibration it has
               nothing to do. */}
-          {figureCaptured && calibExpanded && (config.options?.length ?? 0) > 0 && (
+          {figureCaptured && calibExpanded && manualCard && (config.options?.length ?? 0) > 0 && (
             <div
               data-testid="axes-options"
               style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 12, color: theme.color.text.secondary }}
@@ -9729,7 +9922,7 @@ export function Workspace() {
               those axes make readable. It used to render ABOVE the axis options
               that belong to stage 1, so an unfolded card showed the second step
               before the first one's settings. */}
-          {heatmapActive && cardModel.showsSecondStageHeader && (
+          {manualCard && heatmapActive && cardModel.showsSecondStageHeader && (
             <div
               data-testid="heatmap-grid-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
@@ -9920,7 +10113,7 @@ export function Workspace() {
               to throw the calibration away and start again. setGlobalFieldValue
               already re-runs the calibration live, so editing it here re-reads every
               slice immediately. */}
-          {figureCaptured && calibExpanded && config.globalFields.length > 0 && (
+          {figureCaptured && calibExpanded && manualCard && config.globalFields.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: theme.color.text.secondary }}>
               {config.globalFields.map((gf) => (
                 <label key={gf.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -10763,6 +10956,57 @@ export function Workspace() {
             </MenuItem>,
           ]}
         </Menu>
+        {/* ⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7: the step guide card, in the lower right corner
+            of the canvas while its step lasts (David, 2026-10-16/18): [Leave automatic extraction]
+            in its top left, the instruction in its middle, no Previous or Next. */}
+        {autoView.stepGuide && (
+          <div
+            data-testid="step-guide-card"
+            data-suggestion={suggestPending ? 'pending' : suggestedType ?? 'none'}
+            style={{
+              position: 'absolute', right: 16, bottom: 16, zIndex: 4, minWidth: 240, maxWidth: 320,
+              display: 'flex', flexDirection: 'column', gap: 10, padding: '8px 10px',
+              background: theme.color.background.primary, border: `1px solid ${theme.color.border.regular}`,
+              borderRadius: 8, boxShadow: '0 2px 8px rgba(103, 104, 132, 0.22)',
+            }}
+          >
+            <div style={{ display: 'flex' }}>
+              <button type="button" data-testid="leave-automatic" onClick={() => autoStep({ kind: 'leave' })} style={{ fontSize: 12 }}>
+                {autoView.stepGuide.leave}
+              </button>
+            </div>
+            <span data-testid="step-guide-instruction" style={{ fontSize: theme.font.size.regular, textAlign: 'center' }}>
+              {autoView.stepGuide.instruction}
+            </span>
+            {suggestNotice && (
+              <span data-testid="suggest-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+                {suggestNotice}
+              </span>
+            )}
+          </div>
+        )}
+        {/* The apology card, in the centre of the canvas, for a type with no automatic workflow yet. */}
+        {autoView.apology && (
+          <div
+            data-testid="apology-card"
+            style={{
+              position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', zIndex: 5, maxWidth: 420,
+              display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 14px',
+              background: theme.color.background.primary, border: `1px solid ${theme.color.border.regular}`,
+              borderRadius: 8, boxShadow: '0 2px 8px rgba(103, 104, 132, 0.22)',
+            }}
+          >
+            <span style={{ fontSize: theme.font.size.regular }}>{autoView.apology.text}</span>
+            <span style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button type="button" data-testid="apology-back" onClick={backToGraphTypes} style={{ fontSize: 12 }}>
+                {autoView.apology.back}
+              </button>
+              <button type="button" data-testid="apology-manual" onClick={() => autoStep({ kind: 'manual' })} style={{ fontSize: 12 }}>
+                {autoView.apology.manual}
+              </button>
+            </span>
+          </div>
+        )}
         {/* ⚑ ON THE FIGURE, not in the sidebar. Only while a pie is actually being
             captured: before calibration there is no sector to call exploded, and
             offering it then would be a control that does nothing. */}

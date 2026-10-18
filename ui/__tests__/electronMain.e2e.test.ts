@@ -119,6 +119,7 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       // Auto-accept the confirm dialog (no beforeEach handler in this file).
       page.on('dialog', (d) => void d.accept());
       await page.getByTestId('capture-figure').click();
+      await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
       await page.waitForTimeout(150);
 
       // Same standard XY fixture used throughout workspace.e2e.test.ts.
@@ -305,6 +306,7 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       // Capture the figure first (checkpoint 103): mandatory before calibration.
       page.on('dialog', (d) => void d.accept());
       await page.getByTestId('capture-figure').click();
+      await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
       await page.waitForTimeout(150);
       await clickAt(100, 250); await confirmValue('0');
       await clickAt(400, 250); await confirmValue('10');

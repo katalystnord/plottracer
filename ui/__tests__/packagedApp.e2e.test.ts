@@ -99,6 +99,7 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId('axes-option-bar').click();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(300);
     const box = (await page.locator('canvas').first().boundingBox())!;
     const status = await page.getByTestId('view-state').textContent();
@@ -167,6 +168,7 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     await page.getByTestId('example-contour').click();
     await page.waitForTimeout(1500);
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(300);
     const box = (await page.locator('canvas').first().boundingBox())!;
     const status = await page.getByTestId('view-state').textContent();

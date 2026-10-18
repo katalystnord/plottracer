@@ -13,13 +13,17 @@ export interface LabelAxesOfferProps {
   read: AxesFromLabels;
   onApply: () => void;
   onCancel: () => void;
+  /** Its own Apply and Cancel; false where the card carries the action itself (the automatic
+   * path's axes card, whose [Accept suggested graph axis] is this Apply). */
+  actions?: boolean;
 }
 
 const name = (a: AxisFromLabels) => a.axis.toUpperCase();
 
 /** "X: 0, 20, 40, 60, 80, 100" or "Y: 10^1 … 10^4, log". */
 function axisLine(a: AxisFromLabels & { ok: true }): string {
-  const labels = a.pairs.map((p) => p.label);
+  // a value the vetting corrected shows what was read too, so the correction is never silent
+  const labels = a.pairs.map((p) => (p.vetted ? `${p.value} (read as "${p.vetted.read}")` : p.label));
   const shown = labels.length > 8 ? `${labels.slice(0, 3).join(', ')} … ${labels[labels.length - 1]}` : labels.join(', ');
   // read along the far edge only when it is the figure's one axis: say so
   const edge = a.side === 'top' || a.side === 'right' ? ` (the ${a.side} axis)` : '';
@@ -34,7 +38,7 @@ function unusedLine(a: AxisFromLabels): string | null {
   return parts.length ? `Not used on ${name(a)}: ${parts.join('; ')}.` : null;
 }
 
-export function LabelAxesOffer({ read, onApply, onCancel }: LabelAxesOfferProps): React.ReactElement {
+export function LabelAxesOffer({ read, onApply, onCancel, actions = true }: LabelAxesOfferProps): React.ReactElement {
   const axes = [read.x, read.y];
   const small = { fontSize: theme.font.size.small, color: theme.color.text.secondary } as const;
   return (
@@ -59,7 +63,7 @@ export function LabelAxesOffer({ read, onApply, onCancel }: LabelAxesOfferProps)
           </span>
         ) : null;
       })}
-      <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      {actions && <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <button
           type="button"
           data-testid="label-axes-apply"
@@ -74,7 +78,7 @@ export function LabelAxesOffer({ read, onApply, onCancel }: LabelAxesOfferProps)
           Cancel
         </button>
         {!read.points && <span style={small}>Both axes must be read to fill the calibration; calibrate by hand instead.</span>}
-      </span>
+      </span>}
     </div>
   );
 }

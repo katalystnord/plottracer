@@ -64,6 +64,7 @@ describe.runIf(RUN)('spider screenshot harness', () => {
     await page.getByTestId('axes-type-trigger').click();
     await page.getByTestId('axes-option-spider').click();
     await page.getByTestId('capture-figure').click();
+    await page.getByTestId('choose-manual').click(); // v2.7: the manual path, as before
     await page.waitForTimeout(200);
 
     const box = (await page.locator('canvas').first().boundingBox())!;

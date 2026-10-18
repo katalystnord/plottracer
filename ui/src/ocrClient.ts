@@ -2,6 +2,7 @@ import { cropForOcr, upscaleForOcr } from '../../engine/ocrRegion.js';
 import type { CropRect } from '../../engine/imageEdit.js';
 import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
 import { wordsToTicks } from '../../engine/ocrWordsToTicks.js';
+import { suggestGraphType, type GraphTypeSuggestion } from '../../engine/figureType.js';
 
 /**
  * Turning one dragged band into a proposal per category (v2.4).
@@ -208,4 +209,23 @@ export async function readLabelCrop(crop: { data: Uint8ClampedArray; width: numb
   const answer = await api.readText(enc.base64, { detectorBoxes: true });
   if (answer.error !== undefined) return { error: answer.error };
   return { text: answer.text ?? '', confidence: typeof answer.confidence === 'number' ? answer.confidence / 100 : null };
+}
+
+/**
+ * Automatic graph extraction (v2.7): the graph type suggested for the captured figure, or null
+ * for no suggestion. The worker returns the two models' logits; engine/figureType.ts fuses them.
+ * ⚑ An offer only: the caller highlights it on the Graph type card and the user clicks a type.
+ */
+export async function suggestTypeForFigure(img: {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+}): Promise<GraphTypeSuggestion | OcrFailure> {
+  const api = window.electronAPI;
+  if (!api?.classifyFigure) return { error: 'The graph type reader is only available in the desktop app.' };
+  const png = encodeCrop(img);
+  if (!png) return { error: 'Could not prepare the figure for the graph type reader.' };
+  const r = await api.classifyFigure(png.base64);
+  if (r.error || !r.own || !r.docling) return { error: r.error ?? 'The graph type reader gave no answer.' };
+  return suggestGraphType(r.own, r.docling);
 }
