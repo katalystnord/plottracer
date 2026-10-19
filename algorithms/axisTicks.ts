@@ -18,14 +18,17 @@
  * just outside a line it was HANDED. There is no axis-finding heuristic here to
  * be wrong, and no figure-dependent threshold to tune.
  *
- * ⚠️⚑⚑ IT LOOKS OUTWARD, AND THE CALLER SAYS WHICH WAY THAT IS. Measured over
+ * ⚠️⚑⚑ `detectAxisTicks` LOOKS ONE WAY, AND THE CALLER SAYS WHICH. Measured over
  * the nine bundled figures with a horizontal axis: outward finds 5 to 9 ticks on
  * every one of them, and the inward band finds 1 or 2 on every one of them -
  * which are not ticks at all, but the plot's own furniture and data ink caught
- * against the spine. So inward is not a fallback to try when outward comes up
- * short: it is a source of false positives, and on a histogram, whose bars STAND
- * on the axis, it would be building a calibration out of the readings that
- * calibration is meant to be independent of.
+ * against the spine; on a histogram, whose bars STAND on the axis, an inward
+ * read would build a calibration out of the readings it must be independent of.
+ * ⚑ So the inside is searched only when the outside finds fewer than two
+ * (`findAxisTicks`, v2.7, David 2026-10-19: many published figures draw their
+ * ticks inward, Origin's default, and an outward-only search found none of
+ * them), and with rules for what inside is not a tick: wider than a tick, much
+ * shorter than its siblings, or the frame's own line at an end.
  *
  * ⚑ EVENNESS IS REPORTED, NOT ENFORCED, and the caller decides. Measured over
  * the same nine: eight come in under 1% deviation from a constant pitch and the
@@ -80,6 +83,9 @@ export interface DetectTicksOptions {
   /** Columns closer together than this are one tick - a tick drawn 2px wide has
    *  two anti-aliased edges and one meaning. */
   mergeWithin?: number;
+  /** The widest a tick can be, in pixels along the axis; a wider run of ink is not a tick (a bar
+   *  standing on the axis). Unlimited unless set: `findAxisTicks` sets it for the inside search. */
+  maxWidth?: number;
 }
 
 /** One tick the figure actually draws. */
@@ -224,7 +230,8 @@ export function detectAxisTicks(
     }
   }
 
-  const candidates: TickCandidate[] = merged.map((run) => {
+  const maxWidth = options.maxWidth ?? Infinity;
+  const candidates: TickCandidate[] = merged.filter((run) => run.steps[run.steps.length - 1]! - run.steps[0]! + 1 <= maxWidth).map((run) => {
     const centre = run.steps.reduce((a, b) => a + along(b), 0) / run.steps.length;
     return {
       position: centre / length,
@@ -234,6 +241,78 @@ export function detectAxisTicks(
   });
 
   return { candidates, ...spacingOf(candidates, length) };
+}
+
+/** The widest a tick drawn inside the plot may be: a few pixels, never a bar. */
+const INWARD_MAX_WIDTH = 6;
+
+/**
+ * Find the ticks an axis draws, outside first and inside only when the outside finds fewer than two
+ * (v2.7, David 2026-10-19: "first search on the outside, and only then search on the inside").
+ *
+ * ⚑⚑ WHY OUTSIDE FIRST. Inside is where the plot's own furniture and data ink touch the axis - bars
+ * standing on it, a curve starting on it - which is why the finder above looks outward (see the header).
+ * But many published figures draw their ticks inward (Origin does by default), and an outward-only search
+ * finds none of them. Two ticks are enough to calibrate (David), so an axis whose outside gives two is
+ * never searched inside at all, and the cases that made inward dangerous never meet it.
+ *
+ * ⚑ THE INSIDE SEARCH STARTS PAST THE AXIS LINE'S OWN INK. Outward, the band starts on paper; inward,
+ * it would start inside a thick spine and every column would look like a tick. The spine's inner edge
+ * is measured: the first depth at which most of the axis's columns are paper. And a run of ink wider
+ * than a tick is not one.
+ */
+export function findAxisTicks(
+  src: PixelSource,
+  from: Point2D,
+  to: Point2D,
+  outward: Point2D,
+  options: DetectTicksOptions = {}
+): DetectTicksResult & { side: 'outward' | 'inward' } {
+  const out = detectAxisTicks(src, from, to, outward, options);
+  if (out.candidates.length >= 2) return { ...out, side: 'outward' };
+  const inward = { x: -outward.x, y: -outward.y };
+  const [bandFrom, bandTo] = options.band ?? DEFAULT_BAND;
+  const start = spineInnerEdge(src, from, to, inward, options.minContrast ?? DEFAULT_MIN_CONTRAST, bandFrom);
+  const band = bandTo - bandFrom;
+  const found = detectAxisTicks(src, from, to, inward, {
+    ...options,
+    band: [start, start + band],
+    maxWidth: options.maxWidth ?? INWARD_MAX_WIDTH,
+  });
+  // ⚑ Two more things touch the axis from inside, and neither is a tick (measured on the fixtures):
+  //   · at either END, the plot frame's own side line runs inward the whole band: full depth, at the end;
+  //   · data ink against the spine (a curve leaving the origin) is SHORTER than the ticks, which a figure
+  //     draws all one length - so a mark under half the usual depth is not one of them.
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  const atEnd = (c: TickCandidate) => c.position * length <= 3 || (1 - c.position) * length <= 3;
+  const notFrame = found.candidates.filter((c) => !(atEnd(c) && c.depth >= band));
+  const typical = median(notFrame.map((c) => c.depth));
+  const candidates = notFrame.filter((c) => c.depth >= typical / 2);
+  const inside = { candidates, ...spacingOf(candidates, length) };
+  return inside.candidates.length > out.candidates.length ? { ...inside, side: 'inward' } : { ...out, side: 'outward' };
+}
+
+/** The first depth, going `dir` from the axis line, at which most of the line's columns are paper. */
+function spineInnerEdge(src: PixelSource, from: Point2D, to: Point2D, dir: Point2D, minContrast: number, first: number): number {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  if (!(length >= 2)) return first;
+  const ux = (to.x - from.x) / length, uy = (to.y - from.y) / length;
+  const lumas: number[][] = [];
+  for (let d = first; d < first + 8; d++) {
+    const row: number[] = [];
+    for (let s = 0; s <= length; s += 1) {
+      const l = luma(src, from.x + ux * s + dir.x * d, from.y + uy * s + dir.y * d);
+      if (l !== null) row.push(l);
+    }
+    lumas.push(row);
+  }
+  const paper = median(lumas.flat());
+  for (let i = 0; i < lumas.length; i++) {
+    const row = lumas[i]!;
+    const ink = row.filter((l) => l < paper - minContrast).length;
+    if (ink < row.length / 2) return first + i;
+  }
+  return first;
 }
 
 /**

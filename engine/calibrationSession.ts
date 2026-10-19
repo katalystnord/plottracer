@@ -209,7 +209,7 @@ import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes, type NotDataRegion } from '../core/plotData.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
 import { tickCountFor } from '../core/bandedAxis.js';
-import { detectAxisTicks } from '../algorithms/axisTicks.js';
+import { findAxisTicks } from '../algorithms/axisTicks.js';
 import type { PixelSource } from '../algorithms/samplePixel.js';
 import { outwardNormal } from './categoryTickOverlay.js';
 import { computeBoxPlotGlyph, type BoxPlotGlyphSegment, type BoxPlotOrientation } from './boxPlotGlyph.js';
@@ -4848,7 +4848,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!edges || !this.supportsCategoryTicks()) return null;
     const outward = outwardNormal(edges);
     if (!outward) return null;
-    const found = detectAxisTicks(image, edges[0], edges[1], outward);
+    // outside first, inside only when the outside finds fewer than two (v2.7, David)
+    const found = findAxisTicks(image, edges[0], edges[1], outward);
     return {
       positions: found.candidates.map((c) => c.position),
       evenness: found.evenness,
