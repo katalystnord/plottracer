@@ -694,6 +694,11 @@ describe('Workspace: XY axes', () => {
     // In Calibrate mode, click the X2 handle (local 400,250) to select it for the
     // keyboard - the same handle you would otherwise drag.
     await page.getByTestId('mode-calibrate').click();
+    // ⚑ click what the user would SEE: the tips bar offers the click as soon as the mode switches, but
+    // the canvas's hit test is only rebuilt when Konva next draws, so a click in the same instant
+    // selected nothing (failed every run, 2026-10-19). A person always sees the drawn frame first.
+    await expect.poll(() => textOf('tips-bar')).toMatch(/click one, then/i);
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await clickAt(400, 250);
     expect(await textOf('tips-bar')).toMatch(/Handle selected/i);
 
