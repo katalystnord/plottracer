@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { CATEGORY_TICK_DRAG_HINT, CONVENTION_LABELS } from '../../../engine/categoryTickOverlay.js';
 import type { TickConvention } from '../../../core/categoryAxis.js';
 
@@ -86,8 +87,9 @@ export interface CategoriesCardProps {
    * concerned.
    */
   onDetectTicks?: () => void;
-  /** What the last look found, in one sentence, or null before one was made. */
-  detectNotice?: string | null;
+  /** What the last look found, in one sentence, and whether it failed (then it carries the warning
+   * triangle, as every message that something could not be done does), or null before one was made. */
+  detectNotice?: { text: string; failed: boolean } | null;
 }
 
 export function CategoriesCard({
@@ -200,11 +202,14 @@ export function CategoriesCard({
           Find the figure&apos;s own ticks
         </button>
       )}
-      {detectNotice && (
-        <span data-testid="detect-ticks-notice" style={{ color: theme.color.text.secondary }}>
-          {detectNotice}
-        </span>
-      )}
+      {detectNotice &&
+        (detectNotice.failed ? (
+          <WarningLine id="detect-ticks-notice" text={detectNotice.text} />
+        ) : (
+          <span data-testid="detect-ticks-notice" style={{ color: theme.color.text.secondary }}>
+            {detectNotice.text}
+          </span>
+        ))}
       {regenerateWarning && (
         <span data-testid="category-regenerate-warning" style={{ color: theme.color.text.secondary }}>
           {regenerateWarning}

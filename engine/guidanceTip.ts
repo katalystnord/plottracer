@@ -278,7 +278,8 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
         ? 'Set scale - click the second point of a known distance.'
         : 'Set scale - click the first point of a known distance.';
     }
-    if (measureError) return `⚠ ${measureError}`;
+    // the tips bar shows the warning triangle in the bulb's place for this (Workspace's tips bar)
+    if (measureError) return measureError;
     if (measureTool === 'slope') {
       // ⚑ axesKind, not id. `handleMeasureClick` and the Measure card's own
       // reference both gate on axesKind, so on a calibrated HISTOGRAM the

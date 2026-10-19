@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { FloatingPanel } from '../FloatingPanel.js';
 import { GridRemovalIcon, EyedropperIcon } from '../icons.js';
 
@@ -100,9 +101,7 @@ export function GridRemovalPanel({
             </button>
           </p>
           {error && (
-            <p data-testid="grid-removal-error" style={{ color: theme.color.error }}>
-              {error}
-            </p>
+            <WarningLine id="grid-removal-error" text={error} />
           )}
         </>
       )}

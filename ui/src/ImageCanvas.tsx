@@ -1,4 +1,5 @@
 import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { WarningLine } from './panels/WarningLine.js';
 import Konva from 'konva';
 import { Stage, Layer, Group, Circle, Line, Rect, Image as KonvaImage, Text as KonvaText } from 'react-konva';
 
@@ -1898,13 +1899,12 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
               left: 8,
               top: 8,
               margin: 0,
-              color: theme.color.error,
               background: theme.color.background.panel,
               padding: '2px 6px',
               borderRadius: 4,
             }}
           >
-            {openError}
+            <WarningLine id="open-error-text" text={openError} />
           </p>
         )}
         {stageSize.width > 0 && stageSize.height > 0 && (

@@ -103,6 +103,7 @@ import {
   ImageIcon,
   SaveIcon,
   CameraIcon,
+  WarningIcon,
   ChevronDownIcon,
   MarksVisibleIcon,
   MarksHiddenIcon,
@@ -176,7 +177,8 @@ import type { LoadedDocument } from './pagedDocument.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
 import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type PageText } from '../../engine/pdfDrawing.js';
 import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
-import { LabelAxesOffer, WarningLine, WarningLines } from './panels/LabelAxesOffer.js';
+import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
+import { WarningLine, WarningLines } from './panels/WarningLine.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
 import { errorBarsInDrawing, findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import {
@@ -1635,7 +1637,7 @@ export function Workspace() {
    */
   const [ocrTarget, setOcrTarget] = useState<'category' | 'x' | 'y'>('category');
   /** What the last look for the figure's own tick marks found. Per figure. */
-  const [tickDetectNotice, setTickDetectNotice] = useState<string | null>(null);
+  const [tickDetectNotice, setTickDetectNotice] = useState<{ text: string; failed: boolean } | null>(null);
   const [ocrProposals, setOcrProposals] = useState<OcrProposal[] | null>(null);
   // ⚑⚑ THE BAND AND THE ANGLE ARE KEPT so the card can read the SAME box again
   // at another angle. Without the band there is nothing to re-read, which is
@@ -5318,9 +5320,10 @@ export function Workspace() {
       return;
     }
     const applied = found.fits && session.applyDetectedCategoryTicks(found.positions);
-    setTickDetectNotice(
-      categoryTickDetectionMessage(found.positions.length, found.expected, applied)
-    );
+    setTickDetectNotice({
+      text: categoryTickDetectionMessage(found.positions.length, found.expected, applied),
+      failed: !applied,
+    });
     if (applied) commit();
   }, [session, commit]);
 
@@ -10308,11 +10311,8 @@ export function Workspace() {
                 </button>
               </div>
               {figureNameNotice && (
-                <div
-                  data-testid="figure-name-notice"
-                  style={{ fontSize: 10, color: theme.color.error, maxWidth: 340, textAlign: 'center' }}
-                >
-                  {figureNameNotice}
+                <div style={{ maxWidth: 340 }}>
+                  <WarningLine id="figure-name-notice" text={figureNameNotice} />
                 </div>
               )}
             </div>
@@ -11314,9 +11314,7 @@ export function Workspace() {
       <ResizeHandle data-testid="sidebar-resize" title="Drag to resize the panel" onMouseDown={startSidebarResize} />
 
       {projectError && (
-        <p data-testid="project-error" style={{ color: theme.color.error }}>
-          {projectError}
-        </p>
+        <WarningLine id="project-error" text={projectError} />
       )}
 
       {projectNotice && (
@@ -11416,9 +11414,7 @@ export function Workspace() {
           live on the top calibration card now (checkpoints 50 / 59b). */}
 
       {session.getCalibrationError() && (
-        <p data-testid="calibration-error" style={{ color: theme.color.error }}>
-          {session.getCalibrationError()}
-        </p>
+        <WarningLine id="calibration-error" text={session.getCalibrationError()} />
       )}
 
       {axes && (
@@ -11611,12 +11607,7 @@ export function Workspace() {
               </p>
             )}
             {heatmapValueError && (
-              <p
-                data-testid="heatmap-value-error"
-                style={{ color: theme.color.error, fontSize: theme.font.size.small, margin: '0 0 4px' }}
-              >
-                {heatmapValueError}
-              </p>
+              <WarningLine id="heatmap-value-error" text={heatmapValueError} />
             )}
             <HeatmapCellsTable
               cells={heatmapCells}
@@ -11833,14 +11824,18 @@ export function Workspace() {
               Sits outside the table's scroll container, like the derived legend
               above: an explanation that scrolls out of view is one nobody reads. */}
           {captureNotice && captureNotice.mode === mode && captureNotice.seriesIndex === activeDatasetIndex && (
-            <div
-              data-testid="off-axis-warning"
-              style={{ padding: '4px 2px 0', color: theme.color.error, fontSize: 12 }}
-            >
-              That click was {Math.round(captureNotice.offRayPx)} px off the{' '}
-              {captureNotice.capturedOnLabel} axis and nearer {captureNotice.nearestLabel} - it was
-              recorded on {captureNotice.capturedOnLabel}, the axis the cursor was filling. Undo if
-              you meant {captureNotice.nearestLabel}.
+            <div style={{ padding: '4px 2px 0' }}>
+              <WarningLine
+                id="off-axis-warning"
+                text={
+                  <>
+                    That click was {Math.round(captureNotice.offRayPx)} px off the{' '}
+                    {captureNotice.capturedOnLabel} axis and nearer {captureNotice.nearestLabel} - it was
+                    recorded on {captureNotice.capturedOnLabel}, the axis the cursor was filling. Undo if
+                    you meant {captureNotice.nearestLabel}.
+                  </>
+                }
+              />
             </div>
           )}
           </SidebarSection>
@@ -11925,7 +11920,15 @@ export function Workspace() {
           e2e), and calibrated status. */}
       <BottomBar>
         <span data-testid="tips-bar" style={{ display: 'flex', alignItems: 'center', gap: 6, color: theme.color.text.primary, minWidth: 0 }}>
-          <span aria-hidden style={{ opacity: 0.7 }}>💡</span>
+          {/* an error in the tips bar carries the warning triangle in the bulb's place (David,
+              2026-10-19: the triangle everywhere something could not be done) */}
+          {ocrError || measureError ? (
+            <span data-testid="tips-bar-warning" aria-hidden style={{ color: theme.color.error, display: 'inline-flex' }}>
+              <WarningIcon size={14} />
+            </span>
+          ) : (
+            <span aria-hidden style={{ opacity: 0.7 }}>💡</span>
+          )}
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {/* ⚑⚑ THE GESTURE IS PROMPTED WHERE EVERY OTHER GESTURE IS (v2.4).
                 Gate 4: a walkthrough may only click what a prompt on screen
@@ -11963,8 +11966,8 @@ export function Workspace() {
             but when an edit makes it impossible (points deleted below 2) the user
             gets a clear warning here in the bottom row -- recompute or clear it. */}
         {geometryState && geometryError && (
-          <span data-testid="geometry-stale-callout" style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 12, color: theme.color.error, flex: '0 0 auto', whiteSpace: 'nowrap' }}>
-            ⚠ {activeInfo?.name ?? 'Series'} · geometry can’t recompute - {geometryError}
+          <span style={{ marginLeft: 12, flex: '0 0 auto', whiteSpace: 'nowrap' }}>
+            <WarningLine id="geometry-stale-callout" text={`${activeInfo?.name ?? 'Series'} · geometry can’t recompute - ${geometryError}`} />
           </span>
         )}
         {/* Capture figure moved to the "Capture figure first" prompt IN the

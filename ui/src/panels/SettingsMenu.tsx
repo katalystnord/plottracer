@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { WarningLine } from './WarningLine.js';
 import { theme } from '../theme.js';
 import { FloatingPanel } from '../FloatingPanel.js';
 import { SettingsIcon } from '../icons.js';
@@ -31,7 +32,7 @@ function AgentConnection({ status }: { status: AgentStatus | null | undefined })
     return <div data-testid="setting-agents-status" style={{ ...small, color: theme.color.text.legend, marginTop: 4 }}>Starting…</div>;
   }
   if (status.error) {
-    return <div data-testid="setting-agents-status" style={{ ...small, color: theme.color.error, marginTop: 4 }}>{status.error}</div>;
+    return <div style={{ marginTop: 4 }}><WarningLine id="setting-agents-status" text={status.error} /></div>;
   }
   const cfg = agentConfig(status);
   if (!cfg) return null;

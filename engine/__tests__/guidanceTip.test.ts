@@ -178,7 +178,7 @@ describe('guidanceTip - measure', () => {
   });
 
   it('an error replaces the instruction rather than sitting beside it', () => {
-    expect(guidanceTip(base({ mode: 'measure', measureError: 'Pick two points' }))).toBe('⚠ Pick two points');
+    expect(guidanceTip(base({ mode: 'measure', measureError: 'Pick two points' }))).toBe('Pick two points') // the tips bar draws the warning triangle in the bulb's place;
   });
 });
 
