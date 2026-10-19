@@ -88,9 +88,9 @@ describe('step 1: the graph type', () => {
     expect(v.graphTypeCardOpen).toBe(false);
   });
 
-  it('XY, Bar and Histogram have an automatic workflow; the others do not (David, 2026-10-18)', () => {
-    for (const t of ['xy', 'bar', 'histogram']) expect(view(nextAutoFlow(step1, { kind: 'type', type: t })).axesCard).not.toBeNull();
-    for (const t of ['pie', 'heatmap', 'boxplot', 'map', 'polar', 'ternary', 'spider', 'contour']) {
+  it('XY, Bar, Histogram and Contour have an automatic workflow; the others do not (David, 2026-10-18; Contour 2026-10-19: "there really is no reason why it could not do this one")', () => {
+    for (const t of ['xy', 'bar', 'histogram', 'contour']) expect(view(nextAutoFlow(step1, { kind: 'type', type: t })).axesCard).not.toBeNull();
+    for (const t of ['pie', 'heatmap', 'boxplot', 'map', 'polar', 'ternary', 'spider']) {
       expect(view(nextAutoFlow(step1, { kind: 'type', type: t })).apology).not.toBeNull();
     }
   });

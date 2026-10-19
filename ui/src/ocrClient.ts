@@ -1,4 +1,6 @@
-import { cropForOcr, upscaleForOcr } from '../../engine/ocrRegion.js';
+import { cropForOcr, upscaleBy, upscaleForOcr, type QuarterTurn } from '../../engine/ocrRegion.js';
+import { labelBands, labelCrops, pictureAxes, type BandWord, type CropRead, type Detection } from '../../engine/pictureAxes.js';
+import type { AxesFromLabels } from '../../engine/labelCalibration.js';
 import type { CropRect } from '../../engine/imageEdit.js';
 import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
 import { wordsToTicks } from '../../engine/ocrWordsToTicks.js';
@@ -228,4 +230,43 @@ export async function suggestTypeForFigure(img: {
   const r = await api.classifyFigure(png.base64);
   if (r.error || !r.own || !r.docling) return { error: r.error ?? 'The graph type reader gave no answer.' };
   return suggestGraphType(r.own, r.docling);
+}
+
+/**
+ * [Read graph axis] on a PICTURE (Automatic graph extraction, v2.7; engine/pictureAxes.ts): the detector
+ * finds the plot area and the tick labels; PaddleOCR reads each label's crop (a tall one also turned a
+ * quarter each way) and finds and reads the words in the strip along each axis; the labels lead.
+ * Everything runs in the OCR's worker, offline.
+ */
+export async function readPictureAxes(img: { data: Uint8ClampedArray; width: number; height: number }): Promise<AxesFromLabels | OcrFailure> {
+  const api = window.electronAPI;
+  if (!api?.detectChartElements) return { error: NO_BRIDGE };
+  const png = encodeCrop(img);
+  if (!png) return { error: 'Could not prepare the figure to be read.' };
+  const found = await api.detectChartElements(png.base64);
+  if (found.error !== undefined) return { error: found.error };
+  const dets: Detection[] = found.detections ?? [];
+  const size = { width: img.width, height: img.height };
+  const cropReads: CropRead[][] = [];
+  for (const c of labelCrops(dets, size)) {
+    const reads: CropRead[] = [];
+    for (const turn of c.turns) {
+      // the research turned a crop with Pillow, counterclockwise; cropForOcr turns clockwise
+      const quarter = (turn === 90 ? 3 : turn === 270 ? 1 : 0) as QuarterTurn;
+      const crop = cropForOcr(img.data, img.width, img.height, { x: c.box.x0, y: c.box.y0, width: c.box.x1 - c.box.x0, height: c.box.y1 - c.box.y0 }, quarter);
+      const enc = crop && encodeCrop(crop);
+      if (!enc) continue;
+      const a = await api.readText(enc.base64);
+      if (a.error === undefined) reads.push({ text: a.text ?? '', confidence: a.confidence ?? 0 });
+    }
+    cropReads.push(reads);
+  }
+  const bandWords: BandWord[][] = [];
+  for (const b of labelBands(dets, size)) {
+    const crop = cropForOcr(img.data, img.width, img.height, { x: b.box.x0, y: b.box.y0, width: b.box.x1 - b.box.x0, height: b.box.y1 - b.box.y0 }, 0);
+    const enc = crop && encodeCrop(upscaleBy(crop, b.factor));
+    const a = enc ? await api.readText(enc.base64, { detectorBoxes: true }) : null;
+    bandWords.push(a && a.error === undefined ? (a.words ?? []).map((w) => ({ text: w.text, confidence: w.confidence, bbox: w.bbox })) : []);
+  }
+  return pictureAxes(dets, cropReads, bandWords, size, img);
 }

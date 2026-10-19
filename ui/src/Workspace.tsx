@@ -33,7 +33,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, suggestTypeForFigure } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, suggestTypeForFigure, readPictureAxes } from './ocrClient.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -1058,6 +1058,8 @@ export function Workspace() {
   const [suggestPending, setSuggestPending] = useState(false);
   /** The axes card's interim line where [Read graph axis] cannot read this figure yet. */
   const [readAxisNotice, setReadAxisNotice] = useState<string | null>(null);
+  /** [Read graph axis] on a picture is reading (a few seconds: the detector, then the reader). */
+  const [readingAxes, setReadingAxes] = useState(false);
   // Multi-figure session (checkpoint 110, design §1/§8). `figuresRef` holds every
   // figure IN ORDER when there is more than one; it stays empty while there is a
   // single figure (the live refs simply ARE it), so a single-figure session is
@@ -4933,19 +4935,15 @@ export function Workspace() {
     }
   }, [history, restoreDoc, openGraphTypeCard, setLabelAxesNow]);
   /** [Read graph axis]: the axes read from the figure's own labels, offered for [Accept]. */
-  const readGraphAxis = useCallback(() => {
+  const readGraphAxis = useCallback(async () => {
+    if (session.getSteps()[0]?.key !== 'x1') {
+      setReadAxisNotice('Reading the axes from the labels is not available for this graph type yet. Leave automated mode to calibrate by hand.');
+      return;
+    }
     const kind = figureKindRef.current?.kind;
     if (kind === undefined && provenanceRef.current.source?.pageTransform) {
       // a PDF page's drawing is read after capture; it is not a picture, just not read yet
       setReadAxisNotice("The figure's drawing is still being read. Press Read graph axis again in a moment.");
-      return;
-    }
-    if (kind !== 'drawn' && kind !== 'partly') {
-      setReadAxisNotice('Reading the axes of a picture comes with the detector, which is not built yet. Leave automated mode to calibrate by hand.');
-      return;
-    }
-    if (session.getSteps()[0]?.key !== 'x1') {
-      setReadAxisNotice('Reading the axes from the labels is not available for this graph type yet. Leave automated mode to calibrate by hand.');
       return;
     }
     setReadAxisNotice(null);
@@ -4953,8 +4951,24 @@ export function Workspace() {
     // calibration handles (David, 2026-10-18: "you are NOT using the axis points here... REUSE
     // MECHANICS IN THE SOFTWARE"). A second read replaces the points of the first.
     if (Object.keys(session.getPlacedPoints()).length > 0 && !session.isCalibrated()) session.reset();
-    placeLabelAxes(readAxesFromFigureLabels());
-  }, [session, readAxesFromFigureLabels, placeLabelAxes]);
+    if (kind === 'drawn' || kind === 'partly') {
+      placeLabelAxes(readAxesFromFigureLabels());
+      return;
+    }
+    // ⚑ A PICTURE: the detector finds the plot area and the tick labels, PaddleOCR reads them, and the
+    // labels lead (engine/pictureAxes.ts; David, 2026-10-19). It takes a few seconds, so the card says so.
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return;
+    setReadingAxes(true);
+    const read = await readPictureAxes(img);
+    setReadingAxes(false);
+    if (isOcrFailure(read)) {
+      setReadAxisNotice(`The axes could not be read: ${read.error}`);
+      return;
+    }
+    setLabelAxesNow(read);
+    if (!placeLabelAxes(read)) bump();
+  }, [session, readAxesFromFigureLabels, placeLabelAxes, setLabelAxesNow, bump]);
 
   const setGlobalField = useCallback(
     (key: string, value: string) => {
@@ -8162,7 +8176,10 @@ export function Workspace() {
   const allMarkers = useMemo<CanvasMarker[]>(
     () =>
       categoryMarkers.length > 0 || heatmapHandles.length > 0 || labelTickHandles.length > 0
-        ? [...markers, ...categoryMarkers, ...heatmapHandles, ...labelTickHandles]
+        // ⚑ the read ticks' handles go UNDER the calibration handles: a label's tick and its calibration
+        // point sit on one spot, and the calibration point is what a click there means (David, 2026-10-19:
+        // "I am unable to select the calibration points")
+        ? [...labelTickHandles, ...markers, ...categoryMarkers, ...heatmapHandles]
         : markers,
     [markers, categoryMarkers, heatmapHandles, labelTickHandles]
   );
@@ -8762,7 +8779,9 @@ export function Workspace() {
     // ⚑ The tips bar is an instruction, so it must not instruct while nothing
     // can be done - see the input's own memo.
     marksHidden,
-    automaticStage: !autoView.axesCard || axes
+    automaticStage: autoView.graphTypeCardOpen || autoView.apology
+      ? 'type'
+      : !autoView.axesCard || axes
       ? null
       : autoView.axesCard.stage === 'ticks'
         ? 'ticks'
@@ -9534,9 +9553,14 @@ export function Workspace() {
               </span>
               {autoView.axesCard.read && (
                 <>
-                  <button type="button" data-testid="read-graph-axis" onClick={readGraphAxis} style={{ fontSize: 12, alignSelf: 'center' }}>
+                  <button type="button" data-testid="read-graph-axis" onClick={() => void readGraphAxis()} disabled={readingAxes} style={{ fontSize: 12, alignSelf: 'center' }}>
                     {autoView.axesCard.read.label}
                   </button>
+                  {readingAxes && (
+                    <span data-testid="reading-axes" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, alignSelf: 'center' }}>
+                      Reading the figure's axes…
+                    </span>
+                  )}
                   <span data-testid="read-graph-axis-explanation" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
                     {autoView.axesCard.read.explanation}
                   </span>

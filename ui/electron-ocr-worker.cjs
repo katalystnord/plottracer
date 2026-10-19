@@ -14,6 +14,7 @@ const { parentPort } = require('worker_threads')
 const { decodePng } = require('./electron-ocr-png.cjs')
 const { readPixels } = require('./electron-ocr-paddle.cjs')
 const figtype = require('./electron-figtype.cjs')
+const figdet = require('./electron-figdet.cjs')
 
 const MODEL_DIR = path.join(__dirname, 'ocr-model')
 
@@ -33,6 +34,7 @@ let engine = null
 // ⚑ The graph-type models (v2.7, electron-figtype.cjs) share this thread and its onnxruntime-web:
 // one runtime in the app, started only when Automatic graph extraction is first used.
 let models = null
+let detector = null
 
 parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
   try {
@@ -42,12 +44,19 @@ parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
       parentPort.postMessage({ id, answer: await figtype.classify(await models, image) })
       return
     }
+    // the chart-element detector (v2.7, electron-figdet.cjs), loaded on first use, like the classifiers
+    if (kind === 'figdet') {
+      if (!detector) detector = figdet.startDetector(require('onnxruntime-web'))
+      parentPort.postMessage({ id, answer: await figdet.detect(await detector, image) })
+      return
+    }
     if (!engine) engine = startEngine()
     parentPort.postMessage({ id, answer: await readPixels(await engine, image, options) })
   } catch (e) {
     // ⚑ A failed START is forgotten, so the next read tries again cleanly.
     if (engine) engine.catch(() => (engine = null))
     if (models) models.catch(() => (models = null))
+    if (detector) detector.catch(() => (detector = null))
     parentPort.postMessage({ id, error: e && e.message ? e.message : String(e) })
   }
 })

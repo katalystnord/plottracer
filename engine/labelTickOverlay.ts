@@ -25,8 +25,15 @@ type P = { x: number; y: number };
 /** The axis's two ends, ordered so `outwardNormal` points away from the plot, toward the labels:
  * an axis along the bottom runs left to right (marks stand down), the top right to left (up), the
  * left top to bottom (left), the right bottom to top (right). */
-function edgesFor(a: AxisFromLabels & { ok: true }): [P, P] | null {
+function edgesFor(a: AxisFromLabels & { ok: true }, corners: AxesFromLabels['points']): [P, P] | null {
   const pts = a.pairs.map((p) => ({ x: p.tick[0], y: p.tick[1] }));
+  // the whole axis, corner to corner, where the read placed the points on the data area's corners (David,
+  // 2026-10-19: "the x axis stopped at the 14 tick mark, but it needs to run to the end of the line")
+  if (corners) {
+    const [origin, xEnd, , yTop] = corners;
+    if (a.axis === 'x' && origin && xEnd) pts.push({ x: origin.px, y: origin.py }, { x: xEnd.px, y: xEnd.py });
+    if (a.axis === 'y' && origin && yTop) pts.push({ x: origin.px, y: origin.py }, { x: yTop.px, y: yTop.py });
+  }
   if (pts.length < 2) return null;
   const along = a.axis === 'x' ? (p: P) => p.x : (p: P) => p.y;
   const sorted = [...pts].sort((p, q) => along(p) - along(q));
@@ -41,7 +48,7 @@ function overlays(read: AxesFromLabels) {
   const out: { axis: 'x' | 'y'; edges: [P, P]; tickPoints: P[] }[] = [];
   for (const a of [read.x, read.y]) {
     if (!a.ok) continue;
-    const edges = edgesFor(a);
+    const edges = edgesFor(a, read.points);
     if (!edges) continue;
     out.push({ axis: a.axis, edges, tickPoints: a.pairs.map((p) => ({ x: p.tick[0], y: p.tick[1] })) });
   }
@@ -72,7 +79,7 @@ export function moveLabelTick(read: AxesFromLabels, id: string, drop: P): AxesFr
   if (!which) return null;
   const a = read[which.axis];
   if (!a.ok) return null;
-  const edges = edgesFor(a);
+  const edges = edgesFor(a, read.points);
   const pair = a.pairs[which.index];
   if (!edges || !pair) return null;
   let t = paramAtPoint(edges, drop);

@@ -328,7 +328,7 @@ export interface CanvasMarkerInput {
   /** Fallback when no dataset is active - should never be reached in practice. */
   fallbackColor: string;
   axesKind: string;
-  /** The axes are built. Handles only become draggable once they are. */
+  /** The axes are built. Handles become draggable once they are, or once every point is placed. */
   isCalibrated: boolean;
   labelAway: { x: number; y: number } | undefined;
   /** Which data point (if any) closing the pie ring would land on. */
@@ -366,6 +366,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
   } = input;
 
   const result: CanvasMarker[] = [];
+  const walkComplete = steps.length > 0 && steps.every((s) => placedPoints[s.key]);
 
   /**
    * ⚑⚑ A COMMITTED CALIBRATION STOPS LABELLING THE FIGURE (v2.3).
@@ -451,7 +452,11 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         // too -- otherwise a handle sitting on the origin swallows the click
         // meant to drop a *data point* right there (a real reported bug); you
         // switch to Calibrate to nudge a handle, to Place Point to add data.
-        draggable: isCalibrated && mode === 'calibrate',
+        // ⚑ AND once the walk is COMPLETE, calibrated or not: with every point placed there is no next
+        // step a click could mean, so a handle can be grabbed to adjust it before Calibrate (or the
+        // automatic path's Accept). David, 2026-10-19, after [Read graph axis] placed all four: "I am
+        // unable to select the calibration points".
+        draggable: (isCalibrated || walkComplete) && mode === 'calibrate',
       });
     }
   }

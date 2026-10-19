@@ -143,6 +143,11 @@ function registerIpcHandlers(ipcMain, dialog, getMainWindow) {
     const { classifyFigure } = require('./electron-ocr.cjs')
     return classifyFigure(pngBase64)
   })
+  // the chart-element detector (v2.7, electron-figdet.cjs), in the same worker
+  ipcMain.handle('figdet:detect', async (_event, pngBase64) => {
+    const { detectChartElements } = require('./electron-ocr.cjs')
+    return detectChartElements(pngBase64)
+  })
 
   // ⚑ The OCR engine runs in a worker THREAD, which keeps the event loop alive.
   // Released here rather than in each entry point, for the reason this whole

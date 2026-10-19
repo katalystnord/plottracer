@@ -163,12 +163,19 @@ describe('calibration handles', () => {
     expect(m.map((x) => x.id)).toEqual(['x1']);
   });
 
-  it('are draggable ONLY once calibrated AND in Calibrate mode', () => {
+  it('are draggable ONLY once the walk is complete (calibrated or not) AND in Calibrate mode', () => {
     // Mid-walk a click landing on an already-placed handle (X1 and Y1 sharing an
     // origin pixel is an ordinary calibration) must register as the NEXT step's
     // click, not start a drag.
-    const midWalk = buildCanvasMarkers(base({ steps, placedPoints: placed, isCalibrated: false, mode: 'calibrate' }));
+    const midWalk = buildCanvasMarkers(base({ steps, placedPoints: { x1: placed.x1 }, isCalibrated: false, mode: 'calibrate' }));
     expect(midWalk.every((x) => x.draggable === false)).toBe(true);
+
+    // ⚑ Every point placed and not yet calibrated: there is no next step a click could mean, so a handle
+    // can be grabbed to adjust it (David, 2026-10-19: "I am unable to select the calibration points" after
+    // [Read graph axis] placed all four; the manual walk's own tip already said "drag a handle to adjust one
+    // first" here, which could not be done).
+    const complete = buildCanvasMarkers(base({ steps, placedPoints: placed, isCalibrated: false, mode: 'calibrate' }));
+    expect(complete.every((x) => x.draggable === true)).toBe(true);
 
     // Once calibrated, still inert outside Calibrate - a handle on the origin
     // would otherwise swallow the click meant to drop a data point there.

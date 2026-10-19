@@ -1252,6 +1252,11 @@ describe('the tips bar for a type with capture labels', () => {
 describe('the automatic path\'s calibration card names its own next press (v2.7)', () => {
   // ⚑ Found by walking the built flow: with the four axis points placed by Read graph axis, the tips
   // bar said "press Calibrate", a button the automatic card does not have.
+  it('the graph type step: the type, never the manual walk\'s first click (found on a picture, v2.7)', () => {
+    const t = guidanceTip(base({ automaticStage: 'type' }));
+    expect(t).toMatch(/graph type/);
+    expect(t).not.toMatch(/Click the pixel/);
+  });
   it('axis points not yet placed: Read graph axis', () => {
     expect(guidanceTip(base({ automaticStage: 'read' }))).toMatch(/Read graph axis/);
   });
@@ -1259,6 +1264,9 @@ describe('the automatic path\'s calibration card names its own next press (v2.7)
     const t = guidanceTip(base({ automaticStage: 'points' }));
     expect(t).toMatch(/Accept graph axis points/);
     expect(t).not.toMatch(/Calibrate/);
+  });
+  it('a handle selected on the automatic card: the nudge instruction, as on the manual walk', () => {
+    expect(guidanceTip(base({ automaticStage: 'points', hasActiveHandle: true, mode: 'calibrate' }))).toMatch(/^Handle selected/);
   });
   it('the tick marks stage: Accept tick marks', () => {
     expect(guidanceTip(base({ automaticStage: 'ticks' }))).toMatch(/Accept tick marks/);

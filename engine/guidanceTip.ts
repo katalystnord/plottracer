@@ -60,7 +60,7 @@ export interface GuidanceTipInput {
    * the axis points are placed, 'points' once they are, 'ticks' at the tick marks stage. The card's own
    * buttons are what moves it on, so the tip names them, never the manual walk's Calibrate.
    */
-  automaticStage?: 'read' | 'points' | 'ticks' | null;
+  automaticStage?: 'type' | 'read' | 'points' | 'ticks' | null;
   /**
    * The figure has a category axis to place, and the walk has not placed it.
    *
@@ -188,6 +188,13 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
   // that surprises you.
   if (input.marksHidden === true) {
     return 'Marks are hidden - the figure is shown on its own. Press the eye button, top right, to bring them back.';
+  }
+  // a handle selected on the automatic card says so, as everywhere: the arrows nudge it
+  if (input.automaticStage && input.hasActiveHandle && input.mode === 'calibrate') {
+    return 'Handle selected - ↑ ↓ ← → nudge (Shift = coarse); recalibrates live. Or drag it.';
+  }
+  if (input.automaticStage === 'type') {
+    return 'Please select the graph type on the Graph type card. A type in green is the one the figure looks like.';
   }
   if (input.automaticStage === 'read') {
     return 'Press Read graph axis to find the axis points and tick marks, or click the axis points yourself.';

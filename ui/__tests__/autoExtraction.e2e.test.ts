@@ -59,6 +59,18 @@ async function lowestVioletGrips(): Promise<{ x: number; y: number }[]> {
   }
   return [];
 }
+/** The right-most amber (#e0a458, the X calibration handles' colour) on the canvas: the X2 handle, in page coordinates. */
+async function rightmostAmber(): Promise<{ x: number; y: number } | null> {
+  const box = (await page.locator('canvas').first().boundingBox())!;
+  const img = decodePng(await page.locator('canvas').first().screenshot());
+  const sx = img.width / box.width;
+  let best: { x: number; y: number } | null = null;
+  for (let y = 0; y < img.height; y++) for (let x = 0; x < img.width; x++) {
+    const i = (y * img.width + x) * 4;
+    if (Math.abs(img.data[i]! - 224) < 18 && Math.abs(img.data[i + 1]! - 164) < 18 && Math.abs(img.data[i + 2]! - 88) < 18 && (!best || x > best.x)) best = { x, y };
+  }
+  return best && { x: box.x + (best.x - 6) / sx, y: box.y + best.y / sx };
+}
 /** Pixels of the canvas in the structure violet (#7c3aed), the colour of the app's tick marks. */
 async function violetPixels(): Promise<number> {
   const img = decodePng(await page.locator('canvas').first().screenshot());
@@ -241,6 +253,17 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     expect(await page.getByTestId('label-axes-warnings').count()).toBe(0);
     // the tick marks read are drawn with the app's own tick mark graphics, in its structure violet
     expect(await violetPixels()).toBeGreaterThan(50);
+    // every point placed, nothing calibrated yet: a handle can be selected and nudged (David, 2026-10-19:
+    // "I am unable to select the calibration points")
+    const handle = (await rightmostAmber())!;
+    await page.mouse.click(handle.x, handle.y);
+    await page.waitForTimeout(200);
+    expect(await text('tips-bar')).toMatch(/Handle selected/);
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowLeft');
+    await page.mouse.move(2, 300);
+    await page.waitForTimeout(300);
+    expect((await rightmostAmber())!.x).toBeLessThan(handle.x - 5);
+    await page.keyboard.press('Escape');
     // teal when it can be used: the card-ending teal, as Calibrate
     expect(await accept.textContent()).toBe('Accept graph axis points');
     expect(await accept.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe('rgb(239, 239, 239)');

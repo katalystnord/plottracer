@@ -50,6 +50,7 @@ files:
   # ⚑ The graph-type models (v2.7, Automatic graph extraction), with their LICENSE and NOTICE:
   # read by electron-figtype.cjs in the same worker.
   - ui/figtype-model/**/*
+  - ui/figdet-model/**/*
   - "!ui/electron-dev.cjs"
   - "!ui/electron-start.cjs"
   - build/icons/**/*

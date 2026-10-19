@@ -82,3 +82,14 @@ describe('dragging a read tick mark, by the category ticks\' rules', () => {
     expect(moveLabelTick(r, 'x1', { x: 0, y: 0 })).toBeNull();
   });
 });
+
+describe('the read axis runs corner to corner', () => {
+  it('with the points on the data area\'s corners, the axis line covers the whole axis, past the last label (David: "it needs to run to the end of the line")', () => {
+    const r = {
+      ...read(axis('x', 'bottom', [[100, 400], [200, 400], [300, 400]]), axis('y', 'left', [[50, 300], [50, 100]])),
+      points: [{ px: 50, py: 400, x: 0, y: 0 }, { px: 380, py: 400, x: 15, y: 0 }, { px: 50, py: 400, x: 0, y: 0 }, { px: 50, py: 60, x: 0, y: 60 }],
+    };
+    const g = labelTickGlyphs(r);
+    expect(g[0]!.segments[0]).toEqual({ from: { x: 50, y: 400 }, to: { x: 380, y: 400 } });
+  });
+});

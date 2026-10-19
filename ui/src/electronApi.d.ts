@@ -82,6 +82,11 @@ declare global {
        * figure, or a refusal sentence. engine/figureType.ts turns them into the suggestion.
        */
       classifyFigure: (pngBase64: string) => Promise<{ own?: number[]; docling?: number[]; error?: string }>;
+      /** The chart-element detector's boxes for one figure (v2.7, ui/electron-figdet.cjs). */
+      detectChartElements: (pngBase64: string) => Promise<{
+        detections?: { cls: string; box: { x0: number; y0: number; x1: number; y1: number }; score: number }[];
+        error?: string;
+      }>;
       readText: (pngBase64: string, options?: { detectorBoxes?: boolean }) => Promise<{
         text?: string;
         confidence?: number;

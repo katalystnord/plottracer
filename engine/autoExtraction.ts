@@ -10,9 +10,9 @@
  * each step shows is a function of them, so every case is a millisecond unit test.
  */
 
-/** Graph types with an automatic workflow (David, 2026-10-18); every other type clicked in the
- * automatic path gets the apology card. */
-export const AUTOMATIC_TYPES: readonly string[] = ['xy', 'bar', 'histogram'];
+/** Graph types with an automatic workflow (David, 2026-10-18; Contour 2026-10-19, which calibrates with
+ * the same four axis points as XY); every other type clicked in the automatic path gets the apology card. */
+export const AUTOMATIC_TYPES: readonly string[] = ['xy', 'bar', 'histogram', 'contour'];
 
 export type AutoFlow =
   /** Captured (or not yet), and neither path chosen. */
