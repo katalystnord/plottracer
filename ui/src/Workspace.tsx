@@ -176,7 +176,7 @@ import type { LoadedDocument } from './pagedDocument.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
 import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type PageText } from '../../engine/pdfDrawing.js';
 import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
-import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
+import { LabelAxesOffer, WarningLine, WarningLines } from './panels/LabelAxesOffer.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
 import { errorBarsInDrawing, findLinesFromDrawing, markersFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import {
@@ -277,7 +277,7 @@ import type { AnyAxes } from '../../core/plotData.js';
 import { measurementValue } from '../../core/measurementValues.js';
 import { makeDisplayRounder } from '../../core/displayPrecision.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
-import { labelTickGlyphs } from '../../engine/labelTickOverlay.js';
+import { labelTickGlyphs, labelTickMarkers, moveLabelTick } from '../../engine/labelTickOverlay.js';
 import { calibrationCardModel } from '../../engine/calibrationCardModel.js';
 import { autoExtractionView, nextAutoFlow, type AutoEvent, type AutoFlow } from '../../engine/autoExtraction.js';
 import { clampPanelWidth, defaultPanelWidthFor, readStoredPanelWidth, writePanelWidth } from './panelWidth.js';
@@ -525,6 +525,8 @@ interface DocSnapshot {
   provenance: Provenance;
   /** Automatic graph extraction's path and step (v2.7), so undo steps back across a step. */
   autoFlow?: AutoFlow;
+  /** The axes read from the labels, with any tick mark the user moved (v2.7). */
+  labelAxes?: AxesFromLabels | null;
 }
 
 /**
@@ -1796,7 +1798,14 @@ export function Workspace() {
   const pageDrawingReadRef = useRef<{ drawing: PageDrawing; text: [number, number, number, number][]; items: PageText[] } | null>(null);
   /** v2.7 V5: the axes read from the figure's labels, offered in the calibration
    * card until Apply or Cancel; the line said when they cannot be read (V10). */
-  const [labelAxes, setLabelAxes] = useState<AxesFromLabels | null>(null);
+  const [labelAxes, setLabelAxesState] = useState<AxesFromLabels | null>(null);
+  /** The read, mirrored for `captureDoc`: a tick mark dragged, or the axes read, is one history entry,
+   * so the snapshot taken in the same handler must already see it. */
+  const labelAxesRef = useRef<AxesFromLabels | null>(null);
+  const setLabelAxesNow = useCallback((v: AxesFromLabels | null) => {
+    labelAxesRef.current = v;
+    setLabelAxesState(v);
+  }, []);
   const [labelAxesNotice, setLabelAxesNotice] = useState<string | null>(null);
   useEffect(() => {
     const src = sourcePdfRef.current;
@@ -1805,12 +1814,12 @@ export function Workspace() {
       figureKindRef.current = null;
       pageDrawingReadRef.current = null;
       setFigureKindText(null);
-      setLabelAxes(null);
+      setLabelAxesNow(null);
       setLabelAxesNotice(null);
       return;
     }
     let live = true;
-    setLabelAxes(null);
+    setLabelAxesNow(null);
     setLabelAxesNotice(null);
     if (!pageDrawingRef.current || pageDrawingRef.current.bytes !== src.bytes || pageDrawingRef.current.page !== page) {
       pageDrawingRef.current = { bytes: src.bytes, page, read: import('./pdfRender.js').then((m) => m.readPdfPageDrawing(src.bytes, page)) };
@@ -1831,7 +1840,7 @@ export function Workspace() {
     return () => {
       live = false;
     };
-  }, [figureCaptured, provenance, sourcePdfBundled, setFigureKindText]);
+  }, [figureCaptured, provenance, sourcePdfBundled, setFigureKindText, setLabelAxesNow]);
   const applyPdfState = useCallback((next: { name?: string; pageCount: number; page: number } | null) => {
     pdfStateRef.current = next;
     setPdfState(next);
@@ -2051,6 +2060,7 @@ export function Workspace() {
       imageSrc: imageSrcOverride !== undefined ? imageSrcOverride : imageCanvasRef.current?.getImageDataURL() ?? null,
       provenance: provenanceRef.current,
       autoFlow: autoFlowRef.current,
+      labelAxes: labelAxesRef.current,
     }),
     []
   );
@@ -3537,6 +3547,7 @@ export function Workspace() {
       applyMeasureScale(snapshot.scale);
       applyProvenance(snapshot.provenance); // roll a crop's provenance back with it
       if (snapshot.autoFlow) applyAutoFlow(snapshot.autoFlow); // the automatic path's step rolls back too
+      if (snapshot.labelAxes !== undefined) setLabelAxesNow(snapshot.labelAxes); // and the read, with its tick marks
       setPending([]); // any in-progress measurement is abandoned by the restore
       // Undo/redo across an IMAGE edit (rotate/flip/crop/deskew/grid-removal):
       // reload the snapshot's baked raster, but only when it actually differs, so
@@ -3559,7 +3570,7 @@ export function Workspace() {
       syncAfterRestore();
       bump();
     },
-    [applyMeasurements, applyMeasureScale, applyProvenance, applyAutoFlow, restoreHeatmapGrid, setPending, setColorTraceRegion, syncAfterRestore, bump]
+    [applyMeasurements, applyMeasureScale, applyProvenance, applyAutoFlow, setLabelAxesNow, restoreHeatmapGrid, setPending, setColorTraceRegion, syncAfterRestore, bump]
   );
   // ⚑ Undo/redo wait while Find lines is reading labels (audit B2): its result
   // is applied in one step when the reads are in, and an undo underneath it
@@ -4805,15 +4816,15 @@ export function Workspace() {
     if (!placed) return null;
     // V10: a drawn figure with no text in it draws its labels as shapes
     if (!text.some((t) => /\d/.test(t.str))) {
-      setLabelAxes(null);
+      setLabelAxesNow(null);
       setLabelAxesNotice('The labels are drawn as shapes, so they cannot be read from the drawing. Calibrate by hand instead.');
       return null;
     }
     setLabelAxesNotice(null);
     const axesRead = readAxesFromLabels(placed, text, { width: img.width, height: img.height });
-    setLabelAxes(axesRead);
+    setLabelAxesNow(axesRead);
     return axesRead;
-  }, []);
+  }, [setLabelAxesNow]);
 
   /** V6: fill X1, X2, Y1 and Y2 with the offered ticks and values, exactly as
    * the clicks and typed values would, and the Log boxes with what was read. */
@@ -4839,8 +4850,8 @@ export function Workspace() {
   }, [session, commit]);
   /** V6: the manual offer's Apply. */
   const applyLabelAxes = useCallback(() => {
-    if (placeLabelAxes(labelAxes)) setLabelAxes(null);
-  }, [labelAxes, placeLabelAxes]);
+    if (placeLabelAxes(labelAxes)) setLabelAxesNow(null);
+  }, [labelAxes, placeLabelAxes, setLabelAxesNow]);
 
   // ⚑⚑ AUTOMATIC GRAPH EXTRACTION (BETA), v2.7 - docs/v2.7-figure-type.md. Which card shows is
   // decided in engine/autoExtraction.ts; these only carry out each card's buttons.
@@ -4897,12 +4908,12 @@ export function Workspace() {
       // [Accept tick marks]: the calibration is complete (David: the card is completed with the final
       // acceptance)
       runCalibration();
-      setLabelAxes(null);
+      setLabelAxesNow(null);
       autoStep({ kind: 'accepted-ticks' });
     } else {
       autoStep({ kind: 'accepted-points' });
     }
-  }, [runCalibration, autoStep]);
+  }, [runCalibration, autoStep, setLabelAxesNow]);
   /** [< Previous]: undo the last step and go back one step in the chain (David, 2026-10-17). */
   const previousAutoStep = useCallback(() => {
     // undo until the walk stands where one step back puts it (tick marks -> axis points -> graph type)
@@ -4915,10 +4926,10 @@ export function Workspace() {
     }
     setReadAxisNotice(null);
     if (target.path === 'automatic' && target.step === 'type') {
-      setLabelAxes(null);
+      setLabelAxesNow(null);
       openGraphTypeCard();
     }
-  }, [history, restoreDoc, openGraphTypeCard]);
+  }, [history, restoreDoc, openGraphTypeCard, setLabelAxesNow]);
   /** [Read graph axis]: the axes read from the figure's own labels, offered for [Accept]. */
   const readGraphAxis = useCallback(() => {
     const kind = figureKindRef.current?.kind;
@@ -4981,6 +4992,13 @@ export function Workspace() {
         moveHeatmapDivider(id, x, y);
         return;
       }
+      // a read tick mark, moved by the category ticks' rules
+      const movedRead = labelAxesRef.current ? moveLabelTick(labelAxesRef.current, id, { x, y }) : null;
+      if (movedRead) {
+        setLabelAxesNow(movedRead);
+        commit();
+        return;
+      }
       const tickIndex = categoryTickIndexFromId(id);
       if (tickIndex !== null) {
         // The model clamps it between its neighbours, so a tick can never cross
@@ -4996,7 +5014,7 @@ export function Workspace() {
       }
       commit();
     },
-    [session, commit, moveHeatmapDivider]
+    [session, commit, moveHeatmapDivider, setLabelAxesNow]
   );
 
   // Apply an in-progress datapoint value edit (checkpoint 39): re-derive the
@@ -8136,12 +8154,14 @@ export function Workspace() {
   // ⚑ An aid's marker carries the HIT AREA and draws nothing; the mark and its
   // grip are one object in `allAidGlyphs`. They were two, in two layers and two
   // colours, and only the handle could be moved - see `AidGlyph`.
+  // the read tick marks' handles (engine/labelTickOverlay.ts): the category ticks' own markers
+  const labelTickHandles = useMemo<CanvasMarker[]>(() => (labelAxes ? labelTickMarkers(labelAxes) : []), [labelAxes]);
   const allMarkers = useMemo<CanvasMarker[]>(
     () =>
-      categoryMarkers.length > 0 || heatmapHandles.length > 0
-        ? [...markers, ...categoryMarkers, ...heatmapHandles]
+      categoryMarkers.length > 0 || heatmapHandles.length > 0 || labelTickHandles.length > 0
+        ? [...markers, ...categoryMarkers, ...heatmapHandles, ...labelTickHandles]
         : markers,
-    [markers, categoryMarkers, heatmapHandles]
+    [markers, categoryMarkers, heatmapHandles, labelTickHandles]
   );
   /** A histogram's bin glyphs, which is all this layer carries now.
    *
@@ -9497,7 +9517,8 @@ export function Workspace() {
               Log X, Log Y or Skip rotation: the read sets the log boxes itself. */}
           {autoView.axesCard && calibExpanded && (
             <div data-testid="axes-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, width: 340, maxWidth: '100%' }}>
-              <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {/* a single button sits centred, with a little space under the row above it (David) */}
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
                 <button type="button" data-testid="auto-previous" onClick={previousAutoStep} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                   &lt; Previous
                 </button>
@@ -9510,23 +9531,13 @@ export function Workspace() {
               </span>
               {autoView.axesCard.read && (
                 <>
-                  <button type="button" data-testid="read-graph-axis" onClick={readGraphAxis} style={{ fontSize: 12, alignSelf: 'flex-start' }}>
+                  <button type="button" data-testid="read-graph-axis" onClick={readGraphAxis} style={{ fontSize: 12, alignSelf: 'center' }}>
                     {autoView.axesCard.read.label}
                   </button>
                   <span data-testid="read-graph-axis-explanation" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
                     {autoView.axesCard.read.explanation}
                   </span>
                 </>
-              )}
-              {readAxisNotice && (
-                <span data-testid="read-axis-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-                  {readAxisNotice}
-                </span>
-              )}
-              {labelAxesNotice && (
-                <span data-testid="label-axes-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-                  {labelAxesNotice}
-                </span>
               )}
               {(() => {
                 // enabled only where it acts: the axis points all placed (by the read, or adjusted), or,
@@ -9539,7 +9550,7 @@ export function Workspace() {
                     data-testid="accept-graph-axis"
                     disabled={!ready}
                     onClick={acceptGraphAxis}
-                    style={{ ...(ready ? endsCardButton() : { fontSize: 12 }), alignSelf: 'flex-start' }}
+                    style={{ ...(ready ? endsCardButton() : { fontSize: 12 }), alignSelf: 'center' }}
                   >
                     {autoView.axesCard.accept.label}
                   </button>
@@ -9548,7 +9559,16 @@ export function Workspace() {
               <span data-testid="accept-graph-axis-explanation" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
                 {autoView.axesCard.accept.explanation}
               </span>
-              {labelAxes && <LabelAxesOffer read={labelAxes} onApply={acceptGraphAxis} onCancel={() => setLabelAxes(null)} variant="warnings" />}
+              {/* why the walk cannot go on from here, with the triangle, at the bottom (David, 2026-10-19:
+                  "we need the triangle to make it clearer for the user that we currently cannot proceed") */}
+              <WarningLines
+                testId="read-axis-warnings"
+                lines={[
+                  ...(readAxisNotice ? [{ id: 'read-axis-notice', text: readAxisNotice }] : []),
+                  ...(labelAxesNotice ? [{ id: 'label-axes-notice', text: labelAxesNotice }] : []),
+                ]}
+              />
+              {labelAxes && <LabelAxesOffer read={labelAxes} onApply={acceptGraphAxis} onCancel={() => setLabelAxesNow(null)} variant="warnings" />}
             </div>
           )}
           {/* Point matrix: laid out as a grid with 2 columns, so an XY graph
@@ -9569,15 +9589,11 @@ export function Workspace() {
               <button type="button" data-testid="read-axes-from-labels" onClick={readAxesFromFigureLabels} style={{ fontSize: 12 }}>
                 Read the axes from the figure's labels
               </button>
-              {labelAxesNotice && (
-                <span data-testid="label-axes-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-                  {labelAxesNotice}
-                </span>
-              )}
+              {labelAxesNotice && <WarningLine id="label-axes-notice" text={labelAxesNotice} />}
             </span>
           )}
           {figureCaptured && calibExpanded && manualCard && labelAxes && (
-            <LabelAxesOffer read={labelAxes} onApply={applyLabelAxes} onCancel={() => setLabelAxes(null)} />
+            <LabelAxesOffer read={labelAxes} onApply={applyLabelAxes} onCancel={() => setLabelAxesNow(null)} />
           )}
           {figureCaptured && calibExpanded && manualCard && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>
@@ -11061,11 +11077,8 @@ export function Workspace() {
             <span data-testid="step-guide-instruction" style={{ fontSize: theme.font.size.regular, textAlign: 'center' }}>
               {autoView.stepGuide.instruction}
             </span>
-            {suggestNotice && (
-              <span data-testid="suggest-notice" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-                {suggestNotice}
-              </span>
-            )}
+            {/* the suggestion could not be made: a warning, with the triangle (David, 2026-10-19) */}
+            <WarningLines testId="suggest-warnings" lines={suggestNotice ? [{ id: 'suggest-notice', text: suggestNotice }] : []} />
           </div>
         )}
         {/* The apology card, in the centre of the canvas, for a type with no automatic workflow yet. */}
@@ -11079,7 +11092,7 @@ export function Workspace() {
               borderRadius: 8, boxShadow: '0 2px 8px rgba(103, 104, 132, 0.22)',
             }}
           >
-            <span style={{ fontSize: theme.font.size.regular }}>{autoView.apology.text}</span>
+            <WarningLine id="apology-text" text={autoView.apology.text} size="regular" />
             <span style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button type="button" data-testid="apology-back" onClick={backToGraphTypes} style={{ fontSize: 12 }}>
                 {autoView.apology.back}

@@ -8,12 +8,17 @@
  * automatic path the calibration card's second acceptance is the tick marks (XY) or the categories
  * (Bar, Histogram), so they must look the same because they are the same thing.
  *
- * ⚑ No grip: a read tick mark is not a handle yet (adjusting one belongs to the tick marks
- * acceptance, not designed yet), and `AidGlyph` draws a grip only on a mark that is one. A refused
- * axis draws nothing: it is not offered.
+ * ⚑⚑ AND THEY ARE THE ADJUSTABLE TICK MARKERS, not just their look (David, 2026-10-19: "You have still
+ * not used the adjustable tick markers that we have developed before?"): each mark carries its grip,
+ * and `labelTickMarkers` gives it the same draggable handle, bound on screen to its axis, that
+ * `categoryTickMarkers` gives a category tick. A drop moves the tick by the category ticks' rules
+ * (`moveLabelTick`): projected onto the axis line, and never across a neighbour.
+ * A refused axis draws nothing: it is not offered.
  */
 import type { AxesFromLabels, AxisFromLabels } from './labelCalibration.js';
-import { categoryAidGlyphs, type AidGlyph } from './categoryTickOverlay.js';
+import { categoryAidGlyphs, categoryTickMarkers, type AidGlyph } from './categoryTickOverlay.js';
+import type { CanvasMarker } from './canvasOverlays.js';
+import { paramAtPoint, pointAtParam } from '../core/bandedAxis.js';
 
 type P = { x: number; y: number };
 
@@ -29,16 +34,57 @@ function edgesFor(a: AxisFromLabels & { ok: true }): [P, P] | null {
   return a.side === 'bottom' || a.side === 'left' ? [lo, hi] : [hi, lo];
 }
 
-export function labelTickGlyphs(read: AxesFromLabels): AidGlyph[] {
-  const out: AidGlyph[] = [];
+const tickId = (axis: 'x' | 'y') => (i: number) => `labelTick:${axis}:${i}`;
+
+/** The overlay input of each read axis: its ends, and one tick point per pair, in the pairs' order. */
+function overlays(read: AxesFromLabels) {
+  const out: { axis: 'x' | 'y'; edges: [P, P]; tickPoints: P[] }[] = [];
   for (const a of [read.x, read.y]) {
     if (!a.ok) continue;
     const edges = edgesFor(a);
     if (!edges) continue;
-    const tickPoints = a.pairs.map((p) => ({ x: p.tick[0], y: p.tick[1] }));
-    for (const g of categoryAidGlyphs({ edges, tickPoints, tickId: (i) => `labelTick-${a.axis}-${i}` })) {
-      out.push({ ...g, markerId: null, grip: null });
-    }
+    out.push({ axis: a.axis, edges, tickPoints: a.pairs.map((p) => ({ x: p.tick[0], y: p.tick[1] })) });
   }
   return out;
+}
+
+/** The marks, each with its grip: `categoryAidGlyphs`, unchanged. */
+export function labelTickGlyphs(read: AxesFromLabels): AidGlyph[] {
+  return overlays(read).flatMap((o) => categoryAidGlyphs({ edges: o.edges, tickPoints: o.tickPoints, tickId: tickId(o.axis) }));
+}
+
+/** Their draggable handles: `categoryTickMarkers`, unchanged, so each is bound to its axis on screen. */
+export function labelTickMarkers(read: AxesFromLabels): CanvasMarker[] {
+  return overlays(read).flatMap((o) => categoryTickMarkers({ edges: o.edges, tickPoints: o.tickPoints, tickId: tickId(o.axis) }));
+}
+
+/** Which read tick a handle id names, or null for any other handle. */
+export function labelTickFromId(id: string): { axis: 'x' | 'y'; index: number } | null {
+  const m = /^labelTick:([xy]):(\d+)$/.exec(id);
+  return m ? { axis: m[1] as 'x' | 'y', index: Number(m[2]) } : null;
+}
+
+/** The read with one tick moved to where its handle was dropped, by the category ticks' rules: the drop
+ * projected onto the axis line (the grip stands square off it), and kept strictly between the tick's
+ * neighbours along the axis. Null when the id is not a read tick. */
+export function moveLabelTick(read: AxesFromLabels, id: string, drop: P): AxesFromLabels | null {
+  const which = labelTickFromId(id);
+  if (!which) return null;
+  const a = read[which.axis];
+  if (!a.ok) return null;
+  const edges = edgesFor(a);
+  const pair = a.pairs[which.index];
+  if (!edges || !pair) return null;
+  let t = paramAtPoint(edges, drop);
+  if (!Number.isFinite(t)) return null;
+  const own = paramAtPoint(edges, { x: pair.tick[0], y: pair.tick[1] });
+  const params = a.pairs.map((p, i) => (i === which.index ? null : paramAtPoint(edges, { x: p.tick[0], y: p.tick[1] })));
+  const below = params.filter((v): v is number => v !== null && v < own);
+  const above = params.filter((v): v is number => v !== null && v > own);
+  const EPS = 1e-3;
+  if (below.length) t = Math.max(t, Math.max(...below) + EPS);
+  if (above.length) t = Math.min(t, Math.min(...above) - EPS);
+  const p = pointAtParam(edges, t);
+  const pairs = a.pairs.map((q, i) => (i === which.index ? { ...q, tick: [p.x, p.y] as [number, number] } : q));
+  return { ...read, [which.axis]: { ...a, pairs } };
 }

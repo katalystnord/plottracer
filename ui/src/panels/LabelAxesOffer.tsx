@@ -62,15 +62,31 @@ function Warnings({ read }: { read: AxesFromLabels }): React.ReactElement | null
     const unused = unusedLine(a);
     if (unused) lines.push({ id: `label-axes-unused-${a.axis}`, text: unused });
   }
+  return <WarningLines testId="label-axes-warnings" lines={lines} />;
+}
+
+/**
+ * ⚑⚑ ONE LOOK FOR "THIS CANNOT GO ON": the warning triangle and the sentence (David, 2026-10-19: "triangle
+ * everywhere it applies like this... Consistency and predictability is paramount"). Every message that
+ * says something could not be read, was not done, or stops the walk is drawn by this, at the card's
+ * own text size, so it reads the same wherever it appears.
+ */
+export function WarningLine({ id, text, size = 'small' }: { id: string; text: string; size?: 'small' | 'regular' }): React.ReactElement {
+  const fontSize = size === 'regular' ? theme.font.size.regular : theme.font.size.small;
+  return (
+    <span data-testid={id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize, color: theme.color.text.secondary }}>
+      <span style={{ color: theme.color.error, flexShrink: 0, display: 'inline-flex' }}><WarningIcon size={size === 'regular' ? 16 : 14} /></span>
+      <span>{text}</span>
+    </span>
+  );
+}
+
+/** Several of them, stacked: the bottom of the automatic path's calibration card (David, 2026-10-18). */
+export function WarningLines({ lines, testId }: { lines: readonly { id: string; text: string }[]; testId: string }): React.ReactElement | null {
   if (lines.length === 0) return null;
   return (
-    <div data-testid="label-axes-warnings" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-      {lines.map((l) => (
-        <span key={l.id} data-testid={l.id} style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
-          <span style={{ color: theme.color.error, flexShrink: 0, display: 'inline-flex' }}><WarningIcon size={14} /></span>
-          <span>{l.text}</span>
-        </span>
-      ))}
+    <div data-testid={testId} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {lines.map((l) => <WarningLine key={l.id} id={l.id} text={l.text} />)}
     </div>
   );
 }
@@ -81,11 +97,15 @@ export function LabelAxesOffer({ read, onApply, onCancel, actions = true, varian
   const small = { fontSize: theme.font.size.small, color: theme.color.text.secondary } as const;
   return (
     <div data-testid="label-axes-offer" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
-      {axes.map((a) => (
-        <span key={a.axis} data-testid={`label-axes-${a.axis}`} style={{ color: a.ok ? theme.color.text.primary : theme.color.error }}>
-          {a.ok ? axisLine(a) : `${name(a)} could not be read: ${a.reason}.`}
-        </span>
-      ))}
+      {axes.map((a) =>
+        a.ok ? (
+          <span key={a.axis} data-testid={`label-axes-${a.axis}`} style={{ color: theme.color.text.primary }}>
+            {axisLine(a)}
+          </span>
+        ) : (
+          <WarningLine key={a.axis} id={`label-axes-${a.axis}`} text={`${name(a)} could not be read: ${a.reason}.`} />
+        )
+      )}
       {axes.map((a) =>
         a.ok && a.second ? (
           <span key={`s-${a.axis}`} data-testid={`label-axes-second-${a.axis}`} style={small}>

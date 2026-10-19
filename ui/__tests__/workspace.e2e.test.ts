@@ -2944,6 +2944,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
     expect(await textOf('label-axes-x')).toBe('X: 0, 2, 4, 6 (read as "9"), 8, 10');
     expect(await textOf('label-axes-y')).toBe('Y could not be read: only one label sits at a tick mark; two are needed.');
+    expect(await page.getByTestId('label-axes-y').locator('svg').count()).toBe(1); // the warning triangle, as everywhere
     expect(await page.getByRole('button', { name: 'Apply', exact: true }).isDisabled()).toBe(true);
     // Cancel takes the offer away; calibrating by hand is unchanged
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();

@@ -35,6 +35,30 @@ async function openAndCapture(file: string): Promise<void> {
 }
 
 const text = async (id: string) => ((await page.getByTestId(id).textContent()) ?? '').trim();
+/** The violet grips along the lowest violet row of the canvas (the grips under the X axis), as
+ * their centres in page coordinates, left to right. */
+async function lowestVioletGrips(): Promise<{ x: number; y: number }[]> {
+  const box = (await page.locator('canvas').first().boundingBox())!;
+  const img = decodePng(await page.locator('canvas').first().screenshot());
+  const violet = (x: number, y: number) => {
+    const i = (y * img.width + x) * 4;
+    return Math.abs(img.data[i]! - 124) < 30 && Math.abs(img.data[i + 1]! - 58) < 30 && Math.abs(img.data[i + 2]! - 237) < 30;
+  };
+  const sx = img.width / box.width;
+  for (let y = img.height - 1; y >= 0; y--) {
+    const xs: number[] = [];
+    for (let x = 0; x < img.width; x++) if (violet(x, y)) xs.push(x);
+    if (xs.length < 4) continue;
+    const runs: number[][] = [];
+    for (const x of xs) {
+      const last = runs[runs.length - 1];
+      if (last && x - last[last.length - 1]! <= 3) last.push(x);
+      else runs.push([x]);
+    }
+    return runs.map((r) => ({ x: box.x + (r[0]! + r[r.length - 1]!) / 2 / sx, y: box.y + (y - 3) / sx }));
+  }
+  return [];
+}
 /** Pixels of the canvas in the structure violet (#7c3aed), the colour of the app's tick marks. */
 async function violetPixels(): Promise<number> {
   const img = decodePng(await page.locator('canvas').first().screenshot());
@@ -128,6 +152,8 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     const apology = page.getByTestId('apology-card');
     await apology.waitFor();
     expect(await apology.textContent()).toContain('Apologies, but we have not yet implemented an automatic extraction for this graph type.');
+    // a message that the walk cannot go on carries the triangle, as everywhere (David, 2026-10-19)
+    expect(await page.getByTestId('apology-text').locator('svg').count()).toBe(1);
     await page.getByTestId('axes-type-panel').waitFor({ state: 'detached' });
     expect(await page.getByTestId('step-guide-card').count()).toBe(0);
     // centre of the canvas
@@ -212,12 +238,38 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     // teal when it can be used: the card-ending teal, as Calibrate
     expect(await accept.textContent()).toBe('Accept graph axis points');
     expect(await accept.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe('rgb(239, 239, 239)');
+    // the read and accept buttons stand alone, so they sit centred, with space under the row above
+    const cardBox = (await card.boundingBox())!;
+    for (const b of [page.getByTestId('read-graph-axis'), accept]) {
+      const bb = (await b.boundingBox())!;
+      expect(Math.abs(bb.x + bb.width / 2 - (cardBox.x + cardBox.width / 2))).toBeLessThan(3);
+    }
+    const rowBottom = Math.max(...row.map((r) => r!.y + r!.height));
+    expect((await page.getByTestId('read-graph-axis').boundingBox())!.y - rowBottom).toBeGreaterThanOrEqual(10);
     // the first acceptance: on to the tick marks, which stay drawn; no Read at this stage
     await accept.click();
     expect(await accept.textContent()).toBe('Accept tick marks');
     expect(await page.getByTestId('read-graph-axis').count()).toBe(0);
     expect(await text('tips-bar')).toMatch(/Accept tick marks/);
     expect(await violetPixels()).toBeGreaterThan(50);
+    // the tick marks are the adjustable tick markers (David, 2026-10-19): a grip drags its tick along
+    // the axis, and Ctrl+Z puts it back
+    const before = await lowestVioletGrips();
+    expect(before.length).toBeGreaterThanOrEqual(3);
+    const grip = before[1]!; // a tick with neighbours on both sides
+    await page.mouse.move(grip.x, grip.y);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + 12, grip.y + 30, { steps: 6 });
+    await page.mouse.up();
+    await page.mouse.move(2, 300);
+    await page.waitForTimeout(300);
+    const after = await lowestVioletGrips();
+    expect(after.length).toBe(before.length); // along the axis, never off it: still on the grips' row
+    expect(after[1]!.x - grip.x).toBeGreaterThan(6);
+    expect(Math.abs(after[0]!.x - before[0]!.x)).toBeLessThan(2); // the others stay
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(300);
+    expect(Math.abs((await lowestVioletGrips())[1]!.x - grip.x)).toBeLessThan(2);
     expect(await text('calibrated-status')).toBe('4/4 set');
     // Previous goes back one stage, to the axis points, which are kept
     await page.getByRole('button', { name: '< Previous' }).click();
@@ -288,5 +340,23 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     const l = (await loupe.boundingBox())!;
     const overlap = l.x < card.x + card.width && l.x + l.width > card.x && l.y < card.y + card.height && l.y + l.height > card.y;
     expect(overlap).toBe(false);
+  });
+
+  it('a reason the walk cannot go on is a warning with the triangle, at the bottom of the card (David, 2026-10-19)', { timeout: 120000 }, async () => {
+    await openAndCapture(SAMPLE('bar-tensile-strength'));
+    await page.getByRole('button', { name: 'Try automatic graph extraction (beta)' }).click();
+    await page.getByTestId('axes-type-panel').waitFor();
+    await page.getByTestId('axes-option-bar').click();
+    const card = page.getByTestId('axes-card');
+    await card.waitFor();
+    await page.getByRole('button', { name: 'Read graph axis' }).click();
+    const w = page.getByTestId('read-axis-warnings');
+    await w.waitFor();
+    // (a picture: the detector is not built yet, so the walk cannot read its axes)
+    expect(await text('read-axis-notice')).toMatch(/cannot|not built|not available/);
+    expect(await w.locator('svg').count()).toBe(1);
+    const c = (await card.boundingBox())!;
+    const b = (await w.boundingBox())!;
+    expect(Math.abs(c.y + c.height - (b.y + b.height))).toBeLessThan(4);
   });
 });

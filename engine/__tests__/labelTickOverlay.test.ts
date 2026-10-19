@@ -3,7 +3,7 @@
  * 2026-10-18: "Why are you not using the same tick mark graphics that we had developed before?").
  */
 import { describe, expect, it } from 'vitest';
-import { labelTickGlyphs } from '../labelTickOverlay.js';
+import { labelTickGlyphs, labelTickMarkers, labelTickFromId, moveLabelTick } from '../labelTickOverlay.js';
 import { CATEGORY_TICK_COLOR } from '../categoryTickOverlay.js';
 import type { AxesFromLabels, AxisFromLabels } from '../labelCalibration.js';
 
@@ -21,9 +21,19 @@ describe('the read tick marks, drawn as the category ticks are', () => {
   );
   const g = labelTickGlyphs(r);
 
-  it('one axis line and one mark per tick, in the structure violet, with no grip (not adjustable yet)', () => {
+  it('one axis line and one mark per tick, in the structure violet; each mark with its grip, as the category ticks', () => {
     expect(g).toHaveLength(2 + 3 + 2);
-    expect(g.every((x) => x.color === CATEGORY_TICK_COLOR && x.grip === null && x.markerId === null)).toBe(true);
+    expect(g.every((x) => x.color === CATEGORY_TICK_COLOR)).toBe(true);
+    const marks = g.filter((x) => x.markerId !== null);
+    expect(marks).toHaveLength(5);
+    expect(marks.every((m) => m.grip !== null)).toBe(true);
+  });
+
+  it('(David, 2026-10-19: "You have still not used the adjustable tick markers") each mark has its draggable handle, bound to its axis, with the same identity as its mark', () => {
+    const m = labelTickMarkers(r);
+    expect(m).toHaveLength(5);
+    expect(m.every((x) => x.draggable === true && x.kind === 'aid' && x.dragLine !== undefined)).toBe(true);
+    expect(new Set(m.map((x) => x.id))).toEqual(new Set(g.filter((x) => x.markerId !== null).map((x) => x.markerId)));
   });
 
   it('an X axis along the bottom: the line runs the ticks\' span, the marks stand DOWN, toward the labels', () => {
@@ -46,5 +56,29 @@ describe('the read tick marks, drawn as the category ticks are', () => {
   it('a refused axis draws nothing', () => {
     const t = labelTickGlyphs(read({ axis: 'x', ok: false, reason: 'r', pairs: [], unused: [] }, axis('y', 'left', [[50, 300], [50, 100]])));
     expect(t).toHaveLength(1 + 2);
+  });
+});
+
+describe('dragging a read tick mark, by the category ticks\' rules', () => {
+  const r = read(axis('x', 'bottom', [[100, 400], [200, 400], [300, 400]]), axis('y', 'left', [[50, 300], [50, 100]]));
+
+  it('the handle\'s drop is projected onto the axis line: the tick moves along it, never off it', () => {
+    const id = labelTickMarkers(r).find((m) => labelTickFromId(m.id)?.axis === 'x' && labelTickFromId(m.id)?.index === 1)!.id;
+    const moved = moveLabelTick(r, id, { x: 230, y: 414 })!;
+    expect(moved.x.ok && moved.x.pairs[1]!.tick).toEqual([230, 400]);
+    expect(moved.x.ok && moved.x.pairs[0]!.tick).toEqual([100, 400]);
+  });
+
+  it('a tick cannot cross its neighbour', () => {
+    const id = labelTickMarkers(r).find((m) => labelTickFromId(m.id)?.axis === 'x' && labelTickFromId(m.id)?.index === 1)!.id;
+    const moved = moveLabelTick(r, id, { x: 350, y: 414 })!;
+    const x = moved.x.ok ? moved.x.pairs[1]!.tick[0] : NaN;
+    expect(x).toBeGreaterThan(100);
+    expect(x).toBeLessThan(300);
+  });
+
+  it('an id that is not a read tick changes nothing', () => {
+    expect(labelTickFromId('categoryTick2')).toBeNull();
+    expect(moveLabelTick(r, 'x1', { x: 0, y: 0 })).toBeNull();
   });
 });
