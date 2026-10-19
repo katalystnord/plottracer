@@ -196,6 +196,12 @@ describe('Automatic graph extraction (beta), phase 1', () => {
     expect(Math.abs(row[1]!.y - row[2]!.y)).toBeLessThan(3);
     expect(row[0]!.x).toBeLessThan(row[1]!.x);
     expect(row[1]!.x).toBeLessThan(row[2]!.x);
+    // the row is centred as one group, with equal gaps (David, 2026-10-19: the same rule as a single button)
+    const gap1 = row[1]!.x - (row[0]!.x + row[0]!.width), gap2 = row[2]!.x - (row[1]!.x + row[1]!.width);
+    expect(Math.abs(gap1 - gap2)).toBeLessThan(2);
+    const cardBoxRow = (await card.boundingBox())!;
+    const rowMid = (row[0]!.x + row[2]!.x + row[2]!.width) / 2;
+    expect(Math.abs(rowMid - (cardBoxRow.x + cardBoxRow.width / 2))).toBeLessThan(3);
     expect((await page.getByTestId('calib-fold').boundingBox())!.y).toBeLessThan(row[0]!.y);
     // David, 2026-10-18: the row fits inside the card, and Read and Accept are their own size, not
     // the card's full width

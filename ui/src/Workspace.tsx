@@ -9517,15 +9517,15 @@ export function Workspace() {
               Log X, Log Y or Skip rotation: the read sets the log boxes itself. */}
           {autoView.axesCard && calibExpanded && (
             <div data-testid="axes-card" style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, width: 340, maxWidth: '100%' }}>
-              {/* a single button sits centred, with a little space under the row above it (David) */}
-              <span style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+              {/* the row and each single button sit centred, the row with a little space under it (David) */}
+              <span style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
                 <button type="button" data-testid="auto-previous" onClick={previousAutoStep} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                   &lt; Previous
                 </button>
                 <button type="button" data-testid="leave-automatic" onClick={() => autoStep({ kind: 'leave' })} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                   {autoView.axesCard.leave}
                 </button>
-                <button type="button" data-testid="reset-calibration" onClick={reset} style={{ fontSize: 12, whiteSpace: 'nowrap', marginLeft: 'auto' }}>
+                <button type="button" data-testid="reset-calibration" onClick={reset} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
                   Reset calibration
                 </button>
               </span>
