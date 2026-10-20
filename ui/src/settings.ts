@@ -6,9 +6,9 @@
  * written into a project file; each one either sets a tool's STARTING value or
  * decides how an export is written.
  *
- * ⚑ The main process owns the file (ui/electron-settings.cjs), because the agent
- * switch that lands with the MCP server has to be readable there before any
- * window has a figure. This side reads it once at start and writes each change
+ * ⚑ The main process owns the file (ui/electron-settings.cjs), so a setting it
+ * acts on is readable there before any window has a figure (the agent switch,
+ * on the mcp-server branch). This side reads it once at start and writes each change
  * straight back. Outside Electron (a unit test, a plain browser) the same store
  * falls back to localStorage, the way panelWidth.ts already persists.
  */
@@ -22,13 +22,6 @@ export interface Settings {
   labelConfidence: number;
   exportFullPrecision: boolean;
   decimalComma: boolean;
-  agentsEnabled: boolean;
-  /** The folder an agent may open figures from and save into (M6, M10); '' = none. */
-  agentFolder: string;
-  agentMaySave: boolean;
-  /** M14: how an agent works when it connects - in rounds the user approves, or on its own. */
-  agentStartMode: 'rounds' | 'automatic';
-  agentRoundSize: number;
 }
 
 /** The values the app shipped with before Settings existed. */
@@ -41,20 +34,12 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   labelConfidence: 0.8,
   exportFullPrecision: false,
   decimalComma: false,
-  agentsEnabled: false,
-  agentFolder: '',
-  agentMaySave: false,
-  agentStartMode: 'rounds',
-  agentRoundSize: 5,
 });
 
-/** `under`: the row shows only while that switch is on - so with agents off, the
- * card shows nothing of them but the switch itself. */
+/** `under`: the row shows only while that switch is on. */
 type SpecBase = { key: keyof Settings; group: string; label: string; explains: string; under?: keyof Settings };
 export type SettingSpec =
   | (SpecBase & { kind: 'boolean' })
-  | (SpecBase & { kind: 'folder' })
-  | (SpecBase & { kind: 'choice'; options: readonly { value: string; label: string }[] })
   | (SpecBase & { kind: 'number'; min: number; max: number; step: number; integer: boolean });
 
 /**
@@ -103,32 +88,6 @@ export const SETTING_SPECS: readonly SettingSpec[] = [
     label: 'Decimal comma',
     explains: 'CSV and TSV write 1,5 instead of 1.5, and CSV separates fields with a semicolon, which is what a spreadsheet set to Swedish or German expects. JSON, the workbooks and the code formats are unchanged.',
   },
-  {
-    key: 'agentsEnabled', group: 'Agents', kind: 'boolean',
-    label: 'Let agents use PlotTracer',
-    explains: 'An AI agent on this computer can connect over MCP, look at the figure and work in this window; every step it takes shows here. You pick the graph type and calibrate - the agent cannot.',
-  },
-  {
-    key: 'agentFolder', group: 'Agents', kind: 'folder', under: 'agentsEnabled',
-    label: 'Folder agents may open from',
-    explains: 'An agent can list and open the figures in this folder (and two levels of folders inside it), and nothing outside it.',
-  },
-  {
-    key: 'agentMaySave', group: 'Agents', kind: 'boolean', under: 'agentsEnabled',
-    label: 'Agents may save into the folder',
-    explains: 'Lets an agent write its exports into that folder. It never writes over an existing file. Off, an export is only handed back to the agent.',
-  },
-  {
-    key: 'agentStartMode', group: 'Agents', kind: 'choice', under: 'agentsEnabled',
-    label: 'An agent starts',
-    options: [{ value: 'rounds', label: 'In rounds' }, { value: 'automatic', label: 'Automatic' }],
-    explains: 'In rounds, an agent takes a few steps, then waits for you to approve them, undo them, or let it go on by itself. Automatic, it goes on until you pause it. The strip along the canvas switches it while an agent works.',
-  },
-  {
-    key: 'agentRoundSize', group: 'Agents', kind: 'number', under: 'agentsEnabled', min: 1, max: 50, step: 1, integer: true,
-    label: 'Steps in a round',
-    explains: 'How many steps that change the figure an agent takes before it waits for you. Looking at the figure is not a step.',
-  },
 ];
 
 /** Each key's value if it passes its spec's limits, else the default (S3). */
@@ -140,10 +99,6 @@ export function parseSettings(raw: unknown): Settings {
     const v = src[spec.key];
     if (spec.kind === 'boolean') {
       if (typeof v === 'boolean') (out[spec.key] as boolean) = v;
-    } else if (spec.kind === 'folder') {
-      if (typeof v === 'string' && v.length <= 4096) (out[spec.key] as string) = v;
-    } else if (spec.kind === 'choice') {
-      if (typeof v === 'string' && spec.options.some((o) => o.value === v)) (out[spec.key] as string) = v;
     } else if (
       typeof v === 'number' && Number.isFinite(v) && v >= spec.min && v <= spec.max && (!spec.integer || Number.isInteger(v))
     ) {

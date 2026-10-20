@@ -10,7 +10,7 @@ import type { LinePoint } from '../lineEdits.js';
  * number, if you have not changed the name"*.
  *
  * A name PlotTracer gives is "Series N" where N is the series' place in the
- * list - the number the table and an agent use for it - so a removal or a
+ * list - the number the table uses for it - so a removal or a
  * merge closes the count up by itself. A name a person typed is theirs and is
  * never changed.
  */

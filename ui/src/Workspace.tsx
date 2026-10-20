@@ -64,11 +64,6 @@ import type { AvoidRect } from '../../engine/loupePosition.js';
 import { Menu, MenuItem, Divider } from '@mui/material';
 import { IconButton } from './IconButton.js';
 import { GraphTypeCardPicker } from './GraphTypeCardPicker.js';
-import { AgentStrip, type AgentRoundsControls } from './agent/AgentStrip.js';
-import { AgentRounds } from './agent/agentRounds.js';
-import { useAgentBridge, useAgentStatus, type AgentHost } from './agent/useAgentBridge.js';
-import { AgentStepLog, recordCount } from './agent/agentDoing.js';
-import { NOT_CALIBRATED } from './agent/agentTools.js';
 import {
   AppShell,
   TopBar,
@@ -669,63 +664,6 @@ export function Workspace() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  // Agents (v2.7, docs/v2.7-mcp-cases.md): the server's state, and the host a
-  // tool call is answered from - refreshed every render below, after the facts
-  // it reads exist.
-  const agentStatus = useAgentStatus();
-  const agentHostRef = useRef<AgentHost | null>(null);
-  const agentStepsRef = useRef(new AgentStepLog<DocSnapshot>());
-  // M7: an agent asked for a step this figure is not calibrated for, so the
-  // screen says it is waiting for the person. Remembered with WHICH connection
-  // and WHICH document it waits on, so it ends by itself when either changes,
-  // and is shown only while that document is uncalibrated.
-  const [agentWaitingOn, setAgentWaitingOn] = useState<{ client: number; session: object } | null>(null);
-  const agentClient = agentStatus?.client?.since ?? null;
-  // a new connection starts with no steps of its own (M11)
-  const agentStepsClientRef = useRef<number | null>(null);
-  /** Poll until `get` gives something, or give up after `ms`. */
-  const waitFor = async <T,>(get: () => T | null | undefined, ms: number): Promise<T | null> => {
-    const end = Date.now() + ms;
-    for (;;) {
-      const v = get();
-      if (v) return v;
-      if (Date.now() > end) return null;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-  };
-  const agentSteps = () => {
-    if (agentStepsClientRef.current !== agentClient) {
-      agentStepsRef.current.clear();
-      agentStepsClientRef.current = agentClient;
-    }
-    return agentStepsRef.current;
-  };
-  // M14: the connected agent's rounds - one per connection, starting as
-  // Settings says (R10, R11).
-  const agentRoundsRef = useRef<{ client: number; rounds: AgentRounds } | null>(null);
-  const agentRounds = (): AgentRounds | null => {
-    if (agentClient === null) return null;
-    if (agentRoundsRef.current?.client !== agentClient) {
-      agentRoundsRef.current = {
-        client: agentClient,
-        rounds: new AgentRounds({ size: settingsRef.current.agentRoundSize, mode: settingsRef.current.agentStartMode }),
-      };
-    }
-    return agentRoundsRef.current.rounds;
-  };
-  const recordAgentStep = (label: string) => {
-    agentSteps().record(history.getPresent(), label);
-    agentRounds()?.afterStep(label);
-  };
-  const [, setRoundsTick] = useState(0);
-  useEffect(() => {
-    const r = agentRounds();
-    if (!r) return;
-    return r.subscribe(() => setRoundsTick((t) => t + 1));
-    // the rounds are made per connection, so the connection is the dependency
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentClient]);
-  useAgentBridge(agentHostRef);
   const [axesTypeId, setAxesTypeId] = useState(XY_AXES_CONFIG.id);
   const sessionRef = useRef<CalibrationSession<CalibratedAxes>>(new CalibrationSession(XY_AXES_CONFIG));
   /** Last image height reported by the canvas -- see handleCanvasStatus. Every
@@ -1785,13 +1723,7 @@ export function Workspace() {
   // measured on the PDF's own drawing (engine/pdfDrawing.ts) and said on the
   // calibration card. Re-measured whenever the record changes (an edit, a new
   // page, a reopened project); the page's drawing is read once per PDF page.
-  const [figureKindText, setFigureKindTextState] = useState<string | null>(null);
-  // mirrored in a ref for the agent's get_state, which reads without re-rendering
-  const figureKindTextRef = useRef<string | null>(null);
-  const setFigureKindText = useCallback((t: string | null) => {
-    figureKindTextRef.current = t;
-    setFigureKindTextState(t);
-  }, []);
+  const [figureKindText, setFigureKindText] = useState<string | null>(null);
   const pageDrawingRef = useRef<{ bytes: Uint8Array; page: number; read: Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; items: PageText[]; pageArea: number }> } | null>(null);
   /** The kind as last measured, for Find lines to choose its source by (V12). */
   const figureKindRef = useRef<FigureKind | null>(null);
@@ -2176,7 +2108,7 @@ export function Workspace() {
     setCropMode(false);
     setCropRect(null);
   }, []);
-  /** Mask an area (Image ▸ Mask an area, and an agent's mask_area, v2.7 M9).
+  /** Mask an area (Image ▸ Mask an area; an agent's mask_area too, on the mcp-server branch).
    * Returns the refusal, else null once the area is painted out and recorded. */
   const maskArea = useCallback((rect: { x: number; y: number; width: number; height: number }): string | null => {
     const img = imageCanvasRef.current?.getImageData();
@@ -3604,7 +3536,7 @@ export function Workspace() {
       setMode(calibrated ? 'place-point' : 'calibrate');
       setCalibExpanded(!calibrated); // calibrated -> folded; not -> show the steps
     },
-    [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale]
+    [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale, setOcrProposals, setOcrError, setOcrBand, setOcrAngleNotice]
   );
 
   const restoreDoc = useCallback(
@@ -4013,7 +3945,6 @@ export function Workspace() {
   );
 
   const resetForNewImage = useCallback(() => {
-    agentRoundsRef.current?.rounds.newFigure(); // R12: a new figure starts a fresh round
     resetDocument(axesTypeId);
   }, [resetDocument, axesTypeId]);
 
@@ -4237,10 +4168,10 @@ export function Workspace() {
 
   /**
    * Place one data point at a figure pixel, exactly as a click in place-point
-   * mode does - without the undo entry, which the caller records. A click and an
-   * agent's place_points (v2.7 M9) both come through here, so an agent's point
-   * IS a click: the same spider snap, the same insert-in-place, the same contour
-   * closing.
+   * mode does - without the undo entry, which the caller records. Every way of
+   * placing a point comes through here (an agent's place_points too, on the
+   * mcp-server branch), so each IS a click: the same spider snap, the same
+   * insert-in-place, the same contour closing.
    */
   const placePointAt = useCallback(
     (px: number, py: number) => {
@@ -5191,7 +5122,7 @@ export function Workspace() {
       setOcrAngleNotice(null);
       setOcrProposals(answer.proposals);
     },
-    [session, ocrTarget, heatmapBandFrame]
+    [session, ocrTarget, heatmapBandFrame, setOcrError, setOcrBand, setOcrAngleNotice, setOcrProposals]
   );
 
   /**
@@ -5313,7 +5244,7 @@ export function Workspace() {
     setOcrProposals(null);
     setOcrError(null);
     if (wrote) commit();
-  }, [ocrProposals, session, commit, ocrTarget, setHeatmapCategoryNames]);
+  }, [ocrProposals, session, commit, ocrTarget, setHeatmapCategoryNames, setOcrProposals, setOcrError]);
 
   // Name one point's category in the spreadsheet (v1.3 #9) -- the Bar /
   // categorical-line counterpart of setTupleLabel above, and it commits the same
@@ -6198,8 +6129,8 @@ export function Workspace() {
   }, [confirmDiscardIfDirty, loadCalibratedFigure, setSourcePdf, buildFigureRecordFromDeserialized, restoreFigure, closePdf, importForeignProject]);
 
 
-  // What an export is made of, built once for the Export menu and for an
-  // agent's export (v2.7 M10), so both hand out the same record.
+  // What an export is made of, built once, so every export hands out the same
+  // record (an agent's export too, on the mcp-server branch).
   const buildExportAssembly = useCallback(
     (exportAxes: NonNullable<ReturnType<typeof session.getAxes>>, scopeOverride?: 'active' | 'all') => {
       // Precision: round each value to the figure's own resolution unless the
@@ -6902,9 +6833,9 @@ export function Workspace() {
   // F1-F12, K1). The colour is By colour's own pick: the same question asked
   // by a different reader.
 
-  // ⚑ The colour is an argument, and the card's sentence is the answer, so the
-  // button and an agent's find_lines (v2.7 M8) are one path: the agent is told
-  // what the card says, word for word.
+  // ⚑ The colour is an argument, and the card's sentence is the answer, so every
+  // caller is one path, told what the card says word for word (an agent's
+  // find_lines too, on the mcp-server branch).
   // ⚑ v2.7 V30: sharp zoom. Past 100% on a drawn (or partly drawn) figure, the
   // part in view is redrawn from the PDF at the screen's resolution, a moment
   // after the view settles, and painted over the picture - placed through the
@@ -7169,10 +7100,13 @@ export function Workspace() {
     commit();
     setSeriesResults(said);
   }, [seriesRows, findLinesWith, colorTraceWith, colorTraceShape, commit]);
+  // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
+  // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as
+  // modifying a hook argument; it is the intended latest-callback pattern. (Hidden in v2.7 while the agent host
+  // made the compiler skip this component.)
   const findLinesWithRef = useRef(findLinesWith);
-  useEffect(() => {
-    findLinesWithRef.current = findLinesWith;
-  }, [findLinesWith]);
+  // eslint-disable-next-line react-hooks/immutability
+  findLinesWithRef.current = findLinesWith;
 
   /** C4: unset contour levels filled in from the ones the user has set, in equal
    * steps between them - refused, and saying why, where the levels are uneven. */
@@ -7379,15 +7313,14 @@ export function Workspace() {
    * line is picked: a click on a line in Select ▸ Whole series, and the series'
    * name in the table header (David 2026-10-12: *"choose and activate a line by
    * clicking the series name. Clicking again deselects it"*). A selection is
-   * drawn only in Select, so that is where it lands, as the agent's does.
+   * drawn only in Select, so that is where it lands.
    */
   const selectWholeSeries = useCallback(
     (index: number, add = false) => {
       const n = session.getDatasets()[index]?.getCount() ?? 0;
       const whole = Array.from({ length: n }, (_, i) => i);
       // ⚑ Shift ADDS the line to what is picked, as Shift adds everywhere in
-      // Select - so several wrong pieces go with one Del, the way an agent's
-      // remove_series takes a list (role-play 2026-10-12).
+      // Select - so several wrong pieces go with one Del.
       const lineType = findLinesKind(session.getConfig().id) !== null;
       if (add && lineType && mode === 'select' && lineSelection.length && session.getLinePoints(index) && !session.isGuidePointLine(index)) {
         const others = lineSelection.filter((x) => x.index !== index);
@@ -7418,10 +7351,13 @@ export function Workspace() {
     },
     [session, mode, selectedPointIndices, lineSelection, handleSelectDataset, bump]
   );
+  // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
+  // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as
+  // modifying a hook argument; it is the intended latest-callback pattern. (Hidden in v2.7 while the agent host
+  // made the compiler skip this component.)
   const selectWholeSeriesRef = useRef(selectWholeSeries);
-  useEffect(() => {
-    selectWholeSeriesRef.current = selectWholeSeries;
-  }, [selectWholeSeries]);
+  // eslint-disable-next-line react-hooks/immutability
+  selectWholeSeriesRef.current = selectWholeSeries;
 
   const handleRenameDraft = useCallback(
     (index: number, name: string) => {
@@ -8865,195 +8801,6 @@ export function Workspace() {
 
   const noPointsHint = buildNoPointsHint({ mode, config, heatmapHasGrid: heatmapShownGrid !== null });
 
-  // ⚑ What an agent is told is read from the same values the screen shows: the
-  // tips bar's sentence, the series list, the places to check (M5).
-  agentHostRef.current = {
-    getState: () => ({
-      figure: canvasHasImage
-        ? {
-            fileName: imageCanvasRef.current?.getImageFileName() ?? null,
-            width: canvasImageDims.w,
-            height: canvasImageDims.h,
-            ...(pdfStateRef.current ? { page: { page: pdfStateRef.current.page, count: pdfStateRef.current.pageCount } } : {}),
-          }
-        : null,
-      graphType: sessionRef.current.getConfig().label,
-      calibrated: sessionRef.current.getAxes() !== null,
-      // ⚑ Read off the rail as drawn, so the agent is told what the user sees,
-      // greyed tools with the reason the screen gives.
-      figureKind: figureKindTextRef.current,
-      screenTools: [...(railColRef.current?.querySelectorAll<HTMLButtonElement>('button[data-testid^="mode-"]') ?? [])].map((b) => {
-        const cfgNow = sessionRef.current.getConfig();
-        const choices = b.dataset['testid'] === 'mode-auto-extract'
-          ? AUTO_EXTRACT_CHOICES.filter((c) => autoExtractModesFor(cfgNow.autoExtractKind, cfgNow.id).includes(c.m)).map((c) => c.label)
-          : undefined;
-        return { name: b.dataset['label'] ?? b.getAttribute('aria-label') ?? '', greyed: b.disabled ? b.getAttribute('aria-label') : null, ...(choices && !b.disabled ? { choices } : {}) };
-      }),
-      calibration: (() => {
-        const placed = sessionRef.current.getPlacedPoints();
-        return sessionRef.current.getSteps().flatMap((st) => {
-          const p = placed[st.key];
-          if (!p) return [];
-          return [{ label: st.label, px: p.px, py: p.py, values: st.valueFields.map((f, i) => ({ label: f.label, value: p.values[i] ?? '' })).filter((v) => v.value !== '') }];
-        });
-      })(),
-      step: axes === null && currentStep ? { index: session.getStepIndex(), count: steps.length, label: currentStep.label } : null,
-      tip: ocrError ?? guidanceTip,
-      // ⚑ LIVE, from the session: a result written right after a step must
-      // count what the step made, not what the screen last drew.
-      series: sessionRef.current.getDatasetInfos().map((d) => {
-        const level = sessionRef.current.getContourLevel(d.index);
-        return {
-          index: d.index,
-          name: d.name,
-          colour: d.color,
-          pointCount: d.pointCount,
-          record:
-            sessionRef.current.getExportShape() === 'heatmap'
-              ? `no points: a heatmap's record is its cells, ${heatmapCellsRef.current.length} read (export gives them)`
-              : recordCount(sessionRef.current, d.index),
-          level: level ? { value: level.value, source: level.source } : null,
-          selected: d.active,
-          labelRead: (() => {
-            const lr = sessionRef.current.getLabelRead(d.index);
-            return lr ? { text: lr.text, value: lr.value, refused: lr.refused } : null;
-          })(),
-        };
-      }),
-      places: placesShown(),
-      working: agentRounds()?.describe() ?? null,
-    }),
-    renderRegion: (r) => imageCanvasRef.current?.getRegionPngDataURL(r) ?? null,
-    session: () => sessionRef.current,
-    placeLikeClick: placePointAt,
-    // M11: the step is ONE entry on the shared history, remembered as the
-    // agent's so its own undo can tell whether it is still the newest.
-    commitStep: (label) => {
-      commit();
-      recordAgentStep(label);
-    },
-    undoAgentStep: () => {
-      const c = agentSteps().check(history.getPresent());
-      if (c === 'none' || c === 'user-changed') return c;
-      undo();
-      agentSteps().pop();
-      agentRounds()?.stepUndone();
-      return { undone: c.label };
-    },
-    showSelection: (series, points) => {
-      sessionRef.current.setActiveDataset(series);
-      // a selection is drawn, and kept, only in Select - so that is where the
-      // agent's selection is shown, as the user's own would be
-      if (points.length) setMode('select');
-      setLineSelection([]);
-      setSelectedPointIndices([...points]);
-      setActivePointIndex(points.length === 1 ? points[0]! : null);
-      bump();
-    },
-    waitingForCalibration: () => { if (agentClient !== null) setAgentWaitingOn({ client: agentClient, session: sessionRef.current }); },
-    afterRender: () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
-    findLines: async (colour, at) => {
-      // the card shows what the agent asked for: its mode, its colour, its result
-      setMode('find-lines');
-      setColorTraceColor(colour);
-      const before = history.getPresent();
-      const r = await findLinesWith(colour, at ? { at } : {});
-      if (history.getPresent() !== before) recordAgentStep(at ? `Found the line at (${Math.round(at[0])}, ${Math.round(at[1])})` : `Found lines of colour ${colour}`);
-      return r;
-    },
-    inkAt: (x, y) => {
-      const imageData = imageCanvasRef.current?.getImageData();
-      return imageData ? rgbToHex(sampleInkRgb(imageData, x, y)) : null;
-    },
-    maskArea: (rect) => {
-      const refusal = maskArea(rect);
-      if (!refusal) recordAgentStep('Masked an area');
-      return refusal;
-    },
-    exportText: (format, scope) => {
-      const ax = sessionRef.current.getAxes();
-      if (!ax) return { error: NOT_CALIBRATED };
-      const assembly = buildExportAssembly(ax, scope);
-      if (format === 'json') return { content: buildExportJson(assembly) };
-      return { content: renderTable(buildExportSections(assembly), format, { decimalComma: settingsRef.current.decimalComma }) };
-    },
-    saveFile: async (name, content) =>
-      window.electronAPI?.agentSaveFile ? window.electronAPI.agentSaveFile(name, content) : { error: 'Saving needs the PlotTracer app.' },
-    settings: () => ({ decimalComma: settingsRef.current.decimalComma, fullPrecision: exportFullPrecision }),
-    rounds: agentRounds,
-    openFigure: async ({ name, dataURL, page }) => {
-      // ⚑ An agent never discards the user's work: where a person would be asked,
-      // the agent is refused and told why.
-      if (dirtyRef.current) {
-        return { isError: true, content: [{ type: 'text', text: 'The user has work in PlotTracer that is not saved or exported, so opening another figure would discard it. Ask the user to save or export it first.' }] };
-      }
-      const canvas = imageCanvasRef.current;
-      if (!canvas) return { isError: true, content: [{ type: 'text', text: 'PlotTracer is still starting. Try again in a moment.' }] };
-      agentSteps().clear();
-      // a new document: the round's steps were on the old one and cannot be undone here
-      const r = agentRounds();
-      if (r) r.setMode(r.view().mode);
-      const before = canvas.getImageData();
-      await canvas.openFileContent(dataURL, name);
-      const doc = pdfDocRef.current;
-      const paged = doc !== null && pdfStateRef.current !== null;
-      if (page !== undefined && page !== 1) {
-        if (!paged || !doc || page > doc.pageCount) {
-          return { isError: true, content: [{ type: 'text', text: `Opened ${name}, but it has no page ${page}${paged && doc ? `; it has ${doc.pageCount}` : ' - it is a single image'}. Page 1 is shown.` }] };
-        }
-        await waitFor(() => (canvas.getImageData() !== before ? true : null), 20000);
-        const page1 = canvas.getImageData();
-        await goToPdfPage(page);
-        await waitFor(() => (canvas.getImageData() !== page1 ? true : null), 20000);
-      }
-      // ⚑ Answered only once the figure is on screen: a PDF page renders after
-      // the open returns, and an answer before it would describe nothing.
-      const shown = await waitFor(() => {
-        const img = canvas.getImageData();
-        return img && img !== before && (!paged || pdfStateRef.current?.page === (page ?? 1)) ? img : null;
-      }, 20000);
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-      agentHostRef.current?.waitingForCalibration();
-      const size = shown ? ` (${shown.width} × ${shown.height} pixels)` : '';
-      const pages = paged && doc ? `, page ${page ?? 1} of ${doc.pageCount}` : '';
-      return { content: [{ type: 'text', text: `Opened ${name}${pages}${size}. ${NOT_CALIBRATED}` }] };
-    },
-  };
-
-  // M14: what the strip shows of the rounds, and the person's answers (R2-R6).
-  const agentRoundsControls: AgentRoundsControls | null = (() => {
-    const r = agentRounds();
-    if (!r) return null;
-    const view = r.view();
-    const n = view.steps.length;
-    const undoRoundDisabled =
-      n === 0
-        ? 'There is nothing in this round to undo.'
-        : agentSteps().check(history.getPresent()) === 'user-changed'
-          ? 'You have changed the figure since the agent’s last step, so Undo this round could take back your own work. Use Undo in the top bar instead.'
-          : agentSteps().size() < n
-            ? 'Some of this round’s steps can no longer be undone here; use Undo in the top bar.'
-            : null;
-    return {
-      view,
-      undoRoundDisabled,
-      onApprove: () => r.approve(),
-      onUndoRound: () => {
-        if (undoRoundDisabled) return;
-        // exactly the round's steps, off the same history (R4)
-        for (let i = 0; i < n; i++) {
-          undo();
-          agentSteps().pop();
-        }
-        r.undoRound();
-      },
-      onContinueAutomatically: () => r.continueAutomatically(),
-      onPause: () => r.pause(),
-      onResume: () => r.resume(),
-      onSetMode: (mode) => r.setMode(mode),
-    };
-  })();
-
   // The Measure card's reference line is tool-aware: Slope reads the chart axes;
   // Distance/Area read the Set-scale px->unit; Angle is degrees (no reference).
 
@@ -9308,7 +9055,7 @@ export function Workspace() {
             plus the upstream/licence attribution -- which needs a home now the
             native menu (its Help > About) is hidden. */}
         <TopBarGroup>
-          <SettingsMenu settings={settings} onChange={updateSettings} agentStatus={agentStatus} />
+          <SettingsMenu settings={settings} onChange={updateSettings} />
           <HelpMenu
             onOpenHelpOverlay={() => setHelpOverlayOpen(true)}
             onOpenExample={(ex) => void openExample(ex)}
@@ -9319,17 +9066,6 @@ export function Workspace() {
       </TopBar>
 
       <CanvasRegion ref={canvasRegionRef}>
-        {/* M3: which agent is connected, since when, and Disconnect. Along the
-            bottom edge of the canvas, where it covers the least of a figure. */}
-        <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 6 }}>
-          <AgentStrip
-            status={agentStatus}
-            waiting={agentWaitingOn !== null && agentWaitingOn.client === agentClient && agentWaitingOn.session === session && axes === null}
-            rounds={agentRoundsControls}
-            onDisconnect={() => { void window.electronAPI?.disconnectAgent?.(); }}
-            onAllowReconnect={() => { void window.electronAPI?.allowAgentReconnect?.(); }}
-          />
-        </div>
         {/* Foldable calibration card-bar (checkpoint 50), anchored to the TOP of
             the canvas and overlaid on the chart -- most charts keep their plot
             (and the calibration points) in the lower/left region, so the top

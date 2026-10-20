@@ -1,6 +1,6 @@
 // The Settings file (v2.7, docs/v2.7-settings-cases.md), owned by the main
-// process so the agent switch that lands with the MCP server can be read here
-// before any window has a figure.
+// process so a setting the main process acts on can be read here before any
+// window has a figure (the agent switch did, on the mcp-server branch).
 //
 // ⚑ This side stores and returns a plain object and nothing more. Which keys
 // exist and what values they may hold is decided in ONE place, the renderer's
@@ -47,7 +47,7 @@ function writeSettingsFile(dir, value) {
 // `getDir` is a getter because app.getPath('userData') is only final once the
 // command line (--user-data-dir) has been read.
 // `onWrite` hears every stored value, so the main process can act on a setting
-// it owns (the agent server, M1) without reading the file back.
+// it owns without reading the file back.
 function registerSettingsHandlers(ipcMain, getDir, onWrite) {
   // Synchronous on purpose: the renderer needs the starting values for its
   // first render, and this is one small local file.

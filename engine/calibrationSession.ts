@@ -3060,7 +3060,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     const existing = this.datasetEntries.map((e) => e.dataset.name);
     if (requested !== undefined) return uniqueDatasetName(requested, existing);
     // ⚑ The place it will take in the list (role-play 2026-10-12): a given name
-    // is the number the table and an agent use for the series.
+    // is the number the table uses for the series.
     return freeSeriesNumberName(this.datasetEntries.length + 1, existing);
   }
 

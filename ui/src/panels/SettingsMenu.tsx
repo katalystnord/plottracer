@@ -3,8 +3,6 @@ import { theme } from '../theme.js';
 import { FloatingPanel } from '../FloatingPanel.js';
 import { SettingsIcon } from '../icons.js';
 import { DEFAULT_SETTINGS, SETTING_SPECS, type SettingSpec, type Settings } from '../settings.js';
-import type { AgentStatus } from '../electronApi.js';
-import { agentConfig } from '../agent/useAgentBridge.js';
 
 /**
  * The Settings card (v2.7, docs/v2.7-settings-cases.md) - the gear at the right
@@ -19,43 +17,6 @@ import { agentConfig } from '../agent/useAgentBridge.js';
 export interface SettingsMenuProps {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
-  /** The agent server's state, shown under *Let agents use PlotTracer* (M2). */
-  agentStatus?: AgentStatus | null;
-}
-
-/** Where an agent connects, and what to paste into it (M2) - shown while the
- * switch is on, so turning it on is visibly what made the address exist. */
-function AgentConnection({ status }: { status: AgentStatus | null | undefined }) {
-  const small = { fontSize: theme.font.size.small, lineHeight: 1.35 } as const;
-  if (!status || (!status.listening && !status.error)) {
-    return <div data-testid="setting-agents-status" style={{ ...small, color: theme.color.text.legend, marginTop: 4 }}>Starting…</div>;
-  }
-  if (status.error) {
-    return <div data-testid="setting-agents-status" style={{ ...small, color: theme.color.error, marginTop: 4 }}>{status.error}</div>;
-  }
-  const cfg = agentConfig(status);
-  if (!cfg) return null;
-  const copy = (text: string) => { void navigator.clipboard?.writeText(text).catch(() => undefined); };
-  const code = {
-    display: 'block', fontFamily: 'monospace', fontSize: theme.font.size.small, whiteSpace: 'pre-wrap' as const,
-    wordBreak: 'break-all' as const, background: theme.color.background.panel, border: `1px solid ${theme.color.border.regular}`,
-    borderRadius: theme.border.radius.regular, padding: '4px 6px', margin: '2px 0 4px',
-  };
-  return (
-    <div style={{ marginTop: 6 }}>
-      <div data-testid="setting-agents-status" style={small}>
-        Listening on this computer only, at <span data-testid="setting-agents-address" style={{ fontFamily: 'monospace' }}>{cfg.url}</span>
-      </div>
-      <div style={{ ...small, marginTop: 4 }}>To connect an agent, give it these MCP settings:</div>
-      <code data-testid="setting-agents-config" style={code}>{cfg.json}</code>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button type="button" data-testid="setting-agents-copy-config" onClick={() => copy(cfg.json)}>Copy settings</button>
-      </div>
-      <div style={{ ...small, color: theme.color.text.legend, marginTop: 4 }}>
-        The token in it is the key: only a client holding it can connect, and a web page never can.
-      </div>
-    </div>
-  );
 }
 
 const caption = {
@@ -109,37 +70,7 @@ function NumberSetting({ spec, value, onChange }: {
   );
 }
 
-/** A folder, chosen with the system's own folder picker (M6). */
-function FolderSetting({ label, value, testId, onChange }: { label: string; value: string; testId: string; onChange: (v: string) => void }) {
-  const choose = window.electronAPI?.chooseFolder;
-  return (
-    <div>
-      <div style={{ fontWeight: 600 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-        <span
-          data-testid={testId}
-          title={value || undefined}
-          style={{
-            flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', direction: 'rtl', textAlign: 'left',
-            fontSize: theme.font.size.small, color: value ? theme.color.text.primary : theme.color.text.legend,
-          }}
-        >
-          {value || 'None chosen - agents cannot open or save files'}
-        </span>
-        <button type="button" data-testid={`${testId}-choose`} disabled={!choose} onClick={() => { void choose?.().then((p) => { if (p) onChange(p); }); }}>
-          Choose…
-        </button>
-        {value && (
-          <button type="button" data-testid={`${testId}-clear`} onClick={() => onChange('')}>
-            Clear
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function SettingsMenu({ settings, onChange, agentStatus }: SettingsMenuProps) {
+export function SettingsMenu({ settings, onChange }: SettingsMenuProps) {
   const groups = [...new Set(SETTING_SPECS.map((s) => s.group))];
   const isDefault = SETTING_SPECS.every((s) => settings[s.key] === DEFAULT_SETTINGS[s.key]);
   return (
@@ -150,27 +81,7 @@ export function SettingsMenu({ settings, onChange, agentStatus }: SettingsMenuPr
             <div style={caption}>{g}</div>
             {SETTING_SPECS.filter((s) => s.group === g && (!s.under || settings[s.under] === true)).map((spec) => (
               <div key={spec.key} data-testid={`setting-row-${spec.key}`} style={{ padding: '4px 0 6px', ...(spec.under ? { marginLeft: 22 } : {}) }}>
-                {spec.kind === 'folder' ? (
-                  <FolderSetting label={spec.label} value={settings[spec.key] as string} testId={`setting-${spec.key}`} onChange={(v) => onChange({ [spec.key]: v })} />
-                ) : spec.kind === 'choice' ? (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontWeight: 600 }}>{spec.label}</span>
-                    <span role="radiogroup" aria-label={spec.label} style={{ display: 'flex', gap: 10 }}>
-                      {spec.options.map((o) => (
-                        <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                          <input
-                            type="radio"
-                            name={`setting-${spec.key}`}
-                            data-testid={`setting-${spec.key}-${o.value}`}
-                            checked={settings[spec.key] === o.value}
-                            onChange={() => onChange({ [spec.key]: o.value })}
-                          />
-                          {o.label}
-                        </label>
-                      ))}
-                    </span>
-                  </div>
-                ) : spec.kind === 'boolean' ? (
+                {spec.kind === 'boolean' ? (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -193,7 +104,6 @@ export function SettingsMenu({ settings, onChange, agentStatus }: SettingsMenuPr
                 <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, marginTop: 2, lineHeight: 1.35 }}>
                   {spec.explains}
                 </div>
-                {spec.key === 'agentsEnabled' && settings.agentsEnabled && <AgentConnection status={agentStatus} />}
               </div>
             ))}
           </div>

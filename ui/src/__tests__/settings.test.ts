@@ -60,36 +60,7 @@ describe('Settings (v2.7)', () => {
       labelConfidence: 0.8,
       exportFullPrecision: false,
       decimalComma: false,
-      agentsEnabled: false,
-      agentFolder: '',
-      agentMaySave: false,
-      agentStartMode: 'rounds',
-      agentRoundSize: 5,
     });
-  });
-
-  it('S13 / M6 / M10: no folder is chosen and agents may not save until the user says so', () => {
-    expect(DEFAULT_SETTINGS.agentFolder).toBe('');
-    expect(DEFAULT_SETTINGS.agentMaySave).toBe(false);
-    expect(parseSettings({ agentFolder: '/home/me/figures', agentMaySave: true })).toMatchObject({ agentFolder: '/home/me/figures', agentMaySave: true });
-    expect(parseSettings({ agentFolder: 7, agentMaySave: 'yes' })).toMatchObject({ agentFolder: '', agentMaySave: false });
-  });
-
-  it('S13: the folder and may-save rows sit under the agent switch, shown only while it is on', () => {
-    const under = SETTING_SPECS.filter((s) => s.under === 'agentsEnabled').map((s) => s.key);
-    expect(under).toEqual(['agentFolder', 'agentMaySave', 'agentStartMode', 'agentRoundSize']);
-  });
-
-  it('R10: an agent starts in rounds of 5 unless the user chose otherwise', () => {
-    expect(DEFAULT_SETTINGS).toMatchObject({ agentStartMode: 'rounds', agentRoundSize: 5 });
-    expect(parseSettings({ agentStartMode: 'automatic', agentRoundSize: 3 })).toMatchObject({ agentStartMode: 'automatic', agentRoundSize: 3 });
-    expect(parseSettings({ agentStartMode: 'fast', agentRoundSize: 0 })).toMatchObject({ agentStartMode: 'rounds', agentRoundSize: 5 });
-  });
-
-  it('M1: agents are off until the user turns them on', () => {
-    expect(DEFAULT_SETTINGS.agentsEnabled).toBe(false);
-    expect(parseSettings({ agentsEnabled: 'yes' }).agentsEnabled).toBe(false);
-    expect(parseSettings({ agentsEnabled: true }).agentsEnabled).toBe(true);
   });
 
   it('every default passes its own limits', () => {
