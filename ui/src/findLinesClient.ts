@@ -10,11 +10,12 @@
 import FindLinesWorker from './findLinesWorker.ts?worker&inline';
 import type { FindLinesOptions, FindLinesResult } from '../../algorithms/findLines/lines.js';
 import type { Box, RGB } from '../../algorithms/findLines/ink.js';
+import { work } from './work.js';
 
 const TIMEOUT_MS = 120000;
 
 export function findLinesInWorker(data: Uint8ClampedArray, width: number, height: number, colour: RGB, box: Box, opts: FindLinesOptions): Promise<FindLinesResult | { error: string }> {
-  return new Promise((resolve) => {
+  return work.track(new Promise((resolve) => {
     const worker = new FindLinesWorker();
     const timer = setTimeout(() => {
       worker.terminate();
@@ -32,5 +33,5 @@ export function findLinesInWorker(data: Uint8ClampedArray, width: number, height
     };
     // a copy, so the canvas keeps its own pixels
     worker.postMessage({ data: new Uint8ClampedArray(data), width, height, colour, box, opts });
-  });
+  }));
 }

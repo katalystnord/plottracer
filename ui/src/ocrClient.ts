@@ -3,6 +3,7 @@ import type { CropRect } from '../../engine/imageEdit.js';
 import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
 import { wordsToTicks } from '../../engine/ocrWordsToTicks.js';
 import { whitenColour } from '../../engine/legendRead.js';
+import { work } from './work.js';
 
 /**
  * Turning one dragged band into a proposal per category (v2.4).
@@ -124,7 +125,7 @@ export async function readBandAtAngle(
     const scaledTry = upscaleForOcr(turned);
     const enc = encodeCrop(scaledTry);
     if (!enc) return 0;
-    const a = await api.readText(enc.base64);
+    const a = await work.track(api.readText(enc.base64));
     // ⚑ A FAILED READ SCORES NOTHING, and says so by scoring nothing - which is
     // what `findBandAngle`'s refusal counts. It used to reach the reduce with
     // no words and return 0 indistinguishably from a blank band; that is the
@@ -158,7 +159,7 @@ export async function readBandAtAngle(
   const encoded = encodeCrop(scaled);
   if (!encoded) return { error: 'Could not prepare that region to be read.' };
 
-  const answer = await api.readText(encoded.base64);
+  const answer = await work.track(api.readText(encoded.base64));
   if (answer.error !== undefined) return { error: answer.error };
 
   const readings = wordsToTicks({
@@ -206,7 +207,7 @@ export async function readLabelCrop(crop: { data: Uint8ClampedArray; width: numb
   if (!enc) return { error: 'Could not prepare that label to be read.' };
   // ⚑ `slotCrop` has already isolated, cleaned and margined the label, so it is read box by
   // box as the detector found it (docs/v2.7-paddle-ocr.md, case 12).
-  const answer = await api.readText(enc.base64, { detectorBoxes: true });
+  const answer = await work.track(api.readText(enc.base64, { detectorBoxes: true }));
   if (answer.error !== undefined) return { error: answer.error };
   return { text: answer.text ?? '', confidence: typeof answer.confidence === 'number' ? answer.confidence / 100 : null };
 }
@@ -231,7 +232,7 @@ export async function readRegionWords(
   if (opts.whitenColour) whitenColour(crop.data);
   const enc = encodeCrop(crop);
   if (!enc) return { error: 'Could not prepare the box to be read.' };
-  const answer = await api.readText(enc.base64);
+  const answer = await work.track(api.readText(enc.base64));
   if (answer.error !== undefined) return { error: answer.error };
   // the crop's own frame -> the picture's (the crop may be scaled)
   const sx = rect.width / crop.width, sy = rect.height / crop.height;

@@ -37,6 +37,7 @@ import type { LoadedDocument } from './pagedDocument.js';
 import { sharpRenderTransform } from '../../engine/drawingPlacement.js';
 import type { Provenance } from '../../engine/projectFile.js';
 import { readDrawing, readTextItems, type PageDrawing, type PageText, type PdfOps, type PdfTextItem } from '../../engine/pdfDrawing.js';
+import { work } from './work.js';
 
 pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
 
@@ -64,10 +65,10 @@ const MAX_SCALE = 6;
  * not from an open LoadedDocument, so a reopened project (whose PDF is kept in
  * it, checkpoint 104) can be read too. */
 export async function readPdfPageDrawing(bytes: Uint8Array, n: number): Promise<{ drawing: PageDrawing; text: [number, number, number, number][]; items: PageText[]; pageArea: number }> {
-  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const doc = await work.track(pdfjs.getDocument({ data: bytes.slice() }).promise);
   try {
     const page = await doc.getPage(n);
-    const ops = await page.getOperatorList();
+    const ops = await work.track(page.getOperatorList());
     const items = readTextItems((await page.getTextContent()).items as PdfTextItem[]);
     const [x0, y0, x1, y1] = page.view as number[];
     return { drawing: readDrawing(ops, pdfjs.OPS as unknown as PdfOps), text: items.map((t) => t.box), items, pageArea: (x1! - x0!) * (y1! - y0!) };
@@ -89,7 +90,7 @@ export async function renderPdfRegion(
 ): Promise<HTMLCanvasElement | null> {
   if (!regionDoc || regionDoc.bytes !== bytes) {
     if (regionDoc) void regionDoc.doc.then((d) => d.destroy());
-    regionDoc = { bytes, doc: pdfjs.getDocument({ data: bytes.slice() }).promise };
+    regionDoc = { bytes, doc: work.track(pdfjs.getDocument({ data: bytes.slice() }).promise) };
   }
   const page = await (await regionDoc.doc).getPage(n);
   const unit = page.getViewport({ scale: 1 });
@@ -103,7 +104,7 @@ export async function renderPdfRegion(
   if (!ctx) return null;
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  await page.render({ canvasContext: ctx, viewport: unit, transform: m }).promise;
+  await work.track(page.render({ canvasContext: ctx, viewport: unit, transform: m }).promise);
   return canvas;
 }
 
@@ -117,7 +118,7 @@ export async function renderPdfRegion(
 export async function loadPdf(bytes: Uint8Array): Promise<LoadedDocument> {
   // pdf.js can transfer/detach the buffer it's given; hand it a copy so the
   // caller's bytes (which may still be needed, e.g. to re-detect) stay intact.
-  const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const doc = await work.track(pdfjs.getDocument({ data: bytes.slice() }).promise);
   return {
     pageCount: doc.numPages,
     async renderPage(n: number) {
@@ -135,7 +136,7 @@ export async function loadPdf(bytes: Uint8Array): Promise<LoadedDocument> {
       // digitized figure wants an opaque white page like the printed original.
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvasContext: ctx, viewport }).promise;
+      await work.track(page.render({ canvasContext: ctx, viewport }).promise);
       const t = viewport.transform;
       return { src: canvas.toDataURL('image/png'), pageTransform: [t[0]!, t[1]!, t[2]!, t[3]!, t[4]!, t[5]!] as [number, number, number, number, number, number] };
     },

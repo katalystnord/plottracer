@@ -21,6 +21,8 @@ import { readLineKey, keyPosition, keyPositionOfColour, keyValueAt, keyResolutio
 import { thinFoundLine } from '../../engine/lineEdits.js';
 import type { LabelRead } from '../../engine/contourLabel.js';
 import { PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
+import { StatusRing } from './panels/StatusRing.js';
+import { work } from './work.js';
 import type { NotDataRegion } from '../../core/plotData.js';
 import { guidanceTip as buildGuidanceTip, noPointsHint as buildNoPointsHint } from '../../engine/guidanceTip.js';
 import { buildCanvasMarkers, buildSeriesLines, radialLabelCentre } from '../../engine/canvasOverlays.js';
@@ -6959,15 +6961,19 @@ export function Workspace() {
     const slots = kind === 'contours' && !hasKey && settingsRef.current.readContourLabels ? labelSlots(res.lines, res.labelInk, res.lineWidth) : [];
     const raw: { text: string; confidence: number | null }[] = [];
     findLinesBusyRef.current = true;
+    // the status bar's ring fills as the labels are read
+    const reading = slots.length ? work.start(slots.length) : null;
     try {
       for (let i = 0; i < slots.length; i++) {
         setFindLinesBusy(`Reading labels ${i + 1} of ${slots.length}…`);
         const r = await readLabelCrop(slotCrop(imageData.data, imageData.width, imageData.height, slots[i]!));
         raw.push(isOcrFailure(r) ? { text: '', confidence: null } : r);
+        reading?.progress(i + 1);
         if (sessionRef.current !== session) break;
       }
     } finally {
       findLinesBusyRef.current = false;
+      reading?.end();
     }
     if (sessionRef.current !== session) {
       setFindLinesBusy(null);
@@ -11720,6 +11726,7 @@ export function Workspace() {
             {axes ? 'Calibrated' : 'Not calibrated'}
             {canvasHasImage ? '' : ' · no image loaded'}
           </span>
+          <StatusRing />
         </span>
       </BottomBar>
       {foreignFigures && (

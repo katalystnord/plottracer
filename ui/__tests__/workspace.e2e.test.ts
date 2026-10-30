@@ -12081,6 +12081,20 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
   const VFIX = path.join(__dirname, '..', '..', 'engine', '__tests__', 'fixtures', 'vector');
   const vTruth = (name: string) => JSON.parse(fs.readFileSync(path.join(VFIX, name + '.truth.json'), 'utf8')) as { box: number[]; lines: { points: [number, number][] }[] };
   const vImg = (p: readonly number[]) => [p[0]! * 6, (216 - p[1]!) * 6] as const;
+  // ⚑ The text reader is made slow on purpose, in the main process as the file dialog is stubbed: on a fast machine
+  // a warm read finishes inside the quarter second the ring waits for, and the test must not depend on the machine.
+  // The app's own handler is kept and wrapped, and put back afterwards (ms 0).
+  const slowRead = async (ms: number) => app.evaluate(({ ipcMain }, delay) => {
+    type Handler = (e: unknown, ...args: unknown[]) => Promise<unknown>;
+    const keep = globalThis as unknown as { ptRealOcrRead?: Handler };
+    keep.ptRealOcrRead ??= (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers.get('ocr:readText')!;
+    const real = keep.ptRealOcrRead;
+    ipcMain.removeHandler('ocr:readText');
+    ipcMain.handle('ocr:readText', delay ? async (e, ...args) => {
+      await new Promise((r) => setTimeout(r, delay));
+      return real(e, ...args);
+    } : real);
+  }, ms);
   /** Open a fixture PDF, capture it, calibrate on its plot box's corners as the prompts ask, and open Find lines. */
   async function openDrawnFigure(name: string, boxFrom = name) {
     try {
@@ -12827,6 +12841,125 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.keyboard.press('Delete');
     await expect.poll(() => page.getByTestId('series-select').locator('option').count(), { timeout: 5000 }).toBe(twoBefore - 2);
   }, 120000);
+
+  it('the ring in the lower right corner is always there, with no words, and runs only while a long operation does', async () => {
+    // David, 2026-10-30: "the ring should be there all the time, but only run when there is a long running operation"
+    const ring = page.getByTestId('status-ring');
+    const inCorner = async () => {
+      const r = (await ring.boundingBox())!;
+      const win = await page.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
+      expect(win.w - (r.x + r.width), 'ring at the right edge').toBeLessThan(24);
+      expect(win.h - (r.y + r.height), 'ring at the bottom edge').toBeLessThan(24);
+    };
+    expect(await ring.getAttribute('data-state')).toBe('still');
+    expect(await ring.textContent()).toBe('');
+    await inCorner();
+
+    // the bar chart picture, calibrated as the prompts ask, and its legend marked (as the PICTURE legend case)
+    const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[] } };
+    const H = 432, k = 2;
+    const px = (p: readonly number[]): [number, number] => [p[0]! * k, H - p[1]! * k];
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(VFIX, 'bars-grouped.png'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-bar').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const p1 = px([t.box[0]!, t.value[0]![1]]), p2 = px([t.box[0]!, t.value[1]![1]]);
+    await clickImagePixel(p1[0], p1[1]);
+    await confirmValue('0');
+    await clickImagePixel(p2[0], p2[1]);
+    await confirmValue(String(t.value[1]![0]));
+    if (/STARTS/.test(await textOf('tips-bar'))) {
+      const c1 = px(t.category.from);
+      await clickImagePixel(c1[0], c1[1]);
+    }
+    const cn = px(t.category.to);
+    await clickImagePixel(cn[0], cn[1]);
+    await confirmValue(String(t.category.count));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
+    const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
+    const from = await imageToLocal(...px([lx0 - 3, ly1 + 3]));
+    const to = await imageToLocal(...px([lx1 + 3, ly0 - 3]));
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    await page.waitForTimeout(500);
+    expect(await ring.getAttribute('data-state'), 'still before the long operation').toBe('still');
+
+    let sawRunning = false;
+    await slowRead(1500);
+    try {
+      await page.getByRole('button', { name: 'Read legend', exact: true }).click();
+      // count(), not inputValue(): inputValue waits for the entry, and would look at the ring only before and after
+      await expect.poll(async () => {
+        if ((await ring.getAttribute('data-state')) === 'running') sawRunning = true;
+        expect(await ring.textContent()).toBe('');
+        return page.getByTestId('legend-entry-name-1').count();
+      }, { timeout: 60000, interval: 50 }).toBe(1);
+    } finally {
+      await slowRead(0);
+    }
+    expect(await page.getByTestId('legend-entry-name-1').inputValue()).toBe('B');
+    expect(sawRunning, 'the ring ran while the legend was read').toBe(true);
+    await expect.poll(() => ring.getAttribute('data-state'), { timeout: 2000 }).toBe('still');
+    await inCorner();
+  }, 120000);
+
+  it('the ring fills as Find lines reads the contour labels, one share per label', async () => {
+    const ring = page.getByTestId('status-ring');
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-contour').waitFor({ state: 'visible' });
+    await page.getByTestId('example-contour').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = truth.calibration.anchors;
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('auto-extract-find').click();
+    const p0 = truth.series[0]!.points[5]!;
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickImagePixel(
+      a.x1.px + (p0.x - a.x1.value) * ((a.x2.px - a.x1.px) / (a.x2.value - a.x1.value)),
+      a.y1.py + (p0.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value))
+    );
+    const shares = new Set<string>();
+    await slowRead(400);
+    try {
+      await page.getByTestId('find-lines-run').click();
+      await expect.poll(async () => {
+        const arc = page.getByTestId('status-ring-share');
+        if ((await arc.count()) > 0) shares.add((await arc.getAttribute('stroke-dasharray'))!.split(' ')[0]!);
+        return page.getByTestId('find-lines-summary').count();
+      }, { timeout: 120000, interval: 50 }).toBe(1);
+    } finally {
+      await slowRead(0);
+    }
+    expect(await textOf('find-lines-summary')).toMatch(/7 lines found/);
+    // the arc grew through several shares as the labels were read
+    const lengths = [...shares].map(Number).sort((x, y) => x - y);
+    expect(lengths.length, `shares seen: ${lengths.join(', ')}`).toBeGreaterThanOrEqual(3);
+    await expect.poll(() => ring.getAttribute('data-state'), { timeout: 2000 }).toBe('still');
+  }, 180000);
 
   it('F1/F9/K1-K3 one press finds every contour line, says what it did, and a found line can be cut and joined again', async () => {
     await page.getByTestId('help-trigger').click();
