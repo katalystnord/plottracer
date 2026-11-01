@@ -63,9 +63,8 @@ function tableRows(name: string): Array<[string, string]> {
 describe('the tool digits the card promises are the digits the ladder handles', () => {
   const rows = tableRows('TOOLS');
 
-  it('lists every digit the ladder handles, 0 through 9 down the rail (3 waits for the Legend tool)', () => {
-    expect(rows.map(([k]) => k)).toEqual(['0', '1', '2', '4', '5', '6', '7', '8', '9']);
-    expect(keyboard).not.toContain(`key === '3'`);
+  it('lists every digit the ladder handles, 0 through 9 down the rail', () => {
+    expect(rows.map(([k]) => k)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
   });
 
   // ⚑ WHAT EACH DIGIT DOES, not only that it is handled. Edit image and Calibrate traded places in v2.7 and this
@@ -75,6 +74,7 @@ describe('the tool digits the card promises are the digits the ladder handles', 
     Pan: { type: 'set-mode', mode: 'pan' },
     'Edit image': { type: 'toggle-image-edit' },
     Calibrate: { type: 'set-mode', mode: 'calibrate' },
+    Legend: { type: 'toggle-legend' },
     'Data extraction': { type: 'toggle-data-extraction' },
     Select: { type: 'select-tool' },
     'Error bars': { type: 'toggle-error-bars' },
@@ -165,6 +165,7 @@ describe('the tool rows show the rail’s OWN glyphs', () => {
     'CalibrateIcon',
     'ImageEditIcon',
     'AutoTraceIcon',
+    'LegendIcon',
     'SelectBoxIcon',
     'ErrorBarsIcon',
     'MeasureIcon',

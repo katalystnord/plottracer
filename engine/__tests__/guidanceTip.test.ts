@@ -786,7 +786,7 @@ describe('guidanceTip - the eyedropper takes the bar over whatever tool is armed
 
   it('lets the trace eyedropper fall through - it has no line of its own', () => {
     const tip = guidanceTip(base({ eyedropper: 'trace', mode: 'color-trace' }));
-    expect(tip).toContain('By colour');
+    expect(tip).toContain('Colour trace');
   });
 });
 

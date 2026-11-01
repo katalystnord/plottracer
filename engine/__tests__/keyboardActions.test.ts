@@ -338,7 +338,7 @@ describe('the digit hotkeys mirror the rail, and each guard matches its button',
     expect(resolveDigit('0', s)).toEqual({ type: 'set-mode', mode: 'pan' });
     expect(resolveDigit('1', s)).toEqual({ type: 'toggle-image-edit' });
     expect(resolveDigit('2', s)).toEqual({ type: 'set-mode', mode: 'calibrate' });
-    expect(resolveDigit('3', s)).toBeNull(); // waits for the Legend tool
+    expect(resolveDigit('3', s)).toEqual({ type: 'toggle-legend' });
     expect(resolveDigit('4', s)).toEqual({ type: 'toggle-data-extraction' });
     expect(resolveDigit('5', s)).toEqual({ type: 'select-tool' });
     expect(resolveDigit('6', s)).toEqual({ type: 'toggle-error-bars' });

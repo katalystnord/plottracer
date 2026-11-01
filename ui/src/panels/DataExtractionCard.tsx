@@ -255,22 +255,12 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
 
       {mode === 'find-lines' && findLines && (
         <div data-testid="find-lines-controls" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
-          <span>
-            Finds every line of one colour, each as its own line - also where same-colour lines
-            {findLines.kind === 'contours'
-              ? ` run together or are cut by their labels${findLines.readsLabels ? ', and reads each line\u2019s label' : ''}.`
-              : ' cross, touch or run together.'}
-            {' '}Where it is unsure it leaves the pieces apart and lists the place under Places to check.
-          </span>
           {findLines.kind === 'contours' && !findLines.readsLabels && (
             <span data-testid="find-lines-labels-off" style={{ fontSize: theme.font.size.small }}>
               Label reading is off (Settings).
             </span>
           )}
           {colourRow}
-          <span data-testid="find-lines-mask-hint" style={{ fontSize: theme.font.size.small }}>
-            A legend inside the plot? Mask it first with Image ▸ Mask an area - Find lines then leaves it out, and bridges a line that passes behind it.
-          </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
@@ -351,30 +341,6 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
 
       {mode === 'color-trace' && (
         <div style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
-          <span>
-            {config.autoExtractKind === 'along-axes' ? (
-              <>
-                Walks each calibrated axis outward and records the value where the
-                series&rsquo; colour crosses it - one reading per axis. A ray the colour
-                crosses more than once is left EMPTY for you to place, and named below.
-                The highlighted pixels show what the trace reads.
-              </>
-            ) : config.autoExtractKind === 'bounding-box' ? (
-              <>
-                Finds every {tupleNoun} of that colour and records its own bounding box -
-                measured directly, never a midpoint. {tupleNoun.charAt(0).toUpperCase()}
-                {tupleNoun.slice(1)}s of the identical colour touching with no gap between
-                them are read as one merged {tupleNoun}. The highlighted pixels show what
-                the trace reads.
-              </>
-            ) : (
-              <>
-                Selects every pixel of a series&rsquo; colour - a dashed or marker-only line
-                extracts in one pass. Pick the colour, choose curve or scattered points, then Trace.
-                The highlighted pixels show what the trace reads.
-              </>
-            )}
-          </span>
           {colourRow}
           {/* No shape to choose on a spider or a bar: the rays decide where a
               spider reads, and a bar's shape is always its bounding box -- neither
@@ -527,10 +493,5 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
         </div>
       )}
 
-      {mode === 'interpolate' && (
-        <div style={{ color: theme.color.text.secondary }}>
-          Click a few guide points along one curve; the curve fills in between them. Q/W step between anchors, arrow keys nudge the selected one.
-        </div>
-      )}
     </div>  );
 }

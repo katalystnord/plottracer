@@ -35,7 +35,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, readRegionWords } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements } from './ocrClient.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -92,6 +92,7 @@ import {
   SelectSeriesIcon,
   SelectPointIcon,
   AutoTraceIcon,
+  LegendIcon,
   UndoIcon,
   RedoIcon,
   OpenIcon,
@@ -174,24 +175,8 @@ import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type Pag
 import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
 import { LabelAxesOffer } from './panels/LabelAxesOffer.js';
 import { LegendCard } from './panels/LegendCard.js';
-import { SeriesCard, type SeriesMethod, type SeriesRow } from './panels/SeriesCard.js';
-
-/** The tools a graph type offers the Series extraction card: its bar reader, Find
- * lines, and By colour's Scattered points, as the Auto-extract card offers them. */
-function seriesMethodsFor(config: { id: string; autoExtractKind?: string }): SeriesMethod[] {
-  if (config.autoExtractKind === 'bounding-box') return ['bars'];
-  const out: SeriesMethod[] = [];
-  if (findLinesKind(config.id)) out.push('lines');
-  if (config.autoExtractKind !== 'along-axes') out.push('points');
-  return out;
-}
-/** The tool for a series: the graph type's own when it has one, else what the
- * legend's sample shows (a line, a marker), else the first offered. */
-function defaultSeriesMethod(methods: readonly SeriesMethod[], sample: 'swatch' | 'line' | 'marker' | null): SeriesMethod {
-  const want: SeriesMethod | null = sample === 'line' ? 'lines' : sample === 'marker' ? 'points' : sample === 'swatch' ? 'bars' : null;
-  return want && methods.includes(want) ? want : methods[0] ?? 'points';
-}
-import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
+import { legendFromDetections } from '../../engine/pictureAxes.js';
+import { regionCornerMarkers, regionCornerFromId } from '../../engine/regionHandles.js';
 
 import { WarningLine } from './panels/WarningLine.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
@@ -663,6 +648,9 @@ type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
  * be told apart (David, 2026-10-31). */
 const MASK_COLOR = '#6b6b6b';
 const MASK_SHADE = 'rgba(107, 107, 107, 0.35)';
+/** The legend's: the app's teal (v2.7). */
+const LEGEND_COLOR = '#167782';
+const LEGEND_SHADE = 'rgba(22, 119, 130, 0.22)';
 
 export function Workspace() {
   // ⚑ Settings (v2.7, docs/v2.7-settings-cases.md): read ONCE, before every
@@ -909,6 +897,8 @@ export function Workspace() {
         ? 'mode-error-bars'
         : DATA_EXTRACTION_MODES.includes(mode)
         ? 'mode-data-extraction'
+        : mode === 'legend'
+        ? 'mode-legend'
         : null;
     if (!triggerId) return; // no card open -> leave the last position (it's hidden anyway)
     const btn = row.querySelector<HTMLElement>(`[data-testid="${triggerId}"]`);
@@ -1033,25 +1023,10 @@ export function Workspace() {
    * merely match.
    */
   const [cropIntent, setCropIntent] = useState<'crop' | 'mask' | 'legend'>('crop');
-  /** The Legend detection card (David, 2026-10-17): the marked box, what Read
-   * legend found (editable), and whether it was accepted. */
-  const [legendBox, setLegendBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const [legendEntries, setLegendEntries] = useState<LegendEntry[] | null>(null);
-  const [legendBusy, setLegendBusy] = useState(false);
-  const [legendNotice, setLegendNotice] = useState<string | null>(null);
-  const [legendAccepted, setLegendAccepted] = useState<number | null>(null);
-  // ⚑ FOLDED until asked for, as the calibration card folds once calibrated
-  // (checkpoint 86): open, it sat over the top of the plot on every calibrated
-  // figure, where points are placed by hand
-  const [legendExpanded, setLegendExpanded] = useState(false);
-  /** The Series extraction card: one row per series the accepted legend named. */
-  const [seriesRows, setSeriesRows] = useState<SeriesRow[] | null>(null);
-  const [seriesResults, setSeriesResults] = useState<(string | null)[] | null>(null);
-  const [seriesBusy, setSeriesBusy] = useState(false);
-  const [seriesAccepted, setSeriesAccepted] = useState(false);
-  const [seriesExpanded, setSeriesExpanded] = useState(true);
-  /** The box gesture is armed for the legend: other drags and clicks step aside. */
-  const legendMarking = cropMode && cropIntent === 'legend';
+  /** Auto detect legend is running (v2.7). */
+  const [legendDetecting, setLegendDetecting] = useState(false);
+  /** A drag on the figure is armed by the Legend card: other drags and clicks step aside. */
+  const legendMarking = cropMode && mode === 'legend';
   // Resizable right sidebar (checkpoint 60): the drag handle on its left edge
   // adjusts this width (fed to the shell grid as a CSS variable), clamped so it
   // can't swallow the canvas or shrink below the controls' minimum.
@@ -1932,6 +1907,19 @@ export function Workspace() {
   // opens its card with NOTHING picked (David, 2026-11-01: "Let the user pick, even if it is only one"), and
   // toggling again restores the prior tool. `pickExtractionTool` is the card's switcher. Mirrors the Measure /
   // Error-bars toggle.
+  // Legend (rail 3, v2.7): the same toggle. Leaving the card disarms its drag, so a drag on the figure is a pan
+  // again once the card is folded.
+  const preLegendModeRef = useRef<ToolMode>('pan');
+  const toggleLegend = useCallback(() => {
+    setCropMode(false);
+    setCropRect(null);
+    setCropIntent('crop');
+    setMode((m) => {
+      if (m === 'legend') return preLegendModeRef.current;
+      preLegendModeRef.current = m;
+      return 'legend';
+    });
+  }, []);
   const preDataExtractionModeRef = useRef<ToolMode>('pan');
   const toggleDataExtraction = useCallback(() => {
     setSegmentFillError(null);
@@ -2138,92 +2126,43 @@ export function Workspace() {
     return null;
   }, [commit]);
 
-  // a new figure starts the legend card afresh: the session IS the figure, and
-  // the card's read belongs to the figure it was taken from
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset on a new figure, once per session
-    setLegendBox(null);
-    setLegendEntries(null);
-    setLegendNotice(null);
-    setLegendAccepted(null);
-    setLegendBusy(false);
-    setLegendExpanded(false);
-    setSeriesRows(null);
-    setSeriesResults(null);
-    setSeriesAccepted(false);
-    setSeriesBusy(false);
-  }, [session]);
 
-  /** Legend detection: arm Mask an area's box gesture to mark the legend. */
+  /** Mark legend (the Legend card, v2.7): arm the corner-to-corner drag that records the legend. */
   const startLegendMark = useCallback(() => {
-    setLegendExpanded(true);
     setCropIntent('legend');
     setCropRect(null);
     setCropMode(true);
-    setLegendEntries(null);
-    setLegendNotice(null);
   }, []);
 
-  /** Read legend: from the figure's drawing when it is drawn, else from the
-   * picture (PaddleOCR's words and the colour beside each). Shown, not applied. */
-  const readLegend = useCallback(async () => {
-    const box = legendBox;
+  /**
+   * Auto detect legend (v2.7): the chart-element detector finds the legend's box, and it is recorded exactly as a
+   * marked one is. It reads the picture itself, never through the masks: an old legend rectangle must not hide the
+   * legend from the detector. If nothing of a legend is found, the bottom bar says so with the warning triangle
+   * (David, 2026-10-31).
+   */
+  const autoDetectLegend = useCallback(async () => {
     const img = imageCanvasRef.current?.getImageData();
-    if (!box || !img) return;
-    const b = { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
-    const k = figureKindRef.current;
-    const read = pageDrawingReadRef.current;
-    let entries: LegendEntry[] = [];
-    if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
-      const prov = provenanceRef.current;
-      const placed = placeDrawing(prov, read.drawing, read.text);
-      if (placed) entries = readLegendFromDrawing(placed, placeTextItems(prov, read.items), b);
-    }
-    if (!entries.length) {
-      setLegendBusy(true);
-      try {
-        const words = await readRegionWords(img.data, img.width, img.height, box, { whitenColour: true });
-        if (isOcrFailure(words)) {
-          setLegendNotice(words.error);
-          return;
-        }
-        entries = readLegendFromPixels(words, img.data, img.width, img.height, b);
-      } finally {
-        setLegendBusy(false);
+    if (!img) return;
+    setCropMode(false);
+    setLegendDetecting(true);
+    try {
+      const found = await detectChartElements(img);
+      if (isOcrFailure(found)) {
+        setOcrError(found.error);
+        return;
       }
+      const legend = legendFromDetections(found);
+      if (!legend) {
+        setOcrError('No legend could be found on this figure - mark it with Mark legend.');
+        return;
+      }
+      setOcrError(null);
+      sessionRef.current.setLegendRegion(legend);
+      commit();
+    } finally {
+      setLegendDetecting(false);
     }
-    setLegendEntries(entries);
-    setLegendNotice(entries.length ? null : 'No legend entries were found in that box - mark it again round the legend.');
-  }, [legendBox]);
-
-  /** Accept legend read: mask the legend as Mask an area does (so no series
-   * tool reads it), and name and colour one series per entry. */
-  const acceptLegend = useCallback(() => {
-    const box = legendBox;
-    const entries = legendEntries;
-    if (!box || !entries?.length) return;
-    const s = sessionRef.current;
-    entries.forEach((e, i) => {
-      if (i >= s.getDatasetInfos().length) s.addDataset();
-      if (e.name.trim()) s.renameDataset(i, e.name);
-      if (e.colour) s.setDatasetColor(i, e.colour);
-    });
-    s.setActiveDataset(0);
-    maskArea(box);
-    // the Series extraction card's rows: each series with the tool its legend
-    // sample and the graph type point to
-    const methods = seriesMethodsFor(s.getConfig());
-    setSeriesRows(entries.map((e, i) => ({ index: i, name: e.name.trim() || s.getDatasetInfos()[i]?.name || `Series ${i + 1}`, colour: e.colour, method: defaultSeriesMethod(methods, e.sample) })));
-    setSeriesResults(null);
-    setSeriesAccepted(false);
-    setLegendAccepted(entries.length);
-    // folded once done, as the calibration card folds on success, so the cards
-    // stacked over the figure do not cover it; its header says it is done
-    setLegendExpanded(false);
-    setSeriesExpanded(true);
-    setLegendBox(null);
-    setLegendEntries(null);
-  }, [legendBox, legendEntries, maskArea]);
+  }, [commit]);
 
   const applyCrop = useCallback(() => {
     const img = imageCanvasRef.current?.getImageData();
@@ -3826,6 +3765,7 @@ export function Workspace() {
         case 'select-tool': setMode('select'); setSelectFoldoutOpen(false); return;
         case 'toggle-image-edit': toggleImageEdit(); return;
         case 'toggle-data-extraction': toggleDataExtraction(); return;
+        case 'toggle-legend': toggleLegend(); return;
         case 'toggle-error-bars': toggleErrorBars(); return;
         case 'toggle-measure': toggleMeasure(); return;
         case 'toggle-marks': setMarksHidden((v) => !v); return;
@@ -3851,7 +3791,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleDataExtraction, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, lineSelection, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleDataExtraction, toggleLegend, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, lineSelection, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -4459,6 +4399,8 @@ export function Workspace() {
   // series' own markers carry the `point-` id; inactive series aren't selectable
   // (select the series in the dropdown first).
   const handleMarkerClick = useCallback((id: string, shiftKey?: boolean) => {
+    // a corner grip is moved by dragging; a click on it does nothing else
+    if (regionCornerFromId(id)) return;
     // A grid handle is not a calibration point and not a datum: clicking one
     // picks the BOUNDARY, which is what the Heatmap card then offers to remove.
     if (isDividerHandle(id)) {
@@ -4925,6 +4867,12 @@ export function Workspace() {
         moveHeatmapDivider(id, x, y);
         return;
       }
+      const corner = regionCornerFromId(id);
+      if (corner) {
+        if (session.moveNotDataRegionCorner(corner.index, corner.corner, x, y)) commit();
+        else bump(); // refused: the grip goes back to where the corner is
+        return;
+      }
       const tickIndex = categoryTickIndexFromId(id);
       if (tickIndex !== null) {
         // The model clamps it between its neighbours, so a tick can never cross
@@ -4940,7 +4888,7 @@ export function Workspace() {
       }
       commit();
     },
-    [session, commit, moveHeatmapDivider]
+    [session, commit, bump, moveHeatmapDivider]
   );
 
   // Apply an in-progress datapoint value edit (checkpoint 39): re-derive the
@@ -7046,7 +6994,7 @@ export function Workspace() {
       const kind = pl.kind;
       if (kind === 'markers' && pl.counts) {
         const { corners, markers } = pl.counts;
-        return (names) => `${names || 'This line'} has ${corners} corners and ${markers} markers on it: the markers may be the data. To take them as their own series, use By colour ▸ Scattered points on their colour.`;
+        return (names) => `${names || 'This line'} has ${corners} corners and ${markers} markers on it: the markers may be the data. To take them as their own series, use Colour trace with Scattered points on their colour.`;
       }
       // E1 (David, 2026-10-16): error bars are not read, never pass as data, and are always said
       if (kind === 'errorbars' && pl.bars) {
@@ -7103,50 +7051,6 @@ export function Workspace() {
   }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices, readingImage]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
 
-  /** Read series (the Series extraction card): each row's EXISTING tool on its
-   * colour, into its series, one after another; each row keeps what its tool said. */
-  const readSeries = useCallback(async () => {
-    const rows = seriesRows;
-    if (!rows?.length) return;
-    setSeriesBusy(true);
-    const said: (string | null)[] = [];
-    try {
-      // ⚑ A COLOUR IS NEVER READ TWICE. Two legend entries in one ink (two
-      // black lines told apart by nothing a colour reader sees) would each read
-      // BOTH lines, and the data would come back twice. The second row says so
-      // instead; which line is which is the user's to say.
-      const readBy: { colour: [number, number, number]; name: string }[] = [];
-      for (const r of rows) {
-        const s = sessionRef.current;
-        if (!r.colour) { said.push(null); continue; }
-        const first = readBy.find((q) => Math.hypot(q.colour[0] - r.colour![0], q.colour[1] - r.colour![1], q.colour[2] - r.colour![2]) < 40);
-        if (first) {
-          said.push(`Same colour as ${first.name}, so colour cannot tell them apart: its lines were all read into ${first.name} and the series after it. Move each to its own series in the series list.`);
-          continue;
-        }
-        readBy.push({ colour: r.colour, name: r.name });
-        const hex = `#${r.colour.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
-        s.setActiveDataset(r.index);
-        if (r.method === 'lines') {
-          const before = s.getDatasetInfos().length;
-          const res = await findLinesWith(hex);
-          // the first line went into this series (it was empty); further lines of
-          // the same colour are named after it, and all keep the legend's colour
-          const extra = s.getDatasetInfos().slice(before).map((d) => d.index);
-          extra.forEach((idx, k) => s.renameDataset(idx, `${r.name} ${k + 2}`));
-          for (const idx of [r.index, ...extra]) s.setDatasetColor(idx, r.colour);
-          said.push(res.summary ?? res.text);
-        } else {
-          colorTraceWith(hex, r.method === 'points' ? 'scatter' : colorTraceShape);
-          said.push(colorTraceSaidRef.current || null);
-        }
-      }
-    } finally {
-      setSeriesBusy(false);
-    }
-    commit();
-    setSeriesResults(said);
-  }, [seriesRows, findLinesWith, colorTraceWith, colorTraceShape, commit]);
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as
   // modifying a hook argument; it is the intended latest-callback pattern. (Hidden in v2.7 while the agent host
@@ -8105,15 +8009,20 @@ export function Workspace() {
     }
     // ⚑ Each masked area, shaded: since v2.7 a mask is a rectangle over the figure rather than paint, so this is
     // the only sign of it on screen (David, 2026-11-01). Its own colour, apart from the legend's.
+    // The legend is one of them, shaded in its own colour so the two can be told apart (David, 2026-10-31).
     session.getNotDataRegions().forEach((r, i) => {
       const { x, y, width: w, height: h } = r;
-      list.push({ id: `mask-${i}`, points: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }], closed: true, label: 'Masked', labelAt: { x, y: y - 4 }, color: MASK_COLOR, shade: MASK_SHADE });
+      const legend = r.kind === 'legend';
+      list.push({
+        id: legend ? 'legend-region' : `mask-${i}`,
+        points: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }],
+        closed: true,
+        label: legend ? 'Legend' : 'Masked',
+        labelAt: { x, y: y - 4 },
+        color: legend ? LEGEND_COLOR : MASK_COLOR,
+        shade: legend ? LEGEND_SHADE : MASK_SHADE,
+      });
     });
-    // the Legend detection card's marked box, until the read is accepted
-    if (legendBox) {
-      const { x, y, width: w, height: h } = legendBox;
-      list.push({ id: 'legend-box', points: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }], closed: true, label: 'Legend', labelAt: { x, y: y - 4 }, color: theme.color.primary.main });
-    }
     // v2.7 V5: each label read from the figure joined to its own tick mark, in
     // its axis's calibration colour, while the read is offered; a number with
     // no tick mark at it is marked not used, in grey
@@ -8133,7 +8042,7 @@ export function Workspace() {
     }
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is what changes when a mask is added or moved
-  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps, legendBox, session, version]);
+  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps, session, version]);
 
   // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
   // nothing if only its author knows it is possible -- that is the "shortcut-only
@@ -8183,12 +8092,19 @@ export function Workspace() {
   // ⚑ An aid's marker carries the HIT AREA and draws nothing; the mark and its
   // grip are one object in `allAidGlyphs`. They were two, in two layers and two
   // colours, and only the handle could be moved - see `AidGlyph`.
+  // ⚑ The legend's and the masked areas' corners are grips only while the Legend card is open (David, 2026-10-31:
+  // "it cannot be selected and changed when the legend card is closed. Similar to the calibration card.").
+  const regionHandles = useMemo<CanvasMarker[]>(
+    () => (mode === 'legend' ? regionCornerMarkers(session.getNotDataRegions(), { mask: MASK_COLOR, legend: LEGEND_COLOR }) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is what changes when a corner moves
+    [mode, session, version]
+  );
   const allMarkers = useMemo<CanvasMarker[]>(
     () =>
-      categoryMarkers.length > 0 || heatmapHandles.length > 0
-        ? [...markers, ...categoryMarkers, ...heatmapHandles]
+      categoryMarkers.length > 0 || heatmapHandles.length > 0 || regionHandles.length > 0
+        ? [...markers, ...categoryMarkers, ...heatmapHandles, ...regionHandles]
         : markers,
-    [markers, categoryMarkers, heatmapHandles]
+    [markers, categoryMarkers, heatmapHandles, regionHandles]
   );
   /** A histogram's bin glyphs, which is all this layer carries now.
    *
@@ -9982,46 +9898,6 @@ export function Workspace() {
               </button>
             )}
           </div>
-          {/* The Legend detection card (David, 2026-10-17): the step after the
-              calibration, before the series, as the automated extraction does. */}
-          {figureCaptured && axes && (
-            <LegendCard
-              passThrough={cropMode}
-              expanded={legendExpanded}
-              onToggle={() => setLegendExpanded((v) => !v)}
-              marking={cropMode && cropIntent === 'legend'}
-              marked={legendBox !== null}
-              entries={legendEntries}
-              busy={legendBusy}
-              notice={legendNotice}
-              accepted={legendAccepted}
-              onMark={startLegendMark}
-              onRead={() => void readLegend()}
-              onEditName={(i, name) => setLegendEntries((es) => (es ? es.map((e, j) => (j === i ? { ...e, name } : e)) : es))}
-              onAccept={acceptLegend}
-              endsButton={endsCardButton()}
-            />
-          )}
-          {/* The Series extraction card: the step after the legend. */}
-          {figureCaptured && axes && seriesRows && (
-            <SeriesCard
-              passThrough={cropMode}
-              expanded={seriesExpanded}
-              onToggle={() => setSeriesExpanded((v) => !v)}
-              rows={seriesRows}
-              methods={seriesMethodsFor(config)}
-              onMethod={(i, m) => setSeriesRows((rs) => (rs ? rs.map((r, j) => (j === i ? { ...r, method: m } : r)) : rs))}
-              busy={seriesBusy}
-              results={seriesResults}
-              accepted={seriesAccepted}
-              onRead={() => void readSeries()}
-              onAccept={() => {
-                setSeriesAccepted(true);
-                setSeriesExpanded(false);
-              }}
-              endsButton={endsCardButton()}
-            />
-          )}
           {hasMultipleFigures && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -10125,7 +10001,8 @@ export function Workspace() {
               the canvas cannot answer differently - the drift that once left a
               live "Edit value…" menu item with no editor behind it. */}
           <div ref={railColRef} style={{ display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
-          {/* View & set up: Pan · Edit image · Calibrate (Edit image first since David, 2026-10-31). Image prep is available
+          {/* View & set up: Pan · Edit image · Calibrate · Legend (Edit image first, and Legend a first-class step,
+              since David, 2026-10-31). Image prep is available
               BEFORE capture too (rotate a sideways scan, crop, fine-deskew) and
               THEN capture; enabled whenever there's an image. */}
           <RailGroup data-testid="tool-rail">
@@ -10161,6 +10038,17 @@ export function Workspace() {
               // after calibration the card is folded; the tool opens it again (David, 2026-10-31)
               setCalibExpanded(true);
             }}
+          />
+          <IconButton
+            testId="mode-legend"
+            icon={<LegendIcon />}
+            label="Legend: mark it, detect it, or mask an area"
+            shortcut="3"
+            pressed={mode === 'legend'}
+            disabled={toolDisabled('legend', !figureCaptured)}
+            disabledReason={toolReason('legend', canvasHasImage ? 'Capture the figure first' : 'Open an image first')}
+            onClick={toggleLegend}
+            foldout
           />
           </RailGroup>
           {/* Get data points onto the plot, then refine them: Data extraction holds every way to GET points (v2.7,
@@ -10321,6 +10209,15 @@ export function Workspace() {
               the three tracing mechanisms. The selector switches MODE (each keeps
               its own canvas behaviour) and shows that mechanism's controls, which
               used to live in three places (sidebar / top-bar panel / tips). */}
+          {mode === 'legend' && (
+            <LegendCard
+              armed={cropMode && (cropIntent === 'legend' || cropIntent === 'mask') ? cropIntent : null}
+              detecting={legendDetecting}
+              onMarkLegend={startLegendMark}
+              onAutoDetect={() => void autoDetectLegend()}
+              onMaskArea={startMask}
+            />
+          )}
           {DATA_EXTRACTION_MODES.includes(mode) && (
             <DataExtractionCard
               mode={mode}
@@ -10398,9 +10295,7 @@ export function Workspace() {
               onEdit={applyImageEdit}
               disabled={!canvasHasImage}
               onStartCrop={startCrop}
-              onStartMask={startMask}
-              cropIntent={cropIntent === 'legend' ? 'crop' : cropIntent}
-              cropArmed={cropMode}
+              cropArmed={cropMode && cropIntent === 'crop'}
               cropPending={cropRect ? { width: cropRect.width, height: cropRect.height } : null}
               onApplyCrop={applyCrop}
               onCancelCrop={cancelCrop}
@@ -10495,20 +10390,26 @@ export function Workspace() {
           onLinkDragMove={handleLinkDragMove}
           onLinkDrag={handleLinkDrag}
           onLinkDragCancel={handleLinkDragCancel}
-          cropMode={mode === 'image-edit' || cropIntent === 'legend' ? cropMode : false}
+          cropMode={mode === 'image-edit' || mode === 'legend' ? cropMode : false}
           // v2.0 pre-launch audit: a stray click used to set a 0x0 pending
           // rect here (no guard at all, unlike onRegionRect/onSelectRect's
           // own, inconsistent ones) -- applyCrop then silently no-op'd with
           // no message explaining why Apply did nothing. ImageCanvas.tsx's
           // endDrag now applies one click-vs-drag guard for all three.
           onCropRect={(r) => {
-            // the Legend detection card's box: taken as drawn, nothing painted yet
-            if (cropIntent === 'legend') {
-              setLegendBox(r);
+            // ⚑ The Legend card's drags are recorded on release, with no Apply (v2.7): the rectangle keeps corners
+            // that can be moved afterwards, so there is nothing to confirm. A crop still waits for Apply, because a
+            // crop cuts the picture.
+            if (mode === 'legend' && (cropIntent === 'legend' || cropIntent === 'mask')) {
+              if (cropIntent === 'legend') {
+                session.setLegendRegion(r);
+                commit();
+              } else {
+                maskArea(r);
+              }
               setCropMode(false);
               setCropRect(null);
               setCropIntent('crop');
-              setLegendNotice(null);
               return;
             }
             setCropRect(r);
@@ -11631,7 +11532,12 @@ export function Workspace() {
                 tells it to click, so arming the band read has to say what to
                 drag and where. A refusal replaces it in the same place, because
                 a refusal is about the gesture just made. */}
-            {ocrError ?? (cropMode && cropIntent === 'legend' ? 'Mark the legend: drag a box from one corner of it to the opposite corner.' : guidanceTip)}
+            {ocrError ??
+              (legendMarking && cropIntent === 'legend'
+                ? 'Mark the legend: drag a box from one corner of it to the opposite corner.'
+                : legendMarking && cropIntent === 'mask'
+                  ? 'Mask an area: drag a box from one corner of it to the opposite corner. Every tool leaves it out.'
+                  : guidanceTip)}
           </span>
         </span>
         {/* ⚑ THE KEY-TIPS' OWN AFFORDANCE (v1.6). Badges that appear on Alt are only

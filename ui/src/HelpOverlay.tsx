@@ -41,6 +41,7 @@ import {
   CalibrateIcon,
   ImageEditIcon,
   AutoTraceIcon,
+  LegendIcon,
   SelectBoxIcon,
   ErrorBarsIcon,
   MeasureIcon,
@@ -82,7 +83,7 @@ const TOOLS: Array<[string, string, () => React.JSX.Element]> = [
   ['0', 'Pan', HandIcon],
   ['1', 'Edit image', ImageEditIcon],
   ['2', 'Calibrate', CalibrateIcon],
-  // 3 is the Legend tool's, still to come (David, 2026-10-31); until then the key does nothing and has no row.
+  ['3', 'Legend', LegendIcon],
   ['4', 'Data extraction', AutoTraceIcon],
   ['5', 'Select', SelectBoxIcon],
   ['6', 'Error bars', ErrorBarsIcon],

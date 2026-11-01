@@ -32,7 +32,9 @@ export type ToolMode =
   | 'find-lines'
   | 'cut'
   // The Data extraction card is open and none of its tools is picked: a click on the figure adds nothing.
-  | 'extract';
+  | 'extract'
+  // The Legend card is open (rail 3, v2.7): the legend and masked areas are marked by a drag, never a click.
+  | 'legend';
 
 /** The modes fronted by the single Auto-extract rail tool. Find lines (v2.6)
  * comes first because, where it applies, it does the whole job in one press. */

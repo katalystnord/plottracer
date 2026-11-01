@@ -73,8 +73,8 @@ describe('the Data extraction tool on the rail and the keys', () => {
     expect(resolveDigit('4', { ...calibrated, isCalibrated: false })).toBeNull();
   });
 
-  it('3 does nothing until the Legend tool takes it', () => {
-    expect(resolveDigit('3', calibrated)).toBeNull();
+  it('3 is the Legend tool now (legendRegion.test.ts has its cases)', () => {
+    expect(resolveDigit('3', calibrated)).toEqual({ type: 'toggle-legend' });
   });
 });
 

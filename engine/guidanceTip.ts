@@ -305,6 +305,9 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       ? `Area - click polygon corners (${pendingMeasureCount} placed; need 3+).`
       : `Area - keep clicking corners, then Finish (or Enter) to close (${pendingMeasureCount} placed).`;
   }
+  // The Legend card works before the axes are calibrated too (v2.7), so it speaks for itself ahead of the walk.
+  if (mode === 'legend')
+    return 'Legend - Mark legend and drag across it corner to corner, or Auto detect legend; Mask an area for anything else that is not data. Drag a corner to adjust it.';
   if (isCalibrating) {
     // ⚑⚑ THE STEP'S OWN PROMPT SURVIVES THE PENDING PIXEL (v2.3, D1).
     //
@@ -533,7 +536,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
         return 'Handle selected - ↑ ↓ ← → nudge (Shift = coarse); recalibrates live. Or drag it.';
       return 'Drag a calibration handle to adjust it (or click one, then ↑ ↓ ← → to nudge), or switch to Place Point to add data.';
     }
-    if (mode === 'segment-fill') return 'Flood-fill - click a solid, unbroken curve to trace it automatically.';
+    if (mode === 'segment-fill') return 'Fill a region - click a solid, unbroken curve to trace it automatically.';
     // By-colour traces via the Trace button, not a canvas click (v0.8 audit #2:
     // without this the tip fell through to "calibrate the axes" on an already-
     // calibrated chart, and gave no hint that a stray click does nothing).
@@ -545,20 +548,20 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     // an axis coming back empty (spider) looks like a bug rather than a refusal.
     if (mode === 'color-trace') {
       if (config.autoExtractKind === 'along-axes')
-        return 'By colour - pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.';
+        return 'Colour trace - pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace: it reads one value per axis, where the colour crosses each ray. An axis it can’t read is left for you to place.';
       if (config.autoExtractKind === 'bounding-box')
-        return `By colour - pick a ${tupleNoun} colour (or take it from the image with the pipette), set the tolerance, then press Trace: it finds every ${tupleNoun} of that colour and records its own bounding box. Drag a box on the image to limit the trace to it; a plain click does nothing.`;
-      return 'By colour - pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
+        return `Colour trace - pick a ${tupleNoun} colour (or take it from the image with the pipette), set the tolerance, then press Trace: it finds every ${tupleNoun} of that colour and records its own bounding box. Drag a box on the image to limit the trace to it; a plain click does nothing.`;
+      return 'Colour trace - pick the series’ colour (or take it from the image with the pipette), set the tolerance, then press Trace. Drag a box on the image to limit the trace to it; a plain click does nothing.';
     }
     if (mode === 'interpolate') {
       if (dataPointCount === 0)
-        return 'Interpolate - click a few guide points along one curve; the curve fills in between them.';
+        return 'Follow guide points - click a few guide points along one curve; the curve fills in between them.';
       // `activePointIsAnchor` already carries "a point is selected AND its role
       // is anchor" -- re-testing activePointIndex here would be a second copy of
       // the same condition, and one that cannot disagree with it.
       if (activePointIsAnchor)
         return 'Anchor selected - ↑ ↓ ← → nudge (Shift = coarse), Q/W step anchors, Del removes it - the curve refits. Or click to add another.';
-      return 'Interpolate - click to add a guide point (Q/W to step between anchors); the fill redraws as you go.';
+      return 'Follow guide points - click to add a guide point (Q/W to step between anchors); the fill redraws as you go.';
     }
     if (mode === 'eraser')
       return config.id === 'xy' || config.id === 'contour'
@@ -629,7 +632,8 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
 export function guidanceTip(input: GuidanceTipInput): string {
   const base = guidanceTipBase(input);
   const slotAimNote =
-    input.isCalibrated && input.hasSlots && input.captureProgressText && !base.includes(input.currentGroupLabel)
+    // not on the Legend card, which captures no points: a slot to fill means nothing there
+    input.isCalibrated && input.hasSlots && input.captureProgressText && input.mode !== 'legend' && !base.includes(input.currentGroupLabel)
       ? ` - ${input.captureProgressText.replace(/^Next: /, '')}`
       : '';
   return base + slotAimNote;

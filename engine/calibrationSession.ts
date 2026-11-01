@@ -360,7 +360,7 @@ function freeSeriesNumberName(n: number, taken: readonly string[]): string {
 }
 
 const GUIDE_LINE_REFUSAL =
-  'This line was captured with guide points - its guide points are its record and the line between them is drawn from them, so it is edited through its guide points (Auto-extract ▸ Guide points), not cut, joined or moved.';
+  'This line was captured with guide points - its guide points are its record and the line between them is drawn from them, so it is edited through its guide points (Data extraction ▸ Follow guide points), not cut, joined or moved.';
 
 /**
  * What a piece split off a line inherits: what is true of every part of the
@@ -3027,6 +3027,35 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.notDataRegions = regions
       .filter((r) => [r.x, r.y, r.width, r.height].every((v) => Number.isFinite(v)) && r.width > 0 && r.height > 0)
       .map((r) => ({ ...r }));
+  }
+
+  /** The figure's legend, marked or detected (v2.7), or null. */
+  getLegendRegion(): { x: number; y: number; width: number; height: number } | null {
+    const r = this.notDataRegions.find((n) => n.kind === 'legend');
+    return r ? { x: r.x, y: r.y, width: r.width, height: r.height } : null;
+  }
+
+  /** Marks the legend: a figure has one, so this replaces any legend before it and leaves the masked areas. It is
+   * masked by itself (David, 2026-10-31: "that is half the point"). */
+  setLegendRegion(rect: { x: number; y: number; width: number; height: number }): void {
+    this.setNotDataRegions([...this.notDataRegions.filter((n) => n.kind !== 'legend'), { ...rect, kind: 'legend' }]);
+  }
+
+  /**
+   * Moves one corner of a masked area or the legend to (x, y); the opposite corner stays where it is (v2.7: every
+   * rectangle keeps corners that can be moved, David 2026-10-31). A corner dragged past the opposite one turns the
+   * rectangle round. Refused, with nothing changed, when no area would be left or there is no such rectangle.
+   */
+  moveNotDataRegionCorner(index: number, corner: 'tl' | 'tr' | 'br' | 'bl', x: number, y: number): boolean {
+    const r = this.notDataRegions[index];
+    if (!r || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    const fixedX = corner === 'tl' || corner === 'bl' ? r.x + r.width : r.x;
+    const fixedY = corner === 'tl' || corner === 'tr' ? r.y + r.height : r.y;
+    const width = Math.abs(x - fixedX);
+    const height = Math.abs(y - fixedY);
+    if (width === 0 || height === 0) return false;
+    this.notDataRegions[index] = { ...r, x: Math.min(x, fixedX), y: Math.min(y, fixedY), width, height };
+    return true;
   }
 
   /** Switches which dataset new points/slot actions apply to.

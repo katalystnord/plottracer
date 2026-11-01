@@ -381,3 +381,21 @@ export function atCorners(read: AxesFromLabels, corners: Box): AxesFromLabels {
     points: [origin, { px: x1, py: y1, x: xv(x1), y: yv(y1) }, { ...origin }, { px: x0, py: y0, x: xv(x0), y: yv(y0) }],
   };
 }
+
+/**
+ * The legend's rectangle off the chart-element detector, for Auto detect legend (v2.7; David 2026-10-31,
+ * docs/v2.7-workflow-walk.md, The Legend tool's card). The detector's legend area, the most certain one; else the
+ * box round the legend's markers and labels it found. Null when it found nothing of a legend, and the caller says
+ * so with the warning triangle rather than guessing.
+ */
+export function legendFromDetections(dets: readonly Detection[]): { x: number; y: number; width: number; height: number } | null {
+  const sure = dets.filter((d) => d.score >= DETECTION_AT);
+  const area = sure.filter((d) => d.cls === 'legend_area').sort((a, b) => b.score - a.score)[0];
+  const boxes = area ? [area.box] : sure.filter((d) => d.cls === 'legend_marker' || d.cls === 'legend_label').map((d) => d.box);
+  if (boxes.length === 0) return null;
+  const x0 = Math.min(...boxes.map((b) => b.x0));
+  const y0 = Math.min(...boxes.map((b) => b.y0));
+  const x1 = Math.max(...boxes.map((b) => b.x1));
+  const y1 = Math.max(...boxes.map((b) => b.y1));
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } : null;
+}

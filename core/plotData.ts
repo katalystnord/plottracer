@@ -345,12 +345,14 @@ function axisStampFrom(raw: unknown): SerializedAxisStamp | null {
  * anywhere - and on a heatmap a wrong boundary has no visible symptom, because
  * the colour IS the value.
  */
-/** A rectangle the user marked as not data, image pixels. */
+/** A rectangle the user marked as not data, image pixels. The legend is one of its own kind (v2.7): masked like
+ * any other, and kept apart so it can be shown and found as the legend. */
 export interface NotDataRegion {
   x: number;
   y: number;
   width: number;
   height: number;
+  kind?: 'legend';
 }
 
 /** Not-data regions off a file: each one kept only if it is a real rectangle. */
@@ -359,9 +361,11 @@ function notDataRegionsFrom(raw: unknown): NotDataRegion[] {
   const out: NotDataRegion[] = [];
   for (const r of raw) {
     if (typeof r !== 'object' || r === null) continue;
-    const { x, y, width, height } = r as Record<string, unknown>;
+    const { x, y, width, height, kind } = r as Record<string, unknown>;
     const ns = [x, y, width, height].map(Number);
-    if (ns.every((n) => Number.isFinite(n)) && ns[2]! > 0 && ns[3]! > 0) out.push({ x: ns[0]!, y: ns[1]!, width: ns[2]!, height: ns[3]! });
+    if (ns.every((n) => Number.isFinite(n)) && ns[2]! > 0 && ns[3]! > 0) {
+      out.push({ x: ns[0]!, y: ns[1]!, width: ns[2]!, height: ns[3]!, ...(kind === 'legend' ? { kind: 'legend' as const } : {}) });
+    }
   }
   return out;
 }

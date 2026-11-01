@@ -986,15 +986,16 @@ describe('Workspace: tool mode', () => {
 
     // Hotkeys run 0-9 down the rail (2026-07-22 redesign; Edit image and Calibrate traded places, David
     // 2026-10-31; Data extraction on 4 holds Add, Auto-extract and Cut, v2.7): 0 Pan · 1 Edit img · 2 Calibrate ·
-    // 3 (waits for Legend) · 4 Data extraction · 5 Select · 6 Error bars · 7 Measure · 8 Curve fit · 9 Geometry.
+    // 3 Legend · 4 Data extraction · 5 Select · 6 Error bars · 7 Measure · 8 Curve fit · 9 Geometry.
     await page.keyboard.press('0');
     expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
 
     await page.keyboard.press('2');
     expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
 
-    await page.keyboard.press('3'); // nothing on 3 yet: the tool stays as it was
-    expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
+    await page.keyboard.press('3');
+    expect(await page.getByTestId('mode-legend').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('legend-card').count()).toBe(1);
 
     await page.keyboard.press('4');
     expect(await page.getByTestId('mode-data-extraction').getAttribute('aria-pressed')).toBe('true');
@@ -4361,10 +4362,9 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     // mask the whole figure, 900 x 700 image pixels, corner to corner
     const a = await imagePoint(0, 0);
     const b = await imagePoint(900, 700);
-    await page.getByTestId('mode-image-edit').click();
-    await page.getByTestId('image-edit-mask').click();
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-mask').click();
     await dragMarker(a.lx + 1, a.ly + 1, b.lx - 1, b.ly - 1);
-    await page.getByTestId('crop-apply').click();
     await expect.poll(() => textOf('masked-areas')).toBe('1');
 
     await selectAutoExtract('colour');
@@ -7549,10 +7549,10 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     await calibrateXYStandard();
     await clickAt(250, 175); // a data point reading (5, 5)
 
-    await page.getByTestId('mode-image-edit').click();
-    await page.getByTestId('image-edit-mask').click();
-    expect(await page.getByTestId('crop-bar').innerText()).toMatch(/every tool should leave out/i);
-    expect(await page.getByTestId('crop-apply').isDisabled()).toBe(true);
+    // Mask an area is on the Legend card since v2.7 (David, 2026-10-31); the drag is recorded on release
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-mask').click();
+    expect(await textOf('tips-bar')).toMatch(/Mask an area: drag a box/);
 
     // A patch of the figure's own ink, well right of the folded-out card.
     // ⚠️ Measured against the CANVAS ELEMENT's own box, not the container's: the
@@ -7667,10 +7667,6 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     await page.mouse.down();
     await page.mouse.move(to.x, to.y, { steps: 8 });
     await page.mouse.up();
-    await page.waitForTimeout(200);
-    expect(await page.getByTestId('crop-bar').innerText()).toMatch(/Mask/);
-
-    await page.getByTestId('crop-apply').click();
     await page.waitForTimeout(400);
 
     // ⚑⚑ THE WALKTHROUGH ASKS WHETHER THE GESTURE WORKS. Where the dragged rectangle lands depends on the view,
@@ -9639,7 +9635,8 @@ describe('spider charts', () => {
     expect(await page.getByTestId('extract-tool-interpolate').isDisabled()).toBe(true);
     // Nothing to choose between curve and scatter: the rays decide where to read.
     expect(await page.getByTestId('color-trace-shape').isVisible()).toBe(false);
-    expect(await textOf('data-extraction-card')).toMatch(/one reading per axis/i);
+    // what the tool does is the tips bar's to say (v2.7: the card explains only Auto-extract all series)
+    expect(await textOf('tips-bar')).toMatch(/one value per axis/i);
   });
 
   it('traces the bundled figure and recovers its published values', async () => {
@@ -12396,17 +12393,67 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
   // ⚑ The text reader is made slow on purpose, in the main process as the file dialog is stubbed: on a fast machine
   // a warm read finishes inside the quarter second the ring waits for, and the test must not depend on the machine.
   // The app's own handler is kept and wrapped, and put back afterwards (ms 0).
-  const slowRead = async (ms: number) => app.evaluate(({ ipcMain }, delay) => {
+  /**
+   * Slows an IPC channel by `ms`, or answers it with `answer` instead of running it; `slowChannel(channel, 0)` puts
+   * the real handler back. The handler is wrapped where it is registered, because the main process is "electron"
+   * and has no `require` to reach the module.
+   */
+  const slowChannel = async (channel: string, ms: number, answer?: unknown) => app.evaluate(({ ipcMain }, [ch, delay, ans]) => {
     type Handler = (e: unknown, ...args: unknown[]) => Promise<unknown>;
-    const keep = globalThis as unknown as { ptRealOcrRead?: Handler };
-    keep.ptRealOcrRead ??= (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers.get('ocr:readText')!;
-    const real = keep.ptRealOcrRead;
-    ipcMain.removeHandler('ocr:readText');
-    ipcMain.handle('ocr:readText', delay ? async (e, ...args) => {
-      await new Promise((r) => setTimeout(r, delay));
-      return real(e, ...args);
+    const keep = globalThis as unknown as { ptRealHandlers?: Map<string, Handler> };
+    keep.ptRealHandlers ??= new Map();
+    if (!keep.ptRealHandlers.has(ch as string)) {
+      keep.ptRealHandlers.set(ch as string, (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers.get(ch as string)!);
+    }
+    const real = keep.ptRealHandlers.get(ch as string)!;
+    ipcMain.removeHandler(ch as string);
+    ipcMain.handle(ch as string, delay || ans !== undefined ? async (e, ...args) => {
+      if (delay) await new Promise((r) => setTimeout(r, delay as number));
+      return ans !== undefined ? ans : real(e, ...args);
     } : real);
-  }, ms);
+  }, [channel, ms, answer] as const);
+  /** The bar chart picture (bars-grouped.png, 2 px per point, y down), captured and calibrated as the prompts ask. */
+  async function openBarsPicture() {
+    const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[] } };
+    const H = 432, k = 2;
+    const px = (p: readonly number[]): [number, number] => [p[0]! * k, H - p[1]! * k];
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(VFIX, 'bars-grouped.png'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-bar').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const p1 = px([t.box[0]!, t.value[0]![1]]), p2 = px([t.box[0]!, t.value[1]![1]]);
+    await clickImagePixel(p1[0], p1[1]);
+    await confirmValue('0');
+    await clickImagePixel(p2[0], p2[1]);
+    await confirmValue(String(t.value[1]![0]));
+    if (/STARTS/.test(await textOf('tips-bar'))) {
+      const c1 = px(t.category.from);
+      await clickImagePixel(c1[0], c1[1]);
+    }
+    const cn = px(t.category.to);
+    await clickImagePixel(cn[0], cn[1]);
+    await confirmValue(String(t.category.count));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    // the legend's box in the image's own pixels
+    const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
+    const [ax, ay] = px([lx0, ly1]);
+    const [bx, by] = px([lx1, ly0]);
+    return { legend: { x0: ax, y0: ay, x1: bx, y1: by } };
+  }
+  const recorded = async (): Promise<{ x: number; y: number; width: number; height: number; kind?: string }[]> =>
+    JSON.parse((await page.getByTestId('masked-areas').getAttribute('data-rects')) ?? '[]');
   /** Open a fixture PDF, capture it, calibrate on its plot box's corners as the prompts ask, and open Find lines. */
   async function openDrawnFigure(name: string, boxFrom = name) {
     try {
@@ -12480,7 +12527,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await clickImagePixel(p[0], p[1]);
     await page.getByTestId('find-lines-run').click();
     await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: 1 line found.*1 place to check/);
-    expect(await textOf('places-to-check')).toMatch(/Series 1 has 101 corners and 6 markers on it: the markers may be the data\. To take them as their own series, use By colour ▸ Scattered points on their colour\./);
+    expect(await textOf('places-to-check')).toMatch(/Series 1 has 101 corners and 6 markers on it: the markers may be the data\. To take them as their own series, use Colour trace with Scattered points on their colour\./);
     // the reader it names is right there in the card
     expect(await page.getByTestId('extract-tool-color-trace').count()).toBe(1);
   }, 120000);
@@ -12582,192 +12629,70 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('bar-off-baseline')).toMatch(/^1 bar .* does not reach the baseline/);
   }, 120000);
 
-  it('Legend detection and Series extraction: after calibration the card asks for the legend, Read legend reads it, the read is editable, Accept names the series; the next card reads each series with its tool, the swatches left out', async () => {
-    const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[] } };
+
+  it('Mark legend records the legend as a rectangle over the figure, and its corners move only while the card is open', async () => {
+    const { legend } = await openBarsPicture();
+    await page.keyboard.press('3');
+    await page.getByTestId('legend-card').waitFor({ state: 'visible' });
+    expect(await textOf('tips-bar')).toMatch(/^💡Legend - Mark legend/);
+    await page.getByTestId('legend-mark').click();
+    expect(await textOf('tips-bar')).toMatch(/Mark the legend: drag a box/);
+    const from = await imageToLocal(legend.x0 - 6, legend.y0 - 6);
+    const to = await imageToLocal(legend.x1 + 6, legend.y1 + 6);
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    await expect.poll(async () => (await recorded()).filter((r) => r.kind === 'legend').length).toBe(1);
+    const marked = (await recorded()).find((r) => r.kind === 'legend')!;
+    // nothing read from it is shown: the card is its three buttons and nothing else
+    expect(await page.getByTestId('legend-card').locator('button').allInnerTexts()).toEqual(['Mark legend', 'Auto detect legend', 'Mask an area']);
+    expect((await textOf('legend-card')).replace('Mark legendAuto detect legendMask an area', '')).toBe('Legend');
+
+    // the bottom-right corner, dragged out by 20 image pixels while the card is open
+    const corner = await imageToLocal(marked.x + marked.width, marked.y + marked.height);
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    await dragMarker(corner.lx, corner.ly, corner.lx + 20, corner.ly + 20);
+    await expect.poll(async () => (await recorded()).find((r) => r.kind === 'legend')!.width).toBeGreaterThan(marked.width + 10);
+    const moved = (await recorded()).find((r) => r.kind === 'legend')!;
+    expect([moved.x, moved.y]).toEqual([marked.x, marked.y]);
+
+    // with the card folded, the corner is no grip: the same drag leaves the legend as it is
+    await page.keyboard.press('3');
+    expect(await page.getByTestId('legend-card').count()).toBe(0);
+    const corner2 = await imageToLocal(moved.x + moved.width, moved.y + moved.height);
+    await dragMarker(corner2.lx, corner2.ly, corner2.lx + 20, corner2.ly + 20);
+    expect((await recorded()).find((r) => r.kind === 'legend')).toEqual(moved);
+  }, 120000);
+
+  it('Auto detect legend finds the legend of a picture and records it exactly as a marked one', async () => {
+    const { legend } = await openBarsPicture();
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-auto-detect').click();
+    await expect.poll(async () => (await recorded()).filter((r) => r.kind === 'legend').length, { timeout: 60000 }).toBe(1);
+    const found = (await recorded()).find((r) => r.kind === 'legend')!;
+    // ⚑ It is the legend: inside the legend's frame (the detector's box is the legend's contents, a few pixels in
+    // from the frame line), and covering at least half of it. Recorded as measured, not padded by a guess; the
+    // corners are there to adjust it.
+    const within = 3;
+    expect(found.x, JSON.stringify({ found, legend })).toBeGreaterThanOrEqual(legend.x0 - within);
+    expect(found.y).toBeGreaterThanOrEqual(legend.y0 - within);
+    expect(found.x + found.width).toBeLessThanOrEqual(legend.x1 + within);
+    expect(found.y + found.height).toBeLessThanOrEqual(legend.y1 + within);
+    expect(found.width * found.height).toBeGreaterThan(0.5 * (legend.x1 - legend.x0) * (legend.y1 - legend.y0));
+    expect(await page.getByTestId('tips-bar-warning').count()).toBe(0);
+  }, 120000);
+
+  it('Auto detect legend that finds nothing says so in the bottom bar, with the warning triangle', async () => {
+    await openBarsPicture();
+    await slowChannel('figdet:detect', 0, { detections: [] });
     try {
-      await app.evaluate(({ dialog }, f) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-      }, path.join(VFIX, 'bars-grouped.pdf'));
-      await page.getByTestId('open-image-button').click();
-      await waitForImageFitted();
+      await page.getByTestId('mode-legend').click();
+      await page.getByTestId('legend-auto-detect').click();
+      await expect.poll(() => textOf('tips-bar'), { timeout: 10000 }).toMatch(/No legend could be found on this figure/);
+      expect(await page.getByTestId('tips-bar-warning').count()).toBe(1);
+      expect((await recorded()).filter((r) => r.kind === 'legend')).toEqual([]);
     } finally {
-      await app.evaluate(({ dialog }, f) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-      }, SAMPLE_IMAGE);
+      await slowChannel('figdet:detect', 0);
     }
-    await page.getByTestId('axes-type-trigger').click();
-    await page.getByTestId('axes-option-bar').click();
-    await page.getByTestId('capture-figure').click();
-    await page.waitForTimeout(150);
-    const p1 = vImg([t.box[0]!, t.value[0]![1]]), p2 = vImg([t.box[0]!, t.value[1]![1]]);
-    await clickImagePixel(p1[0], p1[1]);
-    await confirmValue('0');
-    await clickImagePixel(p2[0], p2[1]);
-    await confirmValue(String(t.value[1]![0]));
-    if (/STARTS/.test(await textOf('tips-bar'))) {
-      const c1 = vImg(t.category.from);
-      await clickImagePixel(c1[0], c1[1]);
-    }
-    const cn = vImg(t.category.to);
-    await clickImagePixel(cn[0], cn[1]);
-    await confirmValue(String(t.category.count));
-    await page.getByTestId('run-calibration').click();
-    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
-
-    // the card after the calibration card starts folded, its header offering to
-    // mark the legend; marking opens it, and Read legend waits for the box
-    expect(await page.getByTestId('legend-line').count()).toBe(0);
-    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
-    expect(await textOf('legend-line')).toBe('Draw a box round the legend on the figure.');
-    expect(await page.getByRole('button', { name: 'Read legend', exact: true }).isDisabled()).toBe(true);
-    expect(await textOf('tips-bar')).toMatch(/Mark the legend: drag a box from one corner of it to the opposite corner/);
-    const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
-    const from = await imageToLocal(...(vImg([lx0 - 3, ly1 + 3]) as [number, number]));
-    const to = await imageToLocal(...(vImg([lx1 + 3, ly0 - 3]) as [number, number]));
-    await dragMarker(from.lx, from.ly, to.lx, to.ly);
-    expect(await textOf('legend-line')).toBe('Legend marked. Read it to see what it says.');
-    await page.getByRole('button', { name: 'Read legend', exact: true }).click();
-    await expect.poll(() => page.getByTestId('legend-entry-name-1').inputValue().catch(() => ''), { timeout: 30000 }).toBe('B');
-    expect(await page.getByTestId('legend-entry-name-0').inputValue()).toBe('A');
-    // the read is editable
-    await page.getByTestId('legend-entry-name-0').fill('Group A');
-    await page.getByRole('button', { name: 'Accept legend read', exact: true }).click();
-    // the card folds once done, as the calibration card does, and says so in its header
-    expect(await textOf('legend-status')).toBe('2 series ✓');
-    expect(await page.getByTestId('legend-line').count()).toBe(0);
-    await page.getByTestId('legend-fold').click();
-    expect(await textOf('legend-line')).toBe('Legend accepted: 2 series named from it, and the legend is masked so no series tool reads it.');
-    await page.getByTestId('legend-fold').click();
-    const names = await page.getByTestId('series-select').locator('option').allTextContents();
-    expect(names.join(' | ')).toMatch(/Group A/);
-    expect(names.join(' | ')).toMatch(/\bB\b/);
-
-    // the next card: Series extraction, one row per series the legend named,
-    // each with the tool that will read it
-    expect(await textOf('series-line')).toBe('Read the 2 series the legend named, each with the tool shown.');
-    expect(await textOf('series-row-name-0')).toBe('Group A');
-    expect(await textOf('series-row-name-1')).toBe('B');
-    expect(await page.getByTestId('series-row-method-0').inputValue()).toBe('bars');
-    await page.getByRole('button', { name: 'Read series', exact: true }).click();
-    // each row says what its tool said: five bars each, the legend's swatch not among them
-    await expect.poll(() => textOf('series-row-result-1').catch(() => ''), { timeout: 30000 }).toBe('Read from the figure’s drawing: placed 5 bars (one per drawn rectangle).');
-    expect(await textOf('series-row-result-0')).toBe('Read from the figure’s drawing: placed 5 bars (one per drawn rectangle).');
-    // the last series read (B) is the active one; its five values, to 0.05 (clicked calibration)
-    const heightsB = (vTruth('bars-grouped') as unknown as { series: { heights: number[] }[] }).series[1]!.heights;
-    for (let i = 0; i < 5; i++) {
-      expect(Number((await textOf(`tuple-derived-${i}`)).replace(/[^0-9.eE+-]/g, ''))).toBeCloseTo(heightsB[i]!, 1);
-    }
-    await page.getByRole('button', { name: 'Accept series read', exact: true }).click();
-    expect(await textOf('series-status')).toBe('Read ✓');
-    await page.getByTestId('series-fold').click();
-    expect(await textOf('series-line')).toBe('Series read accepted. Each series can still be edited as usual; Undo takes a read back.');
-  }, 180000);
-
-  /** The legend and series cards on a drawn line figure: mark the legend from
-   * its truth box, read it, accept it, then read the series. Returns what each
-   * series row said. */
-  async function legendThenSeries(name: string): Promise<{ names: string[]; methods: string[]; said: string[] }> {
-    await openDrawnFigure(name);
-    const [lx0, ly0, lx1, ly1] = (vTruth(name) as unknown as { legend_box: [number, number, number, number] }).legend_box;
-    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
-    const from = await imageToLocal(...(vImg([lx0 - 3, ly1 + 3]) as [number, number]));
-    const to = await imageToLocal(...(vImg([lx1 + 3, ly0 - 3]) as [number, number]));
-    await dragMarker(from.lx, from.ly, to.lx, to.ly);
-    await page.getByRole('button', { name: 'Read legend', exact: true }).click();
-    await page.getByTestId('legend-entry-name-0').waitFor({ timeout: 30000 });
-    await page.getByRole('button', { name: 'Accept legend read', exact: true }).click();
-    const rows = await page.getByTestId('series-rows').locator('[data-testid^="series-row-name-"]').count();
-    const names: string[] = [], methods: string[] = [];
-    for (let i = 0; i < rows; i++) {
-      names.push(await textOf(`series-row-name-${i}`));
-      methods.push(await page.getByTestId(`series-row-method-${i}`).inputValue());
-    }
-    await page.getByRole('button', { name: 'Read series', exact: true }).click();
-    await page.getByTestId('series-accept').waitFor({ timeout: 60000 });
-    const said: string[] = [];
-    for (let i = 0; i < rows; i++) said.push(await textOf(`series-row-result-${i}`).catch(() => ''));
-    return { names, methods, said };
-  }
-
-  it('Legend and Series cards on a line chart: each legend line names its series, and Find lines reads each line into it', async () => {
-    const r = await legendThenSeries('lines-legend-colour');
-    expect(r.names).toEqual(['Control', 'Treated']);
-    expect(r.methods).toEqual(['lines', 'lines']);
-    for (const t of r.said) expect(t).toMatch(/^Read from the figure’s drawing: 1 line found/);
-    const series = (await page.getByTestId('series-select').locator('option').allTextContents()).join(' | ');
-    expect(series).toMatch(/Control \(\d+\)/);
-    expect(series).toMatch(/Treated \(\d+\)/);
-    expect(series).not.toMatch(/Control 2|Treated 2/);
-  }, 180000);
-
-  it('Legend and Series cards, two series in ONE ink: the colour is read once, and the second row says colour cannot tell them apart - never the data twice', async () => {
-    const r = await legendThenSeries('lines-legend');
-    expect(r.names).toEqual(['series 1', 'series 2']);
-    expect(r.said[0]).toMatch(/^Read from the figure’s drawing: 2 lines found/);
-    expect(r.said[1]).toBe('Same colour as series 1, so colour cannot tell them apart: its lines were all read into series 1 and the series after it. Move each to its own series in the series list.');
-    const series = await page.getByTestId('series-select').locator('option').allTextContents();
-    // the two drawn lines, once each: 80 points apiece
-    expect(series.filter((t) => /\(80\)/.test(t))).toHaveLength(2);
-  }, 180000);
-
-  it('Legend and Series cards on a PICTURE: the legend is read with PaddleOCR and the colour beside each name, and the bars from the pixels', async () => {
-    // bars-grouped.png: the same figure as a picture, 2 px per point, y down
-    const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[]; entries: { colour: number[] }[] } };
-    const H = 432, k = 2;
-    const px = (p: readonly number[]): [number, number] => [p[0]! * k, H - p[1]! * k];
-    try {
-      await app.evaluate(({ dialog }, f) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-      }, path.join(VFIX, 'bars-grouped.png'));
-      await page.getByTestId('open-image-button').click();
-      await waitForImageFitted();
-    } finally {
-      await app.evaluate(({ dialog }, f) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-      }, SAMPLE_IMAGE);
-    }
-    await page.getByTestId('axes-type-trigger').click();
-    await page.getByTestId('axes-option-bar').click();
-    await page.getByTestId('capture-figure').click();
-    await page.waitForTimeout(150);
-    const p1 = px([t.box[0]!, t.value[0]![1]]), p2 = px([t.box[0]!, t.value[1]![1]]);
-    await clickImagePixel(p1[0], p1[1]);
-    await confirmValue('0');
-    await clickImagePixel(p2[0], p2[1]);
-    await confirmValue(String(t.value[1]![0]));
-    if (/STARTS/.test(await textOf('tips-bar'))) {
-      const c1 = px(t.category.from);
-      await clickImagePixel(c1[0], c1[1]);
-    }
-    const cn = px(t.category.to);
-    await clickImagePixel(cn[0], cn[1]);
-    await confirmValue(String(t.category.count));
-    await page.getByTestId('run-calibration').click();
-    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
-
-    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
-    const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
-    const from = await imageToLocal(...px([lx0 - 3, ly1 + 3]));
-    const to = await imageToLocal(...px([lx1 + 3, ly0 - 3]));
-    await dragMarker(from.lx, from.ly, to.lx, to.ly);
-    await page.getByRole('button', { name: 'Read legend', exact: true }).click();
-    try {
-      await expect.poll(() => page.getByTestId('legend-entry-name-1').inputValue().catch(() => ''), { timeout: 60000 }).toBe('B');
-    } catch (e) {
-      // say what the card shows when the read does not come back (seen only in the full suite)
-      await page.screenshot({ path: path.join(os.tmpdir(), 'plottracer-legend-picture-fail.png') });
-      console.log('LEGEND-PICTURE notice:', await textOf('legend-notice').catch(() => '(none)'), '| read button:', await textOf('legend-read').catch(() => '(none)'));
-      throw e;
-    }
-    expect(await page.getByTestId('legend-entry-name-0').inputValue()).toBe('A');
-    // on a picture the sample's kind is not claimed: no "swatch" beside the names
-    expect(await textOf('legend-entries')).not.toMatch(/swatch/);
-    await page.getByRole('button', { name: 'Accept legend read', exact: true }).click();
-    await page.getByRole('button', { name: 'Read series', exact: true }).click();
-    await page.getByTestId('series-accept').waitFor({ timeout: 60000 });
-    expect(await textOf('series-row-result-0')).toMatch(/^Placed 5 bars/);
-    expect(await textOf('series-row-result-1')).toMatch(/^Placed 5 bars/);
-  }, 180000);
+  }, 120000);
 
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
     const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');
@@ -12908,7 +12833,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(async () => Number(((await page.getByTestId('series-select').locator('option').first().textContent()) ?? '').match(/\((\d+)\)\s*$/)?.[1]), { timeout: 5000 }).toBe(clicks + 1);
   }, 120000);
 
-  it('N4 a legend masked with Image ▸ Mask an area is left out of the lines found', async () => {
+  it('N4 a legend marked with the Legend card is left out of the lines found', async () => {
     const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
       calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
       series: { points: { x: number; y: number }[] }[];
@@ -12949,11 +12874,9 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect((await page.getByTestId('places-to-check').boundingBox())!.y).toBeGreaterThan(dataBox!.y);
     expect(await textOf('places-to-check')).toMatch(/stops here, inside the plot/);
 
-    // The card points at the mask the app already has (v2.5's Image ▸ Mask an
-    // area) - one gesture for every reader, and Find lines remembers where it is.
-    expect(await textOf('find-lines-mask-hint')).toMatch(/Image ▸ Mask an area/);
-    await page.getByTestId('mode-image-edit').click();
-    await page.getByTestId('image-edit-mask').click();
+    // the legend, marked with the Legend card's Mark legend: it is masked by itself (v2.7)
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-mark').click();
     // the legend, measured from an identical re-render of the example (plottracer-ref)
     const p0 = await imageToLocal(716, 538);
     const p1 = await imageToLocal(872, 634);
@@ -12963,7 +12886,6 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.mouse.move(canvasBox.x + (p0.lx + p1.lx) / 2, canvasBox.y + (p0.ly + p1.ly) / 2, { steps: 4 });
     await page.mouse.move(canvasBox.x + p1.lx, canvasBox.y + p1.ly, { steps: 4 });
     await page.mouse.up();
-    await page.getByTestId('crop-apply').click();
     await page.waitForTimeout(200);
     await pickTool('find-lines');
 
@@ -13162,62 +13084,24 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await ring.textContent()).toBe('');
     await inCorner();
 
-    // the bar chart picture, calibrated as the prompts ask, and its legend marked (as the PICTURE legend case)
-    const t = vTruth('bars-grouped') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; legend: { box: number[] } };
-    const H = 432, k = 2;
-    const px = (p: readonly number[]): [number, number] => [p[0]! * k, H - p[1]! * k];
-    try {
-      await app.evaluate(({ dialog }, f) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-      }, path.join(VFIX, 'bars-grouped.png'));
-      await page.getByTestId('open-image-button').click();
-      await waitForImageFitted();
-    } finally {
-      await app.evaluate(({ dialog }, f) => {
-        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
-      }, SAMPLE_IMAGE);
-    }
-    await page.getByTestId('axes-type-trigger').click();
-    await page.getByTestId('axes-option-bar').click();
-    await page.getByTestId('capture-figure').click();
-    await page.waitForTimeout(150);
-    const p1 = px([t.box[0]!, t.value[0]![1]]), p2 = px([t.box[0]!, t.value[1]![1]]);
-    await clickImagePixel(p1[0], p1[1]);
-    await confirmValue('0');
-    await clickImagePixel(p2[0], p2[1]);
-    await confirmValue(String(t.value[1]![0]));
-    if (/STARTS/.test(await textOf('tips-bar'))) {
-      const c1 = px(t.category.from);
-      await clickImagePixel(c1[0], c1[1]);
-    }
-    const cn = px(t.category.to);
-    await clickImagePixel(cn[0], cn[1]);
-    await confirmValue(String(t.category.count));
-    await page.getByTestId('run-calibration').click();
-    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
-    await page.getByRole('button', { name: 'Mark the legend', exact: true }).click();
-    const [lx0, ly0, lx1, ly1] = t.legend.box as [number, number, number, number];
-    const from = await imageToLocal(...px([lx0 - 3, ly1 + 3]));
-    const to = await imageToLocal(...px([lx1 + 3, ly0 - 3]));
-    await dragMarker(from.lx, from.ly, to.lx, to.ly);
-    await page.waitForTimeout(500);
+    // the bar chart picture, calibrated as the prompts ask; the long operation is Auto detect legend, slowed
+    await openBarsPicture();
+    await page.getByTestId('mode-legend').click();
     expect(await ring.getAttribute('data-state'), 'still before the long operation').toBe('still');
 
     let sawRunning = false;
-    await slowRead(1500);
+    await slowChannel('figdet:detect', 1500);
     try {
-      await page.getByRole('button', { name: 'Read legend', exact: true }).click();
-      // count(), not inputValue(): inputValue waits for the entry, and would look at the ring only before and after
+      await page.getByTestId('legend-auto-detect').click();
       await expect.poll(async () => {
         if ((await ring.getAttribute('data-state')) === 'running') sawRunning = true;
         expect(await ring.textContent()).toBe('');
-        return page.getByTestId('legend-entry-name-1').count();
-      }, { timeout: 60000, interval: 50 }).toBe(1);
+        return textOf('legend-auto-detect');
+      }, { timeout: 60000, interval: 50 }).toBe('Auto detect legend');
     } finally {
-      await slowRead(0);
+      await slowChannel('figdet:detect', 0);
     }
-    expect(await page.getByTestId('legend-entry-name-1').inputValue()).toBe('B');
-    expect(sawRunning, 'the ring ran while the legend was read').toBe(true);
+    expect(sawRunning, 'the ring ran while the legend was detected').toBe(true);
     await expect.poll(() => ring.getAttribute('data-state'), { timeout: 2000 }).toBe('still');
     await inCorner();
   }, 120000);
@@ -13249,7 +13133,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
       a.y1.py + (p0.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value))
     );
     const shares = new Set<string>();
-    await slowRead(400);
+    await slowChannel('ocr:readText', 400);
     try {
       await page.getByTestId('find-lines-run').click();
       await expect.poll(async () => {
@@ -13258,7 +13142,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
         return page.getByTestId('find-lines-summary').count();
       }, { timeout: 120000, interval: 50 }).toBe(1);
     } finally {
-      await slowRead(0);
+      await slowChannel('ocr:readText', 0);
     }
     expect(await textOf('find-lines-summary')).toMatch(/7 lines found/);
     // the arc grew through several shares as the labels were read

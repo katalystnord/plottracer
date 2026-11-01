@@ -110,6 +110,7 @@ export type KeyAction =
   | { type: 'select-tool' }
   | { type: 'toggle-image-edit' }
   | { type: 'toggle-data-extraction' }
+  | { type: 'toggle-legend' }
   | { type: 'toggle-error-bars' }
   | { type: 'toggle-measure' }
   | { type: 'toggle-marks' }
@@ -184,7 +185,7 @@ export function stepSelectablePoint(
  * button's `disabled` so a key cannot do what the greyed button cannot.
  *
  * Hotkeys 0-9 run straight down the rail (2026-07-22 redesign; Edit image and
- * Calibrate traded places, David 2026-10-31): 0 Pan · 1 Edit img · 2 Calibrate · 3 (Legend, to come) ·
+ * Calibrate traded places, David 2026-10-31): 0 Pan · 1 Edit img · 2 Calibrate · 3 Legend ·
  * 4 Data extraction (Add, Auto-extract and Cut in one card, v2.7) · 5 Select · 6 Error bars ·
  * 7 Measure · 8 Curve fit · 9 Geometry. Curve Fit (8) / Geometry (9) are fly-out
  * panels: opened by triggering their rail button, skipped when disabled.
@@ -195,8 +196,9 @@ export function resolveDigit(key: string, s: KeyboardState): KeyAction | null {
   if (key === '0') return { type: 'set-mode', mode: 'pan' };
   if (key === '1' && s.canvasHasImage) return { type: 'toggle-image-edit' };
   if (key === '2' && s.figureCaptured) return { type: 'set-mode', mode: 'calibrate' };
-  // 3 waits for the Legend tool (David, 2026-10-31). 4 opens Data extraction on every graph: a tool that does not
-  // apply is greyed inside the card, so the card itself always opens.
+  // 3 is the Legend tool (David, 2026-10-31): the legend can be marked before the axes are calibrated. 4 opens
+  // Data extraction on every graph: a tool that does not apply is greyed inside the card, so the card always opens.
+  if (key === '3' && s.figureCaptured) return { type: 'toggle-legend' };
   if (key === '4' && s.isCalibrated) return { type: 'toggle-data-extraction' };
   // Hotkey 5 activates Select with the current sub-mode but does NOT open the
   // picker (that's the rail button / its arrow) -- see 'select-tool'.

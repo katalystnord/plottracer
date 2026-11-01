@@ -116,6 +116,9 @@ import warningSvg from '../../icons/custom/warning.svg?raw';
 // (The old "Clear points" eraser icon was retired when per-point delete moved to
 // the Select tool; "Clear all points" now uses the trash/DeleteIcon.)
 import autoTraceSvg from '../../icons/custom/auto-trace.svg?raw';
+// The Legend tool (rail 3, v2.7), an original: a legend box holding two entries, each a sample line beside its
+// label.
+import legendSvg from '../../icons/custom/legend.svg?raw';
 // "Select" (data-point selector, subsumes delete) -- icons/custom/select.svg, a
 // standard mouse-pointer arrow (David): the universal "select/edit" symbol. Clicks
 // or box-drags to select DATA points (never calibration handles) for nudge/delete.
@@ -217,6 +220,7 @@ export const ImageEditIcon = () => <Icon svg={imageEditSvg} />;
 export const CameraIcon = () => <Icon svg={cameraSvg} />;
 export const WarningIcon = ({ size }: { size?: number } = {}) => <Icon svg={warningSvg} size={size} />;
 export const AutoTraceIcon = () => <Icon svg={autoTraceSvg} />;
+export const LegendIcon = () => <Icon svg={legendSvg} />;
 export const SelectBoxIcon = () => <Icon svg={selectBoxSvg} />;
 export const SelectLassoIcon = () => <Icon svg={selectLassoSvg} />;
 export const SelectSeriesIcon = () => <Icon svg={selectSeriesSvg} />;
