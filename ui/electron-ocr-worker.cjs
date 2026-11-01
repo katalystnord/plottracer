@@ -15,6 +15,8 @@ const { decodePng } = require('./electron-ocr-png.cjs')
 const { readPixels } = require('./electron-ocr-paddle.cjs')
 const figtype = require('./electron-figtype.cjs')
 const figdet = require('./electron-figdet.cjs')
+const chartdete = require('./electron-chartdete-onnx.cjs')
+const DETECTOR = process.env.PLOTTRACER_DETECTOR !== 'rfdetr' && fs.existsSync(chartdete.MODEL_DIR) ? 'chartdete' : 'rfdetr'
 
 const MODEL_DIR = path.join(__dirname, 'ocr-model')
 
@@ -44,10 +46,13 @@ parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
       parentPort.postMessage({ id, answer: await figtype.classify(await models, image) })
       return
     }
-    // the chart-element detector (v2.7, electron-figdet.cjs), loaded on first use, like the classifiers
+    // the chart-element detector (v2.7), loaded on first use, like the classifiers: ChartDete when its pack is
+    // installed (electron-chartdete-onnx.cjs; measured better on axes and legends), else RF-DETR
+    // (electron-figdet.cjs); PLOTTRACER_DETECTOR=rfdetr asks for RF-DETR, to compare
     if (kind === 'figdet') {
-      if (!detector) detector = figdet.startDetector(require('onnxruntime-web'))
-      parentPort.postMessage({ id, answer: await figdet.detect(await detector, image) })
+      const det = DETECTOR === 'chartdete' ? chartdete : figdet
+      if (!detector) detector = DETECTOR === 'chartdete' ? chartdete.startChartDete(require('onnxruntime-web')) : figdet.startDetector(require('onnxruntime-web'))
+      parentPort.postMessage({ id, answer: await det.detect(await detector, image) })
       return
     }
     if (!engine) engine = startEngine()

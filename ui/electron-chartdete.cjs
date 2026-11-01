@@ -1,5 +1,5 @@
 // COMPARISON BUILD ONLY (David, 2026-10-19: "can you make a build for me with ChartDete instead, so that I can
-// compare both, live?"). When PlotTracer is started with PLOTTRACER_DETECTOR=chartdete, the chart-element
+// compare both, live?"). When PlotTracer is started with PLOTTRACER_DETECTOR=chartdete-python, the chart-element
 // detector's requests go to ChartDete (MIT, Pengyu Yan) running in its own Python on this machine
 // (plottracer-ref research/v2.7-figdet/chartdete_server.py) instead of the app's own RF-DETR. Everything after
 // the boxes is the same pipeline. Not shippable: it needs that Python, mmdetection and PyTorch.

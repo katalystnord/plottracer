@@ -131,8 +131,9 @@ function classifyFigure(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
  * the same rule as `readText`: a refusal is a value, never a hang.
  */
 function detectChartElements(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
-  // COMPARISON BUILD ONLY: ChartDete in its own Python, when asked for at launch (electron-chartdete.cjs)
-  if (process.env.PLOTTRACER_DETECTOR === 'chartdete') return require('./electron-chartdete.cjs').detectWithChartDete(pngBase64)
+  // COMPARISON ONLY: the original ChartDete in its own Python, when asked for at launch (electron-chartdete.cjs);
+  // the app's own ChartDete runs in the worker (electron-chartdete-onnx.cjs)
+  if (process.env.PLOTTRACER_DETECTOR === 'chartdete-python') return require('./electron-chartdete.cjs').detectWithChartDete(pngBase64)
   return new Promise((resolve) => {
     const id = nextId++
     let timer = null

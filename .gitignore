@@ -10,6 +10,7 @@ __pycache__/
 reports/
 .stryker-tmp/
 
-# v2.7: the chart-element detector (117 MB) is not committed until its size is decided (8-bit, or Git LFS);
-# see docs/v2.7-figure-type.md. Copy it from plottracer-ref research/v2.7-figdet (rfdetr_infer.py export).
-ui/figdet-model/detector.onnx
+# v2.7: the chart-element detectors' models, never in git: ChartDete's 8-bit pieces (161 MB, chartdete/), the
+# vision pack, a download; and RF-DETR's detector.onnx (117 MB), from plottracer-ref research/v2.7-figdet
+# (rfdetr_infer.py export). The whole folder, so a link to it in a worktree is ignored too.
+ui/figdet-model
