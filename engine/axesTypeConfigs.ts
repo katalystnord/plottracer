@@ -1471,14 +1471,16 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     //   · on `gplots::heatmap.2` the dendrograms occupy the top and left and
     //     the labels sit right and bottom, so the axes do NOT meet where a
     //     reader expects (B14).
-    { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click the pixel position of a known X value (e.g. X=0)', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
-    { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second pixel position of a known, different X value', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
+    // ⚑ On LABELLED TICK MARKS (David, 2026-11-01: "set the tick marks for value calibration"): the frame's corners
+    // are the data area's business now, not the calibration's.
+    { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click a labelled tick mark on the X axis and enter the number printed there', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
+    { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second labelled tick mark on the X axis, with a different number, and enter it', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
     // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed -
     // three-point calibration shares it - so this step asks only for the Y value
     // that belongs to it. A step that arrived with no click and no explanation
     // would read as the walk having skipped something.
-    { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click the pixel position of a known Y value (e.g. Y=0)', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
-    { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different Y value', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }] },
+    { key: 'y1', label: 'Y1', color: '#5fb4e0', prompt: 'Click a labelled tick mark on the Y axis and enter the number printed there', valueFields: [{ key: 'y1', label: 'Y', field: 'dy' }] },
+    { key: 'y2', label: 'Y2', color: '#5fb4e0', prompt: 'Click a second labelled tick mark on the Y axis, with a different number, and enter it', valueFields: [{ key: 'y2', label: 'Y', field: 'dy' }] },
   ],
   buildAxes(cal, ctx) {
     const isLogX = optionBool(ctx.options, 'isLogX');
@@ -2470,8 +2472,8 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
    * which is the order David gave.
    */
   fixedSteps: [
-    { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click the pixel position of a known bar value (e.g. 0)', valueFields: [{ key: 'p1', label: 'value', field: 'dy' }] },
-    { key: 'p2', label: 'P2', color: '#5fb4e0', prompt: 'Click a second pixel position of a known, different bar value', valueFields: [{ key: 'p2', label: 'value', field: 'dy' }] },
+    { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click a labelled tick mark on the value axis and enter the number printed there', valueFields: [{ key: 'p1', label: 'value', field: 'dy' }] },
+    { key: 'p2', label: 'P2', color: '#5fb4e0', prompt: 'Click a second labelled tick mark on the value axis, with a different number, and enter it', valueFields: [{ key: 'p2', label: 'value', field: 'dy' }] },
     // ⚑ THE STRUCTURE VIOLET, not a third calibration colour. These two handles
     // and the ticks they generate are one axis, and the app already says
     // "violet" for every mark the user placed on the figure's frame
@@ -2853,8 +2855,8 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   secondStage: { label: 'Categories', ending: 'Mark categories', done: 'Categories marked' },
   options: [{ key: 'isLog', label: 'Log scale (value)', kind: 'checkbox', default: false }],
   fixedSteps: [
-    { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a known value on the Y axis (e.g. Y=0)', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },
-    { key: 'v2', label: 'V2', color: '#5fb4e0', prompt: 'Click a second, different known value on the Y axis', valueFields: [{ key: 'v2', label: 'value', field: 'dy' }] },
+    { key: 'v1', label: 'V1', color: '#e0a458', prompt: 'Click a labelled tick mark on the Y axis and enter the number printed there', valueFields: [{ key: 'v1', label: 'value', field: 'dy' }] },
+    { key: 'v2', label: 'V2', color: '#5fb4e0', prompt: 'Click a second labelled tick mark on the Y axis, with a different number, and enter it', valueFields: [{ key: 'v2', label: 'value', field: 'dy' }] },
     // ⚑ The same two clicks Bar asks for, in the same words and the same violet.
     // A categorical Line's other axis is a category axis exactly as a bar
     // chart's is, so it is asked for the same way - MIRROR, not merely match.
