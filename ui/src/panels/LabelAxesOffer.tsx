@@ -20,7 +20,8 @@ const name = (a: AxisFromLabels) => a.axis.toUpperCase();
 
 /** "X: 0, 20, 40, 60, 80, 100" or "Y: 10^1 … 10^4, log". */
 function axisLine(a: AxisFromLabels & { ok: true }): string {
-  const labels = a.pairs.map((p) => p.label);
+  // a value the vetting corrected shows what was read too, so the correction is never silent
+  const labels = a.pairs.map((p) => (p.vetted ? `${p.value} (read as "${p.vetted.read}")` : p.label));
   const shown = labels.length > 8 ? `${labels.slice(0, 3).join(', ')} … ${labels[labels.length - 1]}` : labels.join(', ');
   // read along the far edge only when it is the figure's one axis: say so
   const edge = a.side === 'top' || a.side === 'right' ? ` (the ${a.side} axis)` : '';
