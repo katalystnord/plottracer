@@ -68,6 +68,36 @@ describe('vetting tick mark / label pairs: a disagreeing pair is checked, reread
     if (!x.ok) expect(x.reason).toBe('the labels do not fit one linear or one log scale');
   });
 
+  // guard (a), David 2026-10-17 ("yes, try it"): corrections only when the pairs that agree outnumber
+  // the pairs that disagree. Measured: two confident pairs once "corrected" three others (8, 9, 10 -> -2, -1, 0).
+  it('when the pairs that disagree are as many as those that agree, nothing is corrected and the axis is refused as before', () => {
+    const x = readX([label('0', 100, sure), label('10', 150, sure), label('70', 200, unsure),
+      label('80', 250, unsure), label('90', 300, unsure), label('50', 350, unsure)]);
+    expect(x.ok).toBe(false);
+    if (!x.ok) expect(x.reason).toBe('the labels do not fit one linear or one log scale');
+  });
+
+  // guard (b): a pair a pixel off whose mark is on the spacing and whose value is already the one its
+  // neighbours give it agrees; it is neither corrected nor counted against the majority.
+  it('a tick mark a pixel off its place, with the value its neighbours give it, is kept as read', () => {
+    const x = readX([label('0', 100, sure), label('10', 150, sure), label('20', 200, sure),
+      label('30', 251.5, unsure), label('40', 300, sure), label('50', 350, sure)], [100, 150, 200, 251.5, 300, 350]);
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([0, 10, 20, 30, 40, 50]);
+    expect(x.pairs.every((p) => p.vetted === undefined)).toBe(true);
+  });
+
+  // Measured 2026-10-17: a mark several pixels from its place was counted as "in place" when
+  // the allowance was a fraction of a label step, so a broken or uneven axis was offered with every
+  // pair kept as read. By David's step 1 such a mark is not in the right place: set aside, said.
+  it('a tick mark several pixels from its place is not in the right place: its pair is set aside, not kept as read', () => {
+    const x = readX([label('0', 100, sure), label('10', 150, sure), label('20', 200, sure),
+      label('30', 256, sure), label('40', 300, sure), label('50', 350, sure)], [100, 150, 200, 256, 300, 350]);
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([0, 10, 20, 40, 50]);
+    expect(x.unused.find((u) => u.label === '30')?.reason).toBe('it does not fit the other labels, and its tick mark is off their spacing');
+  });
+
   it('an axis whose pairs all fit is read exactly as before, whatever their confidence', () => {
     const x = readX([label('0', 100, unsure), label('10', 150, unsure), label('20', 200, unsure),
       label('30', 250, unsure), label('40', 300, unsure), label('50', 350, unsure)]);
