@@ -78,7 +78,8 @@ interface Label {
   size: number;
   /** 0 to 100; 100 for a PDF's own text. */
   confidence: number;
-  alternatives: readonly string[];
+  /** Other reads of the same label, parsed as the figure writes its numbers. */
+  alternatives: readonly { str: string; value: number }[];
 }
 /** A mark drawn at a value: a tick mark (a short straight stroke) or a
  * gridline (a long one). `at` is its place along the axis, `from`/`to` its
@@ -101,13 +102,29 @@ const SCALE_FACTOR = /^(1e[+-]?\d+|×\s*10\^[+-]?\d+)$/i;
 // digit, so "10,000" matched as a "1" sign before "0,000" (measured on PMC5855060, 2026-10-17).
 const DECIMAL_COMMA = /^[+\-\u2212]?(0,\d+|\d+,\d{1,2}|\d+,\d{4,})$/;
 
-/** A printed number, the minus sign (U+2212) understood, and commas as the
- * figure uses them: decimal commas when `decimalComma`, else thousands
- * separators ("1,000"). Undecided, "1,250" would be either, so the figure's
- * other labels decide (labelsOf). */
-function parseNumber(s: string, decimalComma = false): { value: number } | null {
+/** A dot the figure can only mean as a decimal point: "0.995", "2.5", "1.25", "3.1416"
+ * (a leading 0 group, or not three digits after it). */
+const DOT_DECIMAL = /^[+\-\u2212]?(0\.\d+|\d+\.\d{1,2}|\d+\.\d{4,})$/;
+/** Dots as thousands separators: "1.000", "12.500", "1.000.000", "1.000,5". */
+const DOT_THOUSANDS = /^[+\-\u2212]?[1-9]\d{0,2}(\.\d{3})+(,\d+)?$/;
+
+/** How the figure writes its numbers, decided once from all its labels (labelsOf). */
+interface NumberStyle {
+  /** "0,5" means a half. */
+  decimalComma?: boolean;
+  /** "1.000" means a thousand. */
+  dotThousands?: boolean;
+}
+
+/** A printed number, the minus sign (U+2212) understood, and commas and dots as the
+ * figure uses them: decimal commas when `decimalComma`, else commas are thousands
+ * separators ("1,000"); dots are thousands separators when `dotThousands` ("1.000",
+ * "1.000.000", "1.000,5"), else decimal points. Undecided, "1,250" or "1.250" would be
+ * either, so the figure's other labels decide (labelsOf). */
+function parseNumber(s: string, style: NumberStyle = {}): { value: number } | null {
   let t = s.trim().replace(/\u2212/g, '-').replace(/[\u2009\u202f\u00a0]/g, '');
-  if (decimalComma && /^[+-]?\d+,\d+$/.test(t)) t = t.replace(',', '.');
+  if (style.dotThousands && DOT_THOUSANDS.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+  else if (style.decimalComma && /^[+-]?\d+,\d+$/.test(t)) t = t.replace(',', '.');
   else if (/^[+-]?[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
   if (!NUMBER.test(t)) return null;
   return { value: Number(t) };
@@ -141,7 +158,7 @@ function joinTouching(text: readonly PlacedText[]): PlacedText[] {
       chain.push(j);
     }
     const str = chain.map((k) => text[k]!.str.trim()).join('');
-    if (chain.length > 1 && parseNumber(str, true)) {
+    if (chain.length > 1 && parseNumber(str, { decimalComma: true })) {
       for (const k of chain) used.add(k);
       const bs = chain.map((k) => text[k]!.box);
       const conf = chain.map((k) => text[k]!.confidence).filter((c): c is number => c !== undefined);
@@ -159,6 +176,16 @@ function joinTouching(text: readonly PlacedText[]): PlacedText[] {
 function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: PlacedText[] } {
   const text = joinTouching(pieces);
   const decimalComma = text.some((t) => DECIMAL_COMMA.test(t.str.trim()));
+  // ⚑ A tick label with three decimals ("1.000") is highly uncommon (David, 2026-10-17): a dot with
+  // three digits after it is a thousands separator, unless the figure shows real decimal dots
+  // ("0.995", "2.5"); on a figure with decimal commas a dot can only be a thousands separator.
+  // ⚑ And thousands step in round amounts (1.000, 1.250, 1.500), so every three-digit group must be
+  // a multiple of 50; 2.242, 2.244 or 1.005, 1.010 are decimals (David: "what would the steps be?").
+  const dotted = text.map((t) => t.str.trim()).filter((t) => DOT_THOUSANDS.test(t));
+  const roundGroups = dotted.every((t) => (t.replace(/,.*$/, '').match(/\.(\d{3})/g) ?? []).every((g) => Number(g.slice(1)) % 50 === 0));
+  const dotThousands = decimalComma || text.some((t) => /^[+\-\u2212]?[1-9]\d{0,2}(\.\d{3}){2,}/.test(t.str.trim()))
+    || (dotted.length > 0 && roundGroups && !text.some((t) => DOT_DECIMAL.test(t.str.trim())));
+  const style: NumberStyle = { decimalComma, dotThousands };
   const used = new Set<number>();
   const labels: Label[] = [];
   const factors: PlacedText[] = [];
@@ -191,9 +218,12 @@ function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: Pl
       factors.push(t);
       return;
     }
-    const n = parseNumber(t.str, decimalComma);
+    const n = parseNumber(t.str, style);
     if (n) labels.push({ str: t.str.trim(), value: n.value, exponent: false, box: t.box, size: t.size,
-      confidence: t.confidence ?? 100, alternatives: t.alternatives ?? [] });
+      confidence: t.confidence ?? 100, alternatives: (t.alternatives ?? []).flatMap((a) => {
+        const v = parseNumber(a, style);
+        return v ? [{ str: a, value: v.value }] : [];
+      }) });
   });
   return { labels, factors };
 }
@@ -431,8 +461,8 @@ function vetPairs(pairs: readonly { tick: Tick; label: Label }[], row: readonly 
       continue;
     }
     // 2. reread the value
-    const alt = q.label.alternatives.map((s) => ({ s, n: parseNumber(s) })).find((r) => r.n && fitsAt(r.n.value, q.tick.at));
-    if (alt) { out.pairs.push({ tick: q.tick, label: q.label, value: alt.n!.value, vetted: { read: q.label.str, how: 'reread' } }); continue; }
+    const alt = q.label.alternatives.find((a) => fitsAt(a.value, q.tick.at));
+    if (alt) { out.pairs.push({ tick: q.tick, label: q.label, value: alt.value, vetted: { read: q.label.str, how: 'reread' } }); continue; }
     // 3. the mark is in the right place, the value is wrong: the value its neighbours give it
     if (step !== null) {
       const v = snapAt(q.tick.at)!;
