@@ -289,6 +289,7 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     // calibration record on the old ends - a state no gesture produces.
     session.updateCalibPointPixel('c1', 100, 500);
     session.updateCalibPointPixel('c2', 900, 500);
+    expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
 
@@ -358,6 +359,7 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     // calibration record on the old ends - a state no gesture produces.
     session.updateCalibPointPixel('c1', 100, 500);
     session.updateCalibPointPixel('c2', 900, 500);
+    expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
 
@@ -370,6 +372,7 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     // ⚑ RE-PLACING is dragging the two handles back onto the figure.
     session.updateCalibPointPixel('c1', 100, 500);
     session.updateCalibPointPixel('c2', 900, 500);
+    expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
 
@@ -433,6 +436,7 @@ describe('⚑⚑ the columns are the TYPE\u2019s named values', () => {
     // calibration record on the old ends - a state no gesture produces.
     session.updateCalibPointPixel('c1', 100, 500);
     session.updateCalibPointPixel('c2', 900, 500);
+    expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
 
@@ -443,6 +447,7 @@ describe('⚑⚑ the columns are the TYPE\u2019s named values', () => {
     calibratedBar(session);
     session.updateCalibPointPixel('c1', 100, 500);
     session.updateCalibPointPixel('c2', 900, 500);
+    expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
 

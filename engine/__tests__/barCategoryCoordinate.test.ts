@@ -77,6 +77,7 @@ function barSession(config = BAR_AXES_CONFIG) {
 function withThreeCategories<S extends {
   updateCalibPointPixel: (key: string, px: number, py: number) => void;
   setCalibrationValues: (key: string, values: readonly string[]) => boolean;
+  runCalibration: () => boolean;
 }>(s: S) {
   // ⚑⚑ THE AXIS IS RE-PLACED THE WAY A USER RE-PLACES IT: the two category
   // handles are dragged, and the count is edited where it was declared. Since
@@ -86,6 +87,9 @@ function withThreeCategories<S extends {
   s.updateCalibPointPixel('c1', 100, 300);
   s.updateCalibPointPixel('c2', 400, 300);
   expect(s.setCalibrationValues('c2', ['3'])).toBe(true);
+  // ⚑ and Calibrate is pressed again, as a user must: any change to the
+  // calibration loses it (David, 2026-11-01).
+  expect(s.runCalibration()).toBe(true);
   return s;
 }
 

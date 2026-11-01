@@ -303,9 +303,10 @@ export function resolveKeyDown(e: KeyPress, s: KeyboardState): ResolvedKey | nul
   }
 
   // Keyboard CALIBRATION-HANDLE adjustment (checkpoint 127): nudge the selected
-  // handle with the arrows. updateCalibPointPixel re-runs calibration live, so
-  // every data value updates as the handle moves -- the reason handle precision
-  // matters more than any single point's (tenet 1). Checked before the data-point
+  // handle with the arrows. Handle precision matters more than any single
+  // point's (tenet 1): every value is read through it. A nudge is a change to
+  // the calibration, so it loses it until Calibrate is pressed again
+  // (updateCalibPointPixel; David, 2026-10-31). Checked before the data-point
   // branch since the two selections are mutually exclusive.
   if (s.activeHandleKey != null && isArrow(e.key)) {
     const { dx, dy } = nudgeDelta(e.key, e.shiftKey, s.canvasScale);

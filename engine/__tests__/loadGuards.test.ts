@@ -153,7 +153,7 @@ describe('A3 - the load path runs the same refusals as the click path', () => {
 
   it('stays RECOVERABLE - fixing the calibration clears the error', () => {
     // The escape hatch that makes "surface, don't refuse" honest: the handles
-    // are live, and moving one re-runs runCalibration, which re-guards.
+    // can be moved, and Calibrate (runCalibration) re-guards.
     const axes = loadedXY([
       [100, 300, '0', '0'],
       [100, 300, '10', '0'], // X2 coincident with X1
@@ -164,9 +164,12 @@ describe('A3 - the load path runs the same refusals as the click path', () => {
     session.loadCalibrated(axes, [new Dataset(2)]);
     expect(session.getCalibrationError()).toMatch(/same pixel/i);
 
-    // updateCalibPointPixel re-runs runCalibration when already calibrated,
-    // which is the guarded path - so the drag both fixes and re-checks.
+    // The drag fixes it and loses the calibration (David, 2026-11-01: any
+    // change to the calibration loses it); Calibrate is the guarded path, so it
+    // re-checks.
     session.updateCalibPointPixel('x2', 400, 300);
+    expect(session.isCalibrated()).toBe(false);
+    expect(session.runCalibration()).toBe(true);
     expect(session.getCalibrationError()).toBeNull();
     expect(session.isCalibrated()).toBe(true);
   });

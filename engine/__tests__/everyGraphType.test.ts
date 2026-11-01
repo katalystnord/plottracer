@@ -133,6 +133,9 @@ describe('⚑⚑ a type stamps the SAME metadata keys whatever its options say',
 
         const session = calibratedHealthy(id, config);
         session.setOption(option.key, value);
+        // ⚑ The flip loses the calibration (David, 2026-11-01: any change to the
+        // calibration loses it); Calibrate builds the axes with the new option.
+        const built = session.runCalibration();
 
         // ⚑ A flip may be REFUSED, and legitimately so - a heatmap with a
         // CATEGORY colour key is refused on purpose, naming what it would cost.
@@ -140,6 +143,10 @@ describe('⚑⚑ a type stamps the SAME metadata keys whatever its options say',
         // to compare; skipping it is right, but skipping SILENTLY is how a loop
         // like this ends up asserting nothing at all. Hence the counter.
         if (session.getCalibrationError()) continue;
+        // ⚑ A flip that reshapes a step (an axis turned to categories) gives its
+        // typed values back, so the walk is unfinished and there is nothing built
+        // to compare - the same as a refusal, and counted the same way.
+        if (!built) continue;
 
         flipsThatBuilt++;
         expect(

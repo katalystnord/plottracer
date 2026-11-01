@@ -328,8 +328,10 @@ export interface CanvasMarkerInput {
   /** Fallback when no dataset is active - should never be reached in practice. */
   fallbackColor: string;
   axesKind: string;
-  /** The axes are built. Handles only become draggable once they are. */
+  /** The axes are built. */
   isCalibrated: boolean;
+  /** The calibration card is open. Calibration handles can be selected and dragged only while it is. */
+  calibrationCardOpen: boolean;
   labelAway: { x: number; y: number } | undefined;
   /** Which data point (if any) closing the pie ring would land on. */
   ringClosingIndex: number | null;
@@ -355,6 +357,7 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
     fallbackColor,
     axesKind,
     isCalibrated,
+    calibrationCardOpen,
     labelAway,
     ringClosingIndex,
     mode,
@@ -443,15 +446,12 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
         // Selected for keyboard nudge (checkpoint 127) -- highlighted so you can
         // see which handle the arrow keys will move.
         selected: activeHandleKey === step.key,
-        // Interactive *only* in Calibrate mode. Mid-walk (axes === null) a
-        // click that lands exactly on an already-placed handle (e.g. X1 and
-        // Y1 sharing the same origin pixel, a common real calibration
-        // pattern) must still register as the *next* step's click, not start
-        // a drag. Once calibrated, the handles stay inert in Place Point mode
-        // too -- otherwise a handle sitting on the origin swallows the click
-        // meant to drop a *data point* right there (a real reported bug); you
-        // switch to Calibrate to nudge a handle, to Place Point to add data.
-        draggable: isCalibrated && mode === 'calibrate',
+        // Interactive only in Calibrate mode with the calibration card open (David, 2026-10-31: a point placed by
+        // hand or by a detection is adjusted before Calibrate as well as after, and only while the card is open).
+        // In other modes the handles stay inert, or a handle sitting on the origin swallows the click meant to drop
+        // a *data point* right there (a real reported bug). A click on a handle while a step is waiting for its
+        // click is that step's click (Workspace's handleMarkerClick), so X1 and Y1 can still share a pixel.
+        draggable: calibrationCardOpen && mode === 'calibrate',
       });
     }
   }

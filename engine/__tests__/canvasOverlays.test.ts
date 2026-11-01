@@ -140,6 +140,7 @@ function base(over: Partial<CanvasMarkerInput> = {}): CanvasMarkerInput {
     fallbackColor: '#fallback',
     axesKind: 'xy',
     isCalibrated: true,
+    calibrationCardOpen: true,
     labelAway: undefined,
     ringClosingIndex: null,
     mode: 'place-point',
@@ -163,22 +164,25 @@ describe('calibration handles', () => {
     expect(m.map((x) => x.id)).toEqual(['x1']);
   });
 
-  it('are draggable ONLY once calibrated AND in Calibrate mode', () => {
-    // Mid-walk a click landing on an already-placed handle (X1 and Y1 sharing an
-    // origin pixel is an ordinary calibration) must register as the NEXT step's
-    // click, not start a drag.
-    const midWalk = buildCanvasMarkers(base({ steps, placedPoints: placed, isCalibrated: false, mode: 'calibrate' }));
-    expect(midWalk.every((x) => x.draggable === false)).toBe(true);
+  it('are draggable in Calibrate mode with the calibration card open, calibrated or not, and never otherwise', () => {
+    // David, 2026-10-31: a calibration point is adjustable before and after
+    // Calibrate - a detected point must be adjustable before it - but only while
+    // the calibration card is open. (Until v2.7 they were draggable only once
+    // calibrated.)
+    for (const isCalibrated of [false, true]) {
+      const open = buildCanvasMarkers(base({ steps, placedPoints: placed, isCalibrated, mode: 'calibrate' }));
+      expect(open.every((x) => x.draggable === true), `calibrated: ${isCalibrated}`).toBe(true);
 
-    // Once calibrated, still inert outside Calibrate - a handle on the origin
-    // would otherwise swallow the click meant to drop a data point there.
-    for (const mode of ['place-point', 'pan', 'select', 'error-bars']) {
-      const m = buildCanvasMarkers(base({ steps, placedPoints: placed, mode }));
-      expect(m.every((x) => x.draggable === false), mode).toBe(true);
+      const folded = buildCanvasMarkers(base({ steps, placedPoints: placed, isCalibrated, calibrationCardOpen: false, mode: 'calibrate' }));
+      expect(folded.every((x) => x.draggable === false), `folded, calibrated: ${isCalibrated}`).toBe(true);
+
+      // Outside Calibrate they stay inert - a handle on the origin would
+      // otherwise swallow the click meant to drop a data point there.
+      for (const mode of ['place-point', 'pan', 'select', 'error-bars']) {
+        const m = buildCanvasMarkers(base({ steps, placedPoints: placed, isCalibrated, mode }));
+        expect(m.every((x) => x.draggable === false), `${mode}, calibrated: ${isCalibrated}`).toBe(true);
+      }
     }
-
-    const live = buildCanvasMarkers(base({ steps, placedPoints: placed, mode: 'calibrate' }));
-    expect(live.every((x) => x.draggable === true)).toBe(true);
   });
 
   it('render as calibration reticles, not data dots', () => {

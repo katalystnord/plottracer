@@ -58,9 +58,12 @@ describe('a placed calibration value can be corrected', () => {
     // David's case exactly: a key value of 0 typed on a linear key, then Log
     // switched on - refused, with no way to enter the positive value it asks
     // for. Correcting the value now makes the same calibration succeed.
+    // ⚑ In that order: since v2.7 an edit is refused AT THE EDIT when the type's
+    // rules can already reject it, so a 0 typed after Log is on never lands.
+    // The way out still has to exist for the 0 that was typed first.
     const s = walked();
+    expect(s.setCalibrationValues('kv1', ['0'])).toBe(true);
     s.setOption('isLogValue', 'true');
-    s.setCalibrationValues('kv1', ['0']);
     expect(s.runCalibration()).toBe(false);
     expect(s.getCalibrationError()).toMatch(/log colour scale/i);
 
@@ -81,10 +84,10 @@ describe('a placed calibration value can be corrected', () => {
     expect(s.setCalibrationValues('nosuchstep', ['1'])).toBe(false);
   });
 
-  it('re-calibrates live when the axes already exist', () => {
-    // ⚑ Same rule `setOption` follows: an option describes how the EXISTING
-    // handles are read, so it re-runs rather than waiting to be asked. A
-    // corrected value is the same kind of change.
+  it('loses a live calibration, and Calibrate reads the corrected value', () => {
+    // ⚑ Same rule `setOption` follows: any change to the calibration loses it
+    // (David, 2026-11-01), and a corrected value is that kind of change. The
+    // figure is Not calibrated until Calibrate is pressed again.
     const s = walked(XY_AXES_CONFIG, [
       [100, 300, ['0']], [400, 300, ['10']],
       [100, 300, ['0']], [100, 100, ['20']],
@@ -93,7 +96,8 @@ describe('a placed calibration value can be corrected', () => {
     expect(s.getAxes()!.pixelToData(250, 200)).toEqual([5, 10]);
 
     expect(s.setCalibrationValues('x2', ['20'])).toBe(true);
-    // The axes moved with it - no second Calibrate press.
+    expect(s.isCalibrated()).toBe(false);
+    expect(s.runCalibration()).toBe(true);
     expect(s.getAxes()!.pixelToData(250, 200)).toEqual([10, 10]);
   });
 

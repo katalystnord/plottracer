@@ -660,53 +660,81 @@ describe('Workspace: XY axes', () => {
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1); // moved, not duplicated
   });
 
-  it('dragging a calibration handle re-calibrates live and updates existing data points', async () => {
+  // ⚑⚑ ANY CHANGE TO THE CALIBRATION LOSES IT (David, 2026-10-31 and 2026-11-01): a drag or a one-pixel nudge
+  // makes the figure "Not calibrated" and opens the card on its Calibrate, which reads the data afresh and folds
+  // the card again. Until v2.7 a drag or nudge re-calibrated live.
+  it('dragging a calibration handle loses the calibration, and Calibrate reads the existing data with the new handle', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(250, 175); // (5.000, 5.000), never moved after this
     await expectRow([5, 5]);
 
-    // Drag Y2 from local (100,100) to (100,0): the Y span for the same
-    // 0-10 data range grows, so the same screen pixel now reads a
-    // different Y value. Pure ratio math (screen->image is affine, so
-    // ratios along a calibration axis are scale/offset-independent):
-    // Y1@250=0, new Y2@0=10, query still at local y=175 ->
-    // (250-175)/(250-0) * 10 = 3.000. X is untouched, stays 5.000.
-    // Calibration handles are only interactive in Calibrate mode now (so a
-    // Place-Point click on a handle drops a data point rather than grabbing it
-    // -- see Workspace.tsx's marker draggable rule); switch modes to adjust.
+    // Drag Y2 from local (100,100) to (100,0): the Y span for the same 0-10 range grows, so after Calibrate the
+    // same pixel reads (250-175)/(250-0) * 10 = 3.000. X is untouched, stays 5.000. The Calibrate tool opens the
+    // folded card, and handles are adjustable while it is open.
     await page.getByTestId('mode-calibrate').click();
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await dragMarker(100, 100, 100, 0);
 
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
     await expectRow([5, 3]);
+    expect(await page.getByTestId('calib-chip-x1').count(), 'Calibrate folds the card again').toBe(0);
   });
 
-  it('nudges a selected calibration handle with the arrow keys, recalibrating live (checkpoint 127)', async () => {
+  it('a one-pixel nudge of a calibration handle loses the calibration too (checkpoint 127)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(250, 175); // a data point, reads (5, 5)
     await expectRow([5, 5]);
 
-    // In Calibrate mode, click the X2 handle (local 400,250) to select it for the
-    // keyboard - the same handle you would otherwise drag.
+    // In Calibrate mode, click the X2 handle (local 400,250) to select it for the keyboard.
     await page.getByTestId('mode-calibrate').click();
-    // ⚑ click what the user would SEE: the tips bar offers the click as soon as the mode switches, but
-    // the canvas's hit test is only rebuilt when Konva next draws, so a click in the same instant
-    // selected nothing (failed every run, 2026-10-19). A person always sees the drawn frame first.
+    // ⚑ click what the user would SEE: the canvas's hit test is only rebuilt when Konva next draws, so a click in
+    // the same instant selected nothing (failed every run, 2026-10-19). A person always sees the drawn frame first.
     await expect.poll(() => textOf('tips-bar')).toMatch(/click one, then/i);
     await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await clickAt(400, 250);
     expect(await textOf('tips-bar')).toMatch(/Handle selected/i);
 
-    // Nudge X2 left: the x=10 anchor moves toward x=0, compressing the x axis, so
-    // the fixed data point at local x=250 now reads a LARGER x. Y is untouched
-    // (X2 is an x-axis handle), which is the proof it recalibrated, not just moved
-    // a dot. The exact delta is zoom-scaled so only the direction is asserted.
-    const [beforeX, beforeY] = await rowValues(0);
-    for (let i = 0; i < 12; i++) await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
+    // X2 moved left: the x axis is compressed, so the fixed point reads a LARGER x; Y is untouched
     const [afterX, afterY] = await rowValues(0);
-    expect(afterX!).toBeGreaterThan(beforeX! + 0.03);
-    expect(afterY!).toBeCloseTo(beforeY!, 5);
+    expect(afterX!).toBeGreaterThan(5);
+    expect(afterY!).toBeCloseTo(5, 5);
+  });
+
+  it('after calibration the card is folded, and the Calibrate tool on the rail opens it again', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    expect(await page.getByTestId('calib-chip-x1').count()).toBe(0);
+    await page.getByTestId('mode-calibrate').click();
+    await expect.poll(() => page.getByTestId('calib-chip-x1').count()).toBe(1);
+    expect(await textOf('calib-status')).toMatch(/^Calibrated/);
+  });
+
+  it('a calibration point can be placed at any time: press its chip, then click the figure', async () => {
+    await resetWorkspace('xy');
+    // X2 first, by choice
+    await page.getByTestId('calib-chip-pick-x2').click();
+    await expect.poll(() => textOf('tips-bar')).toMatch(/X2/);
+    await clickAt(400, 250);
+    await confirmValue('10');
+    // then the walk asks for the first point still missing, X1, and goes on as usual
+    await expect.poll(() => textOf('tips-bar')).toMatch(/X1/);
+    await clickAt(100, 250);
+    await confirmValue('0');
+    await confirmValue('0'); // Y1: shared corner, placed and prefilled already
+    await clickAt(100, 100);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
+    await clickAt(250, 175);
+    await expectRow([5, 5]);
   });
 
   it('does NOT nudge a data point with the arrows outside a data-editing mode (v0.6 gate)', async () => {
@@ -777,7 +805,7 @@ describe('Workspace: tool mode', () => {
     expect(after).not.toBe(before);
   });
 
-  it('switching back to Calibrate mode after calibration ignores clicks (no stray points) but still allows handle drags', async () => {
+  it('switching back to Calibrate mode after calibration ignores clicks (no stray points) but still allows handle drags, which lose the calibration', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard(); // lands in Place Point mode
 
@@ -785,8 +813,12 @@ describe('Workspace: tool mode', () => {
     await clickAt(250, 175);
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(0);
 
-    // Still in Calibrate mode: dragging the Y2 handle should re-calibrate live.
+    // Still in Calibrate mode (the card open): the Y2 handle can be dragged.
     await dragMarker(100, 100, 100, 0);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
     await page.getByTestId('mode-place-point').click();
     await clickAt(250, 175);
@@ -935,7 +967,7 @@ describe('Workspace: Bar axes', () => {
     expect(await derivedValue()).toBeCloseTo(5, 2);
   });
 
-  it('dragging a Bar calibration handle re-calibrates live', async () => {
+  it('dragging a Bar calibration handle loses the calibration, and Calibrate reads the data with it', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
     await dragMarker(300, 400, 300, 250); // baseline to (5.000), never moved after this
@@ -944,7 +976,13 @@ describe('Workspace: Bar axes', () => {
     // Drag P2 from local (300,100) to (300,0): P1@400=0, new P2@0=10,
     // query still at local y=250 -> (400-250)/(400-0) * 10 = 3.750.
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
+    // ⚑ the canvas's hit test is rebuilt only when Konva next draws: a person always sees the drawn frame first
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await dragMarker(300, 100, 300, 0);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
     expect(await derivedValue()).toBeCloseTo(3.75, 2);
   });
@@ -2059,7 +2097,7 @@ describe('Workspace: Polar axes', () => {
     expect(await page.getByTestId('calib-option-isClockwise').count()).toBe(0);
   });
 
-  it('dragging the P2 handle re-calibrates live', async () => {
+  it('dragging the P2 handle loses the calibration, and Calibrate reads the data with it', async () => {
     await resetWorkspace('polar');
     await calibratePolarStandard();
 
@@ -2073,7 +2111,13 @@ describe('Workspace: Polar axes', () => {
     // same query pixel (600,300 -- unmoved, only the handle moved) now
     // reads a smaller r: ((20-10)/900)*(500-300)+10 = 12.222.
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
+    // ⚑ the canvas's hit test is rebuilt only when Konva next draws: a person always sees the drawn frame first
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await dragMarker(700, 300, 1300, 300);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
     await expectRow([12.222, 0]);
   });
@@ -2121,7 +2165,7 @@ describe('Workspace: Ternary axes', () => {
     await expectRow([50, 50, 0]);
   });
 
-  it('dragging the second corner re-calibrates live', async () => {
+  it('dragging the second corner loses the calibration, and Calibrate reads the data with it', async () => {
     await resetWorkspace('ternary');
     await calibrateTernaryStandard();
 
@@ -2132,7 +2176,13 @@ describe('Workspace: Ternary axes', () => {
     // the same query pixel (100,200 -- unmoved) is now only 1/3 of the way
     // from A to B instead of half: a=66.667, b=33.333, c=0.
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
+    // ⚑ the canvas's hit test is rebuilt only when Konva next draws: a person always sees the drawn frame first
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await dragMarker(100, 100, 100, 0);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
     // ⚑ 66.7, not 66.667: the TABLE reports at the figure's own resolution (v2.3),
     // and this axis resolves to about 0.17 per half-pixel, so one decimal is
@@ -2192,7 +2242,7 @@ describe('Workspace: Map axes', () => {
     expect(data[1]).toBeCloseTo((query.y * 30) / dist, 0);
   });
 
-  it('dragging the P2 handle re-calibrates live', async () => {
+  it('dragging the P2 handle loses the calibration, and Calibrate reads the data with it', async () => {
     await resetWorkspace('map');
     await page.getByTestId('calib-choice-origin-top-left').check(); // see the note above
     await calibrateMapStandard();
@@ -2211,7 +2261,13 @@ describe('Workspace: Map axes', () => {
     // Drag P2 from local (400,300) to (700,300): the reference distance
     // changes, so the same query pixel (unmoved) now reads a different value.
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
+    // ⚑ the canvas's hit test is rebuilt only when Konva next draws: a person always sees the drawn frame first
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await dragMarker(400, 300, 700, 300);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
     const p2After = screenToImage(view, 700, 300);
     const distAfter = Math.hypot(p2After.x - p1.x, p2After.y - p1.y);
 
@@ -2309,7 +2365,25 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     // genuinely can't see arbitrarily far from the chart circle's own
     // radius here).
     await page.getByTestId('mode-calibrate').click(); // handles adjust in Calibrate mode (checkpoint 37)
-    await dragMarker(400, 200, 420, 220);
+    // ⚑ The open card covers this handle, and the user pans the figure out from under it (David, 2026-11-01:
+    // "a user can always pan or move the graph to see all the points"). The middle button pans in any tool.
+    await refreshCanvasBox();
+    const [ox0, oy0] = await viewOffset();
+    await page.mouse.move(canvasBox.x + 300, canvasBox.y + 450);
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(canvasBox.x + 300, canvasBox.y + 700, { steps: 6 });
+    await page.mouse.up({ button: 'middle' });
+    await page.waitForTimeout(150);
+    const [ox1, oy1] = await viewOffset();
+    const hx = 400 + (ox1 - ox0);
+    const hy = 200 + (oy1 - oy0);
+    // ⚑ the canvas's hit test is rebuilt only when Konva next draws: a person always sees the drawn frame first
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    await dragMarker(hx, hy, hx + 20, hy + 20);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
     const after = await rowCells();
     expect(Number(after[1])).toBeCloseTo(Number(before[1]), 6); // r unchanged
@@ -8082,7 +8156,17 @@ describe('Workspace: changing graph type is non-destructive (checkpoint 87)', ()
 describe('Workspace: calibration options survive calibration (checkpoint 86)', () => {
   it('lets you switch Log Y after calibrating, WITHOUT losing your points', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard();
+    // Y over 1..1000: a log scale cannot hold the standard walk's Y1 = 0, and Calibrate rightly refuses it
+    await clickAt(100, 250);
+    await confirmValue('0');
+    await clickAt(400, 250);
+    await confirmValue('10');
+    await clickAt(100, 250);
+    await confirmValue('1');
+    await clickAt(100, 100);
+    await confirmValue('1000');
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
     // Trace some data -- the thing you must not lose.
     await page.getByTestId('mode-place-point').click();
     await clickAt(200, 200);
@@ -8096,8 +8180,13 @@ describe('Workspace: calibration options survive calibration (checkpoint 86)', (
     await page.getByTestId('calib-fold').click();
     await page.getByTestId('calib-option-isLogY').check();
     await page.waitForTimeout(200);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
-    // The whole point: the option changed and every point is still here.
+    // The whole point: the option changed and every point is still here. (Calibrate folded the card again.)
+    await page.getByTestId('calib-fold').click();
     expect(await page.getByTestId('calib-option-isLogY').isChecked()).toBe(true);
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(2);
   });
@@ -8112,10 +8201,10 @@ describe('Workspace: calibration options survive calibration (checkpoint 86)', (
     expect(await page.getByTestId('calib-option-isLogY').count()).toBe(0);
   });
 
-  it('re-projects values live when an option changes post-calibration', async () => {
+  it('an option changed after calibration loses it, and Calibrate re-projects the values', async () => {
     // Not just cosmetic: flipping Log Y must re-read the existing handles, or the
-    // reported values would be stale. Engine already did this (session.setOption);
-    // ckpt 86 only stopped the UI from hiding the control.
+    // reported values would be stale. Since 2026-11-01 the flip loses the
+    // calibration and Calibrate does the re-reading.
     await resetWorkspace('xy');
     // Calibrate Y over 1..1000 so linear vs log give clearly different readings.
     await clickAt(100, 250);
@@ -8136,6 +8225,10 @@ describe('Workspace: calibration options survive calibration (checkpoint 86)', (
     await page.getByTestId('calib-fold').click();
     await page.getByTestId('calib-option-isLogY').check();
     await page.waitForTimeout(200);
+    // ⚑ Any change to the calibration loses it (David, 2026-11-01): Not calibrated until Calibrate is pressed.
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
     const log = await textOf('point-row-0');
 
     // The same pixel now reads a different value -- the re-projection happened.

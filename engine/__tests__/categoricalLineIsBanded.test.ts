@@ -68,6 +68,9 @@ function withThreeCategories(s: LineSession) {
   s.updateCalibPointPixel('c1', 100, 300);
   s.updateCalibPointPixel('c2', 400, 300);
   expect(s.setCalibrationValues('c2', ['3'])).toBe(true);
+  // ⚑ and Calibrate is pressed again, as a user must: any change to the
+  // calibration loses it (David, 2026-11-01).
+  expect(s.runCalibration()).toBe(true);
   return s;
 }
 
@@ -148,6 +151,7 @@ describe('a category is the band the reading sits in', () => {
     // Slide the axis right so x=250 now falls in the FIRST band (250–400 split
     // into three: 250–300, 300–350, 350–400 - 250 is band 0).
     s.updateCalibPointPixel('c1', 250, 300);
+    expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     expect(positions(s, 0)).toEqual([1]);
   });
 

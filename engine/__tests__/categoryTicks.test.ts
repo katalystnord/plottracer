@@ -233,6 +233,7 @@ describe('marking the axis and declaring the categories', () => {
     s.getCategoryAxis().renameCategory(0, 'Flax');
     s.updateCalibPointPixel('c1', 150, 480);
     s.updateCalibPointPixel('c2', 650, 480);
+    expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 150, y: 480 }, { x: 650, y: 480 }]);
     expect(s.getCategoryAxis().getCategories()).toEqual(['Flax', '', '']);
   });
@@ -277,6 +278,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     const edges = s.getCategoryAxis().getAxisEdges();
 
     expect(s.setCalibrationValues('c2', ['6'])).toBe(true);
+    expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
 
     expect(s.getCategoryAxis().getCategoryCount()).toBe(6);
     expect(s.getCategoryAxis().getTickPoints()).toHaveLength(6);
@@ -311,6 +313,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     // Moving an end regenerates the ticks by design, so the user's dragged tick
     // and its adjusted flag are exactly what undo has to bring back.
     s.updateCalibPointPixel('c2', 800, 500);
+    expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 800, y: 500 }]);
     expect(s.getCategoryAxis().hasAdjustments()).toBe(false);
 

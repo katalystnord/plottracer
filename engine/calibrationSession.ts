@@ -714,6 +714,8 @@ export interface CategoryTickDetection {
 export class CalibrationSession<A extends CalibratedAxes> {
   private placed: Record<string, PlacedCalibPoint> = {};
   private stepIndex = 0;
+  /** A step the user CHOSE (its chip), which the next click places whatever else is placed - see `chooseStep`. */
+  private chosenStep = false;
   private pendingPixel: { px: number; py: number } | null = null;
   private axes: A | null = null;
   private calibrationError: string | null = null;
@@ -892,10 +894,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * *existing* handles should be read. */
   setOption(key: string, value: string): void {
     this.optionValues[key] = value;
-    if (this.axes) {
-      this.runCalibration();
-      return;
-    }
+    // ⚑⚑ ANY CHANGE TO THE CALIBRATION LOSES IT (David, 2026-11-01) - see `loseCalibration`. The figure then goes
+    // through the same reshaping as an uncalibrated one below, which is what it now is.
+    this.loseCalibration();
     // ⚑⚑ AN OPTION CAN RESHAPE THE STEP A PIXEL IS ALREADY WAITING UNDER.
     // "X is categories" turns X start from a step that takes a typed value into
     // one that takes none, and a pixel clicked a moment earlier was then stuck:
@@ -1097,6 +1098,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   getCurrentStep(): CalibStepInfo | null {
     const steps = this.getSteps();
+    if (this.chosenStep) return steps[this.stepIndex] ?? null;
     if (this.axes) {
       const unplaced = steps.find((s) => this.placed[s.key] === undefined);
       return unplaced ?? null;
@@ -1109,7 +1111,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * with steps unplaced, the cursor is wherever that step is, not wherever the
    * walk happened to stop. */
   getStepIndex(): number {
-    if (this.axes) {
+    if (this.axes && !this.chosenStep) {
       const steps = this.getSteps();
       const i = steps.findIndex((s) => this.placed[s.key] === undefined);
       return i < 0 ? steps.length : i;
@@ -1135,14 +1137,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   setGlobalFieldValue(key: string, value: string): void {
     this.globalValues[key] = value;
-    // Re-calibrate live once calibrated, mirroring setOption above. A global
-    // field (CCR's Chart Start Time) feeds buildAxes exactly as an option does,
-    // so editing one after calibration must re-project the values -- without
-    // this, changing the start time on a calibrated CCR silently did nothing
-    // (checkpoint 86; the audit flagged the asymmetry with setOption as
-    // "looks unintentional"). It was: setOption grew this branch at ckpt 68 and
-    // its sibling never did.
-    if (this.axes) this.runCalibration();
+    // ⚑ A global field (CCR's Chart Start Time) feeds buildAxes exactly as an option does, so it follows setOption:
+    // a change loses the calibration (David, 2026-11-01). Checkpoint 86 found the two had drifted apart once
+    // (setOption re-projected and this did nothing); they are kept the same.
+    this.loseCalibration();
   }
 
   getAxes(): A | null {
@@ -3489,26 +3487,53 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * kept happening, so there is now one.
    */
   /**
-   * Re-run the calibration when a point is placed on a figure that is ALREADY
-   * calibrated - the amend case.
+   * After a point is placed: the walk asks next for the first point still missing, else nothing (Calibrate). In the
+   * guided order that is simply the next step, since every earlier one is placed; it differs only once points were
+   * placed out of order, by choosing them or by a detection.
    *
-   * ⚑⚑ WITHOUT THIS THE RESUMED WALK GOES NOWHERE. A figure can arrive
-   * calibrated with steps unplaced (a WPD import, a pre-v2.3 project), and
-   * `getCurrentStep` now asks for them - but the `Calibrate` button belongs to
-   * stage 1 and a calibrated card is past it, so the two clicks would land in
-   * `placed` and nothing would read them.
-   *
-   * ⚑ It is the rule this session already follows everywhere else: *"setOption
-   * re-calibrates live when `this.axes` exists"*. A change to a calibrated
-   * figure takes effect immediately; only the first walk has a button.
-   *
-   * ⚑ Only once the walk is COMPLETE, so a half-placed amendment cannot tear
-   * down a working calibration mid-gesture.
+   * ⚑ A point placed on a CALIBRATED figure is a change to its calibration, so it loses it (David, 2026-11-01). That
+   * includes a figure that arrived calibrated with steps unplaced (a WPD import, a pre-v2.3 project): placing the
+   * missing step used to re-calibrate at once; now the card asks for Calibrate, as after any other change.
    */
-  private recalibrateIfAmendingComplete(): void {
+  private afterPlacing(): void {
+    const steps = this.getSteps();
+    this.chosenStep = false;
+    const first = steps.findIndex((st) => this.placed[st.key] === undefined);
+    this.stepIndex = first >= 0 ? first : steps.length;
+    this.loseCalibration();
+  }
+
+  /**
+   * Make `key` the step the next click places, whatever else is placed - its chip in the calibration card. True
+   * when `key` is a step of this graph type. A placed step is placed again; on a calibrated figure nothing changes
+   * until it is (then `afterPlacing` loses the calibration).
+   */
+  chooseStep(key: string): boolean {
+    const at = this.getSteps().findIndex((st) => st.key === key);
+    if (at < 0) return false;
+    this.stepIndex = at;
+    this.chosenStep = true;
+    this.pendingPixel = null;
+    return true;
+  }
+
+  /**
+   * ⚑⚑ ANY CHANGE TO THE CALIBRATION LOSES IT (David, 2026-10-31 and 2026-11-01): a point moved (a drag or a
+   * one-pixel nudge), placed, or its value edited; an option or a global field changed. The figure is "Not
+   * calibrated" until Calibrate is pressed again - one rule, "to be consistent". Until v2.7 each of these
+   * re-calibrated live. Enforced by `calibrationAnyChange.test.ts`.
+   *
+   * ⚑ Only the AXES go. The placed points stay, and so do the data points, as pixels; they have no values until
+   * Calibrate, which reads them with the new calibration. A rotate or flip of the whole image is not a change to
+   * the calibration (every point moves together) and still re-calibrates (`transformAllPixels`).
+   */
+  private loseCalibration(): void {
     if (!this.axes) return;
-    if (!this.getSteps().every((st) => this.placed[st.key] !== undefined)) return;
-    this.runCalibration();
+    this.axes = null;
+    if (this.chosenStep) return;
+    const steps = this.getSteps();
+    const first = steps.findIndex((st) => this.placed[st.key] === undefined);
+    this.stepIndex = first < 0 ? steps.length : first;
   }
 
   private completeValuelessStep(px: number, py: number): boolean {
@@ -3516,8 +3541,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!step || step.valueFields.length > 0) return false;
     this.placed[step.key] = { px, py, values: [] };
     this.pendingPixel = null;
-    this.stepIndex += 1;
-    this.recalibrateIfAmendingComplete();
+    this.afterPlacing();
     return true;
   }
 
@@ -6937,8 +6961,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.calibrationError = null;
     this.placed[step.key] = candidate;
     this.pendingPixel = null;
-    this.stepIndex += 1;
-    this.recalibrateIfAmendingComplete();
+    this.afterPlacing();
     return true;
   }
 
@@ -7572,16 +7595,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
       const field = step.valueFields[i]!;
       return v === '' && field.optional ? (field.blankValue ?? '0') : v;
     });
-    const previous = [...point.values];
-    point.values = filled;
-    // ⚑ A refused re-calibration must not leave the axes half-changed: put the
-    // old values back and report the edit as refused, so the calibration on
-    // screen still matches the one the user had.
-    if (this.axes && !this.runCalibration()) {
-      point.values = previous;
-      this.runCalibration();
+    // ⚑ REFUSED AT THE EDIT, as the walk refuses at the click: a value the type's rules can already reject is not
+    // accepted, and the calibration (if any) is left exactly as it was.
+    const complete = this.getSteps().every((st) => this.placed[st.key] !== undefined);
+    const problem = complete ? this.problemWith(key, { px: point.px, py: point.py, values: filled }) : null;
+    if (problem) {
+      this.calibrationError = problem;
       return false;
     }
+    point.values = filled;
+    this.loseCalibration();
     return true;
   }
 
@@ -7598,7 +7621,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // offer supplied a starting position; once it is moved, the position is the
     // user's measurement and there is nothing left to take back.
     this.reusedStepKeys.delete(key);
-    if (this.axes) this.runCalibration();
+    this.loseCalibration();
   }
 
   /** Reposition an already-placed data point in the active dataset (drag-to-adjust).

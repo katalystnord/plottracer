@@ -192,6 +192,7 @@ describe('⚑⚑ tenet 11 - a datum\'s coordinates are MEASURED, not derived fro
       session.updateCalibPointPixel('c1', 100, 400);
       session.updateCalibPointPixel('c2', 500, 400);
       expect(session.setCalibrationValues('c2', ['4'])).toBe(true);
+      expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
 
       session.addDataPoint(200, 250);
       const first = session.getExportRows(0);

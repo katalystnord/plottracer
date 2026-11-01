@@ -421,7 +421,7 @@ describe('CalibrationSession (XY axes)', () => {
     points[0]!.data!.forEach((v, i) => expect(v).toBeCloseTo([10, 10][i]!, 10));
   });
 
-  it('updateCalibPointPixel repositions a placed handle and re-calibrates live', () => {
+  it('updateCalibPointPixel repositions a placed handle, loses the calibration, and Calibrate reads the new position', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     calibrateStandardXY(session);
     session.runCalibration();
@@ -429,8 +429,10 @@ describe('CalibrationSession (XY axes)', () => {
 
     // Drag the Y2 handle so the Y axis now spans twice the pixel distance
     // for the same data range (100,250)=0 -> (100,0)=10 instead of (100,100)=10.
+    // The drag loses the calibration (David, 2026-11-01: any change to the calibration loses it); Calibrate reads the new position.
     session.updateCalibPointPixel('y2', 100, 0);
-    expect(session.isCalibrated()).toBe(true);
+    expect(session.isCalibrated()).toBe(false);
+    expect(session.runCalibration()).toBe(true);
 
     const [, y] = session.getAxes()!.pixelToData(100, 125);
     expect(y).toBeCloseTo(5, 10);
@@ -869,7 +871,7 @@ describe('CalibrationSession (Bar axes)', () => {
     expect(points[0]!.data![0]).toBeCloseTo(5, 10);
   });
 
-  it('re-calibrates live when a Bar calibration handle is dragged', () => {
+  it('a dragged Bar calibration handle loses the calibration, and Calibrate reads the data with it', () => {
     const session = new CalibrationSession(BAR_AXES_CONFIG);
     calibrateStandardBar(session);
     session.runCalibration();
@@ -877,8 +879,11 @@ describe('CalibrationSession (Bar axes)', () => {
 
     // Drag P2 from (300,100) to (300,0): the pixel span for the same 0-10
     // data range grows from 400px to 500px, so the same data point's pixel
-    // (unchanged, only the handle moved) now reads a smaller value.
+    // (unchanged, only the handle moved) now reads a smaller value - once
+    // Calibrate is pressed again (David, 2026-11-01: any change to the calibration loses it).
     session.updateCalibPointPixel('p2', 300, 0);
+    expect(session.isCalibrated()).toBe(false);
+    expect(session.runCalibration()).toBe(true);
     const points = session.getDataPoints();
     expect(points[0]!.data![0]).toBeCloseTo(4, 10);
   });
@@ -1306,7 +1311,7 @@ describe('CalibrationSession (Polar axes)', () => {
     expect(points[0]!.data![1]).toBeCloseTo(0, 10); // θ
   });
 
-  it('re-calibrates live when the P2 handle is dragged', () => {
+  it('a dragged P2 handle loses the calibration, and Calibrate reads the data with it', () => {
     const session = new CalibrationSession(POLAR_AXES_CONFIG);
     calibrateStandardPolar(session);
     session.runCalibration();
@@ -1318,8 +1323,11 @@ describe('CalibrationSession (Polar axes)', () => {
     // Drag P2 from (700,300) to (1300,300): dist10=300 (unchanged), dist20
     // grows from 600 to 1200, so dist12 grows from 300 to 900. The same
     // pixel (700,300 -- unchanged, only the handle moved) now reads a
-    // smaller r: ((20-10)/900)*(600-300)+10 = 13.333...
+    // smaller r: ((20-10)/900)*(600-300)+10 = 13.333... - once Calibrate is
+    // pressed again (David, 2026-11-01: any change to the calibration loses it).
     session.updateCalibPointPixel('p2', 1300, 300);
+    expect(session.isCalibrated()).toBe(false);
+    expect(session.runCalibration()).toBe(true);
     points = session.getDataPoints();
     expect(points[0]!.data![0]).toBeCloseTo(10 + (10 / 900) * 300, 10);
   });
@@ -1388,7 +1396,7 @@ describe('CalibrationSession (Ternary axes)', () => {
     points[2]!.data!.forEach((v, i) => expect(v).toBeCloseTo([100, 0, 0][i]!, 10));
   });
 
-  it('re-calibrates live when the B handle is dragged', () => {
+  it('a dragged B handle loses the calibration, and Calibrate reads the data with it', () => {
     const session = new CalibrationSession(TERNARY_AXES_CONFIG);
     calibrateStandardTernary(session);
     session.runCalibration();
@@ -1399,8 +1407,11 @@ describe('CalibrationSession (Ternary axes)', () => {
 
     // Drag B from (100,100) to (100,0): L grows from 200 to 300, so the
     // same pixel (100,200 -- unchanged, only the handle moved) is now only
-    // 1/3 of the way from A to B instead of half.
+    // 1/3 of the way from A to B instead of half - once Calibrate is pressed
+    // again (David, 2026-11-01: any change to the calibration loses it).
     session.updateCalibPointPixel('b', 100, 0);
+    expect(session.isCalibrated()).toBe(false);
+    expect(session.runCalibration()).toBe(true);
     points = session.getDataPoints();
     expect(points[0]!.data![0]).toBeCloseTo(200 / 3, 6);
     expect(points[0]!.data![1]).toBeCloseTo(100 / 3, 6);
@@ -1446,7 +1457,7 @@ describe('CalibrationSession (Map axes)', () => {
     expect(points[0]!.data![1]).toBeCloseTo(15, 10);
   });
 
-  it('re-calibrates live when the P2 handle is dragged', () => {
+  it('a dragged P2 handle loses the calibration, and Calibrate reads the data with it', () => {
     const session = new CalibrationSession(MAP_AXES_CONFIG);
     session.setOption('origin', 'top-left'); // see the note above
     calibrateStandardMap(session);
@@ -1458,8 +1469,10 @@ describe('CalibrationSession (Map axes)', () => {
 
     // Drag P2 from (400,300) to (700,300): dist grows from 300 to 600, so
     // the same pixel (200,150 -- unchanged, only the handle moved) now
-    // reads half the value.
+    // reads half the value - once Calibrate is pressed again (David, 2026-11-01: any change to the calibration loses it).
     session.updateCalibPointPixel('p2', 700, 300);
+    expect(session.isCalibrated()).toBe(false);
+    expect(session.runCalibration()).toBe(true);
     points = session.getDataPoints();
     expect(points[0]!.data![0]).toBeCloseTo(10, 10);
     expect(points[0]!.data![1]).toBeCloseTo(7.5, 10);
@@ -1750,7 +1763,7 @@ describe('CalibrationSession - per-axes calibration options (checkpoint 68)', ()
     expect(p.data![1]).toBeCloseTo(10, 6);
   });
 
-  it('re-reads existing handles when an option is toggled, without re-calibrating by hand', () => {
+  it('an option toggled on a calibrated figure loses the calibration, and Calibrate reads the existing handles with it', () => {
     const session = new CalibrationSession(XY_AXES_CONFIG);
     session.handleCalibrationClick(100, 300);
     session.confirmCalibrationValues(['0']);
@@ -1767,10 +1780,13 @@ describe('CalibrationSession - per-axes calibration options (checkpoint 68)', ()
     // linear reads 1 + (1000-1)/3 = 334.
     expect(session.getDataPoints()[0]!.data![1]).toBeCloseTo(334, 2);
 
-    // The option describes how the *existing* handles should be read, so
-    // toggling it must update every derived value immediately. Same third of
-    // the way up, but now of three decades (1 -> 1000): 10^1 = 10.
+    // The option describes how the *existing* handles should be read; toggling
+    // it loses the calibration (David, 2026-11-01: any change to the
+    // calibration loses it), and Calibrate reads the same handles with it. Same
+    // third of the way up, but now of three decades (1 -> 1000): 10^1 = 10.
     session.setOption('isLogY', 'true');
+    expect(session.isCalibrated()).toBe(false);
+    expect(session.runCalibration()).toBe(true);
     expect(session.getDataPoints()[0]!.data![1]).toBeCloseTo(10, 6);
   });
 
@@ -2873,14 +2889,17 @@ describe('a calibrated figure whose walk is not finished', () => {
     expect(importedBar().getStepIndex()).toBe(2);
   });
 
-  it('⚑⚑ placing it takes effect LIVE, because a calibrated card has no Calibrate button', () => {
+  it('⚑⚑ placing it is a change to the calibration: it is lost, and Calibrate builds the category axis', () => {
     const s = importedBar();
     s.handleCalibrationClick(100, 500); // Cat 1 - no value to type
     expect(s.getCurrentStep()?.key).toBe('c2');
     s.handleCalibrationClick(500, 500);
     expect(s.confirmCalibrationValues(['4'])).toBe(true);
-    // No `runCalibration()` call here on purpose: that button belongs to stage 1
-    // and this figure is past it. The amendment has to land by itself.
+    // ⚑ This used to take effect live, because the calibrated card had no
+    // Calibrate button. Now any change to the calibration loses it (David,
+    // 2026-11-01), so the card asks for Calibrate as after any other change.
+    expect(s.isCalibrated()).toBe(false);
+    expect(s.runCalibration()).toBe(true);
     expect(s.getCategoryAxis().hasGeometry()).toBe(true);
     expect(s.getCategoryAxis().getCategoryCount()).toBe(4);
     expect(s.getCurrentStep()).toBeNull();

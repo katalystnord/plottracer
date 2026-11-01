@@ -133,6 +133,7 @@ describe('the cap marker', () => {
       fallbackColor: '#fallback',
       axesKind: 'xy',
       isCalibrated: true,
+      calibrationCardOpen: true,
       labelAway: undefined,
       ringClosingIndex: null,
       mode: 'place-point',

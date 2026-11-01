@@ -1194,7 +1194,24 @@ export function Workspace() {
   // The top foldable calibration card (checkpoint 50): expanded shows the full
   // point matrix overlaid on the chart's (usually empty) top strip; collapsed
   // is a thin chip bar. Defaults open while calibrating.
-  const [calibExpanded, setCalibExpanded] = useState(true);
+  const [calibExpanded, setCalibExpandedState] = useState(true);
+  // ⚑⚑ THE CALIBRATION CARD IS THE CALIBRATE TOOL'S OWN FOLD-OUT (David, 2026-11-01), detached from the rail icon
+  // only so it is always on screen, at least folded: whether the graph is calibrated must always be visible, and
+  // the multi-figure arrows sit either side of it. Card and tool are linked BOTH WAYS: opening the card makes
+  // Calibrate the active tool, and leaving Calibrate folds the card (the effect below). Calibration handles can be
+  // adjusted only while it is open; if the card covers one, the user pans the figure.
+  const setCalibExpanded = useCallback((open: boolean | ((was: boolean) => boolean)) => {
+    setCalibExpandedState((was) => {
+      const next = typeof open === 'function' ? open(was) : open;
+      if (next) setMode('calibrate');
+      return next;
+    });
+  }, []);
+  const modeWasRef = useRef(mode);
+  useEffect(() => {
+    if (modeWasRef.current === 'calibrate' && mode !== 'calibrate') setCalibExpandedState(false);
+    modeWasRef.current = mode;
+  }, [mode]);
   // "Common origin" (XY): X1 (X=0) and Y1 (Y=0) share one physical point (the
   // axis crossing) -- the overwhelmingly common case. When ticked, placing X1
   // auto-reuses that pixel for Y1 so you never place or reuse it by hand.
@@ -3145,7 +3162,7 @@ export function Workspace() {
       // those already commit. One gesture, one entry.
       commit();
     }
-  }, [commit, runHeatmapRead]);
+  }, [commit, runHeatmapRead, setCalibExpanded]);
 
   /**
    * Record what the user read in a cell, and put it where a save and an undo
@@ -3538,7 +3555,7 @@ export function Workspace() {
       setMode(calibrated ? 'place-point' : 'calibrate');
       setCalibExpanded(!calibrated); // calibrated -> folded; not -> show the steps
     },
-    [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale, setOcrProposals, setOcrError, setOcrBand, setOcrAngleNotice]
+    [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale, setOcrProposals, setOcrError, setOcrBand, setOcrAngleNotice, setCalibExpanded]
   );
 
   const restoreDoc = useCallback(
@@ -3919,7 +3936,7 @@ export function Workspace() {
       setCalibExpanded(!keep); // a kept calibration is done -> stay folded (ckpt 86)
       commit();
     },
-    [commit, clearMeasurements, swapSession]
+    [commit, clearMeasurements, swapSession, setCalibExpanded]
   );
 
   /** Start a genuinely CLEAN document under config `id` -- a freshly opened image
@@ -3943,7 +3960,7 @@ export function Workspace() {
       markClean();
       bump();
     },
-    [history, bump, markClean, clearMeasurements, captureDoc, swapSession, applyProvenance, applyPdfState]
+    [history, bump, markClean, clearMeasurements, captureDoc, swapSession, applyProvenance, applyPdfState, setCalibExpanded]
   );
 
   const resetForNewImage = useCallback(() => {
@@ -4131,7 +4148,7 @@ export function Workspace() {
       setMode: (m) => setMode(m),
       bump: () => bump(),
     }),
-    [resetDocument, closePdf, clearFiguresToSingle, confirmDiscardIfDirty, bump]
+    [resetDocument, closePdf, clearFiguresToSingle, confirmDiscardIfDirty, bump, setCalibExpanded]
   );
 
   const game = useTraceChallenge(
@@ -4486,12 +4503,39 @@ export function Workspace() {
       setPickedPointIndex(idx);
       setActiveHandleKey(null);
     } else {
-      // A calibration handle (its id is the step key). Only listening/clickable in
-      // Calibrate mode post-calibration, so selecting it here is unambiguous.
+      // A calibration handle (its id is the step key), clickable in Calibrate mode while the card is open.
+      // ⚑ While a step is waiting for its click, a click ON a handle is that click: X1 and Y1 sharing one pixel
+      // is an ordinary calibration, and the handles are draggable before Calibrate now (David, 2026-10-31), so the
+      // press lands on the handle rather than the canvas. With nothing waiting, it selects the handle to nudge.
+      const waiting = session.getCurrentStep();
+      const at = session.getPlacedPoints()[id];
+      if (waiting && at && !session.getPendingPixel()) {
+        handleImageClick(at.px, at.py);
+        return;
+      }
       setActiveHandleKey(id);
       setActivePointIndex(null);
     }
-  }, [mode, removeDataPointByIndex, selectSubMode, session]);
+  }, [mode, removeDataPointByIndex, selectSubMode, session, handleImageClick]);
+
+  /** A calibration chip pressed: the next click places that point (David, 2026-10-31). */
+  const chooseCalibrationStep = useCallback((key: string) => {
+    if (!session.chooseStep(key)) return;
+    setMode('calibrate');
+    setActiveHandleKey(null);
+    setDataValueInputs([]);
+    bump();
+  }, [session, bump]);
+
+  // ⚑ A change to a calibrated figure loses its calibration (engine: loseCalibration), and the user then presses
+  // Calibrate again, which folds the card (David, 2026-10-31). So the card opens the moment it is lost, wherever
+  // the change was made (a drag, a nudge, a value, an option), to show the Calibrate it now needs. "Lost" and not
+  // reset: every point is still placed, so nothing is asked for but Calibrate.
+  const hadAxesRef = useRef(axes !== null);
+  useEffect(() => {
+    if (hadAxesRef.current && axes === null && figureCaptured && session.getCurrentStep() === null) setCalibExpanded(true);
+    hadAxesRef.current = axes !== null;
+  }, [axes, figureCaptured, session, setCalibExpanded]);
 
   /**
    * On a LINES type (XY, Contour - v2.6) a Select box or lasso takes the points
@@ -4798,7 +4842,7 @@ export function Workspace() {
     } else {
       bump();
     }
-  }, [session, bump, commit, heatmapActive, runHeatmapDetect]);
+  }, [session, bump, commit, heatmapActive, runHeatmapDetect, setCalibExpanded]);
 
   /**
    * v2.7 V5: read the axes from the figure's own tick labels and the marks drawn
@@ -5431,7 +5475,7 @@ export function Workspace() {
     clearMeasurements(); // slope measurements depend on the calibration being cleared
     commit(); // NOT history.reset() -- this must stay undoable
     bump();
-  }, [session, commit, bump, clearMeasurements]);
+  }, [session, commit, bump, clearMeasurements, setCalibExpanded]);
 
   // Write zip bytes to a project file (binary saveFile path, checkpoint 93).
   const saveProjectZipBytes = useCallback(async (zip: Uint8Array, stem: string) => {
@@ -8115,6 +8159,7 @@ export function Workspace() {
         fallbackColor: theme.color.error,
         axesKind: config.axesKind,
         isCalibrated: axes !== null,
+        calibrationCardOpen: figureCaptured && calibExpanded,
         labelAway,
         ringClosingIndex,
         mode,
@@ -8124,7 +8169,7 @@ export function Workspace() {
         activeDatasetIndex,
         errorTargetIndex,
       }),
-    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex]
+    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex, figureCaptured, calibExpanded]
   );
 
   // ⚑ An aid's marker carries the HIT AREA and draws nothing; the mark and its
@@ -9269,7 +9314,21 @@ export function Workspace() {
                 return (
                   <div key={step.key} data-testid={`calib-chip-${step.key}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
                     <span
+                      // ⚑ Any point can be placed at any time by choosing it here, then clicking the canvas
+                      // (David, 2026-10-31): the next click places this point, whatever placed the others.
+                      role="button"
+                      tabIndex={0}
+                      data-testid={`calib-chip-pick-${step.key}`}
+                      title={`Place ${step.label}: then click its position on the figure`}
+                      onClick={() => chooseCalibrationStep(step.key)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          chooseCalibrationStep(step.key);
+                        }
+                      }}
                       style={{
+                        cursor: 'pointer',
                         minWidth: 22,
                         textAlign: 'center',
                         padding: '1px 7px',
@@ -10068,7 +10127,11 @@ export function Workspace() {
             pressed={mode === 'calibrate'}
             disabled={toolDisabled('calibrate', !figureCaptured)}
             disabledReason={toolReason('calibrate', canvasHasImage ? 'Capture the figure first' : 'Open an image first')}
-            onClick={() => setMode('calibrate')}
+            onClick={() => {
+              setMode('calibrate');
+              // after calibration the card is folded; the tool opens it again (David, 2026-10-31)
+              setCalibExpanded(true);
+            }}
           />
           <IconButton
             testId="mode-image-edit"
