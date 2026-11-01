@@ -7737,12 +7737,15 @@ export function Workspace() {
     expanded: calibExpanded,
   });
   // The spider table: one ROW per axis, one COLUMN per series (David, 2026-07-27).
-  const spiderTable = useMemo(() => session.getSpiderTable(), [session, version]);
+  // ⚑ Every table reads through `readWithLastCalibration`: while a change has left the figure Not calibrated, the
+  // rows stay and their values are the last calibration's, greyed out (David, 2026-11-01). See `tableGreyed`.
+  const tableGreyed = useMemo(() => session.showsLastCalibration(), [session, version]);
+  const spiderTable = useMemo(() => session.readWithLastCalibration(() => session.getSpiderTable()), [session, version]);
   // The bar table: one ROW per category, one COLUMN per series (v2.0), the
   // same shape spiderTable uses above, replacing Bar's own per-series
   // switching table (David: "we need to store them, series by series, as
   // columns. Like this [spider's table]").
-  const barTable = useMemo(() => session.getBarCategoryTable(), [session, version]);
+  const barTable = useMemo(() => session.readWithLastCalibration(() => session.getBarCategoryTable()), [session, version]);
   // Spider points sitting nearer another axis than the one they were captured on.
   // Recomputed on the same tick, so dragging a stray point back onto its ray
   // clears its warning as you drop it.
@@ -7758,7 +7761,7 @@ export function Workspace() {
   const globalFieldValues = useMemo(() => session.getGlobalFieldValues(), [session, version]);
   const hasSlots = useMemo(() => session.hasSlots(), [session, version]);
   const pointGroupNames = useMemo(() => session.getSlotNames(), [session, version]);
-  const tupleRows = useMemo(() => session.getTupleRows(), [session, version]);
+  const tupleRows = useMemo(() => session.readWithLastCalibration(() => session.getTupleRows()), [session, version]);
   // Declared by the type when its datum is the TUPLE rather than its members - the
   // pie's slice value, which lives in the difference between its two boundaries.
   const derivedTupleColumn = config.derivedTupleValue ?? null;
@@ -8007,10 +8010,14 @@ export function Workspace() {
    * that depends on it, which is the shape [[live and stable are separate]]
    * warns about.
    */
-  const displayRounder = useMemo(() => makeDisplayRounder(axes), [axes]);
+  const displayRounder = useMemo(
+    () => session.readWithLastCalibration(() => makeDisplayRounder(session.getAxes())),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session, axes, tableGreyed]
+  );
 
   const spreadsheetSeries = useMemo(
-    () => buildSpreadsheetSeries(allDatasetsData, datasetInfos, session),
+    () => session.readWithLastCalibration(() => buildSpreadsheetSeries(session.getAllDatasetsData(), datasetInfos, session)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allDatasetsData, datasetInfos, session, version]
   );
@@ -8042,11 +8049,11 @@ export function Workspace() {
   // diverged (CCR t/value vs Time/Magnitude; Ternary A/B/C vs a/b/c). Falls back
   // to config.valueLabels before calibration (no axes to ask yet).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const tableValueLabels = useMemo(() => session.getTableValueLabels(), [session, version, config]);
+  const tableValueLabels = useMemo(() => session.readWithLastCalibration(() => session.getTableValueLabels()), [session, version, config]);
   // Date format per value column (or null) so a date-calibrated column shows a
   // real date in the table, matching the export, not a raw serial (v1.2 #16).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const tableDateFormats = useMemo(() => session.getTableDateFormats(), [session, version, config]);
+  const tableDateFormats = useMemo(() => session.readWithLastCalibration(() => session.getTableDateFormats()), [session, version, config]);
   const spreadsheetMaxRows = useMemo(() => spreadsheetMaxRowCount(spreadsheetSeries), [spreadsheetSeries]);
   const showCategoryColumn = showsCategoryColumn(config.axesKind, hasSlots);
   const curveFitOverlay = useMemo(() => {
@@ -8250,6 +8257,12 @@ export function Workspace() {
   // still reads "(x, y)"), swapping to a focused input while it's the cell
   // being edited (checkpoint 39). Committing repositions the point via
   // commitDataPointEdit.
+  // A value while the figure is Not calibrated: the last calibration's number, which cannot be edited, because an
+  // edit moves the point through a calibration the figure no longer has. The table around it is greyed out.
+  const greyedValue = (testId: string, display: React.ReactNode) => (
+    <span data-testid={testId} title="Press Calibrate to read this value again">{display}</span>
+  );
+
   const renderEditableValue = (index: number, axis: number, value: number, supplied: boolean) => {
     const suffix = axis === 0 ? 'x' : 'y';
     // ⚑⚑ THE DISPLAY ROUNDS AND THE SEED DOES NOT. `value` arrives raw, because
@@ -8261,6 +8274,7 @@ export function Workspace() {
     const pixel = session.getDataset().getPixel(index) as { x: number; y: number } | undefined;
     const shown =
       pixel === undefined ? value : displayRounder.scalarAtPixel(value, pixel.x, pixel.y, axis);
+    if (tableGreyed) return greyedValue(`data-value-${suffix}-${index}`, valueText(fmtValue(shown), supplied));
     return (
       <EditableValue
         editing={editingCell?.index === index && editingCell.axis === axis}
@@ -8306,7 +8320,10 @@ export function Workspace() {
     axisIndex: number,
     value: number,
     supplied: boolean
-  ) => (
+  ) => tableGreyed ? greyedValue(
+    `spider-value-${seriesIndex}-${axisIndex}`,
+    valueText(fmtValue(displayRounder.scalarAtData(value, [axisIndex, value], 0)), supplied)
+  ) : (
     // ⚑ `display` is rounded to THIS SPOKE's own resolution - a spider's axes each
     // carry their own scale, so the spoke index has to go in. The seed below stays
     // the whole number, because the commit is what moves the datum (F23).
@@ -8351,6 +8368,9 @@ export function Workspace() {
   ) => {
     const pointIndex = session.valuePointIndexFor(tupleIndex, columnIndex);
     if (pointIndex === null) return <>{valueText(fmtValue(displayRounder.atData([value], 0)), supplied)}</>;
+    if (tableGreyed) {
+      return greyedValue(`bar-value-${seriesIndex}-${tupleIndex}-${columnIndex}`, valueText(fmtValue(displayRounder.atData([value], 0)), supplied));
+    }
     return (
       <EditableValue
         editing={editingCell?.index === pointIndex && editingCell.axis === 0}
@@ -11147,7 +11167,8 @@ export function Workspace() {
         </p>
       )}
 
-      {axes && (
+      {/* ⚑ Shown while Not calibrated too, when there is a last calibration to grey out (see `tableGreyed`). */}
+      {(axes || tableGreyed) && (
         <>
           {/* "Calibrated." prose removed (checkpoint 59b) -- the card's
               "Calibrated ✓" status and the bottom tips bar already say it. */}
@@ -11304,6 +11325,13 @@ export function Workspace() {
                 </div>
               )}
             </div>
+          {/* ⚑ Greyed while a change has left the figure Not calibrated (David, 2026-11-01): the rows stay and the
+              values are the last calibration's, until Calibrate reads them again. */}
+          <div
+            data-testid="data-table-values"
+            data-greyed={tableGreyed ? 'true' : 'false'}
+            style={tableGreyed ? { color: theme.color.text.legend, opacity: 0.55 } : undefined}
+          >
           {config.outputPanel === 'heatmap' ? (
             /* ⚑ A heatmap's record goes where every other type's record goes.
                It first lived inside the Heatmap card, which left the panel a
@@ -11374,7 +11402,7 @@ export function Workspace() {
               // alignment, because a bins row IS a tuple (F41).
               error={errorColumnsByTuple(session, activeDatasetIndex).error}
             />
-          ) : config.outputPanel === 'spider' && axes ? (
+          ) : config.outputPanel === 'spider' && (axes || tableGreyed) ? (
             <SpiderTable
               table={spiderTable}
               display={displayRounder}
@@ -11400,7 +11428,7 @@ export function Workspace() {
               // the one without it (audit fleet, G9).
               noPointsHint={noPointsHint}
             />
-          ) : config.outputPanel === 'bar' && axes ? (
+          ) : config.outputPanel === 'bar' && (axes || tableGreyed) ? (
             <>
             {/* ⚑ The candlestick colour-convention control MOVED TO THE CANVAS
                 (2026-09-12, David). You judge the direction by looking at the
@@ -11513,6 +11541,7 @@ export function Workspace() {
               noPointsHint={noPointsHint}
             />
           )}
+          </div>
           {/* What the italic cells MEAN, on screen rather than in a tooltip: a reader
               who never placed a guide point still has to be able to tell which of
               these numbers came off the figure and which the spline invented.

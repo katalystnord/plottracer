@@ -683,6 +683,32 @@ describe('Workspace: XY axes', () => {
     expect(await page.getByTestId('calib-chip-x1').count(), 'Calibrate folds the card again').toBe(0);
   });
 
+  // ⚑ While Not calibrated the table keeps its rows and greys out the values, which are the last calibration's
+  // (David, 2026-11-01: "just greying out the values"). Calibrate reads them again, no longer greyed.
+  it('while Not calibrated the table keeps its rows with the last values greyed out, and Calibrate reads them again', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await clickAt(250, 175);
+    await expectRow([5, 5]);
+    expect(await page.getByTestId('data-table-values').getAttribute('data-greyed')).toBe('false');
+
+    await page.getByTestId('mode-calibrate').click();
+    await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    await dragMarker(100, 100, 100, 0);
+    expect(await textOf('calib-status')).toContain('Not calibrated');
+
+    expect(await page.getByTestId('data-table-values').getAttribute('data-greyed')).toBe('true');
+    await expectRow([5, 5]);
+    // a greyed value is the last calibration's and cannot be edited
+    await page.getByTestId('data-value-y-0').dblclick();
+    expect(await page.getByTestId('data-edit-y-0').count()).toBe(0);
+
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
+    expect(await page.getByTestId('data-table-values').getAttribute('data-greyed')).toBe('false');
+    await expectRow([5, 3]);
+  });
+
   it('a one-pixel nudge of a calibration handle loses the calibration too (checkpoint 127)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();

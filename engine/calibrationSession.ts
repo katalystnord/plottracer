@@ -718,6 +718,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
   private chosenStep = false;
   private pendingPixel: { px: number; py: number } | null = null;
   private axes: A | null = null;
+  /** The calibration that a change just lost, kept only for `readWithLastCalibration`. */
+  private lastAxes: A | null = null;
   private calibrationError: string | null = null;
   private datasetEntries: DatasetEntry[];
   private activeDatasetIndex = 0;
@@ -1067,6 +1069,27 @@ export class CalibrationSession<A extends CalibratedAxes> {
       if (validKeys.has(k)) this.optionValues[k] = v;
     }
     return this.runCalibration();
+  }
+
+  /**
+   * Runs a read of the points as the last calibration read them, while a change has left the figure Not calibrated.
+   * The data table greys these values out until Calibrate (David, 2026-11-01: "just greying out the values"); the
+   * canvas, the record and every export still see a figure with no calibration. Calibrated, or never calibrated,
+   * the read runs as it is.
+   */
+  readWithLastCalibration<T>(read: () => T): T {
+    if (this.axes || !this.lastAxes) return read();
+    this.axes = this.lastAxes;
+    try {
+      return read();
+    } finally {
+      this.axes = null;
+    }
+  }
+
+  /** Whether the values the table shows are the last calibration's, greyed out (see `readWithLastCalibration`). */
+  showsLastCalibration(): boolean {
+    return this.axes === null && this.lastAxes !== null;
   }
 
   isCalibrated(): boolean {
@@ -3365,6 +3388,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
         'This project\u2019s calibration could not be read - check the calibration values, then press Calibrate to redo it.';
     }
     this.axes = axes;
+    this.lastAxes = null;
     const finalDatasets = datasets.length > 0 ? datasets : [new Dataset(this.config.dataDim)];
     // De-duplicate on load, don't refuse. A project can arrive violating the
     // uniqueness invariant the rest of the app now depends on -- our own 0.2.0
@@ -3529,6 +3553,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   private loseCalibration(): void {
     if (!this.axes) return;
+    this.lastAxes = this.axes;
     this.axes = null;
     if (this.chosenStep) return;
     const steps = this.getSteps();
@@ -7091,6 +7116,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // so it survives without help. `pieCapture.test.ts`'s "KEEPS them across a
     // RE-CALIBRATION, without anything copying them" is that measurement, kept.
     this.axes = result.axes;
+    this.lastAxes = null;
     this.applyAxesDerivedSlots();
     // ⚑ The category axis is part of THIS calibration now, not a fold-out bolted
     // on after it - so it is built here, from the same placed points, every time
@@ -7942,6 +7968,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.stepIndex = 0;
     this.pendingPixel = null;
     this.axes = null;
+    this.lastAxes = null;
     this.calibrationError = null;
     // Back to the DEFAULTS, not to empty -- a prefilled global (the pie's total and
     // sweep) must survive a reset the same way it survives a fresh session, or the
@@ -8031,6 +8058,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     plotData.deserialize(snapshot.plotData);
     const datasets = plotData.getDatasets();
     this.axes = (plotData.getAxesColl()[0] ?? null) as A | null;
+    this.lastAxes = null;
     // v2.0: restore the SAME category-axis instance captureState bound every
     // dataset to -- falls back to a fresh empty one only if the snapshot
     // somehow predates this field entirely (never true in practice, since

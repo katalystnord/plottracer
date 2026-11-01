@@ -113,3 +113,54 @@ describe('any calibration point can be placed at any time, by choosing it', () =
     expect(s.getCurrentStep()!.key).toBe('x1');
   });
 });
+
+/**
+ * While the figure is Not calibrated the data table keeps its rows and greys out the values (David, 2026-11-01:
+ * "just greying out the values"). The greyed numbers are the last calibration's reading; the record, the canvas
+ * and the export still treat the figure as Not calibrated.
+ */
+describe('while Not calibrated, the table reads the points with the last calibration', () => {
+  it('after a handle is moved, the table still reads the point as the last calibration did', () => {
+    const s = calibrated();
+    s.addDataPoint(250, 175);
+    s.updateCalibPointPixel('x2', 250, 250);
+    const read = s.readWithLastCalibration(() => s.getDataPoints()[0]!.data);
+    expect(read![0]).toBeCloseTo(5, 6);
+    expect(read![1]).toBeCloseTo(5, 6);
+    expect(s.isCalibrated()).toBe(false);
+    expect(s.showsLastCalibration()).toBe(true);
+    expect(s.getDataPoints()[0]!.data).toBeNull();
+  });
+
+  it('Calibrate replaces the last reading with the new one', () => {
+    const s = calibrated();
+    s.addDataPoint(250, 175);
+    s.updateCalibPointPixel('x2', 250, 250);
+    expect(s.runCalibration()).toBe(true);
+    expect(s.readWithLastCalibration(() => s.getDataPoints()[0]!.data)![0]).toBeCloseTo(10, 6);
+  });
+
+  it('a figure that was never calibrated has no last reading', () => {
+    const s = new CalibrationSession<XYAxes>(XY_AXES_CONFIG);
+    placeAll(s);
+    expect(s.showsLastCalibration()).toBe(false);
+    expect(s.readWithLastCalibration(() => s.isCalibrated())).toBe(false);
+  });
+
+  it('Reset calibration forgets the last reading', () => {
+    const s = calibrated();
+    s.addDataPoint(250, 175);
+    s.updateCalibPointPixel('x2', 250, 250);
+    s.reset();
+    placeAll(s);
+    expect(s.showsLastCalibration()).toBe(false);
+    expect(s.readWithLastCalibration(() => s.isCalibrated())).toBe(false);
+  });
+
+  it('a read that throws still leaves the figure Not calibrated', () => {
+    const s = calibrated();
+    s.updateCalibPointPixel('x2', 250, 250);
+    expect(() => s.readWithLastCalibration(() => { throw new Error('boom'); })).toThrow('boom');
+    expect(s.isCalibrated()).toBe(false);
+  });
+});
