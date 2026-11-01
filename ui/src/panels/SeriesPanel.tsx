@@ -1,4 +1,5 @@
 import { Popover } from '@mui/material';
+import { WarningLine } from './WarningLine.js';
 import { theme } from '../theme.js';
 import { SidebarSection, SidebarHeading } from '../layout.js';
 import { EyedropperIcon } from '../icons.js';
@@ -356,19 +357,13 @@ export function SeriesPanel(props: SeriesPanelProps) {
         </div>
       )}
       {join?.notice && (
-        <p data-testid="series-join-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
-          {join.notice}
-        </p>
+        <WarningLine id="series-join-error" text={join.notice} />
       )}
       {level?.notice && (
-        <p data-testid="series-level-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
-          {level.notice}
-        </p>
+        <WarningLine id="series-level-error" text={level.notice} />
       )}
       {nameNotice && (
-        <p data-testid="series-name-error" style={{ margin: '4px 0 0', color: theme.color.error, fontSize: 12 }}>
-          {nameNotice}
-        </p>
+        <WarningLine id="series-name-error" text={nameNotice} />
       )}
     </SidebarSection>  );
 }

@@ -3124,11 +3124,14 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await textOf('label-axes-second-y')).toBe('A second Y axis along the right is not read; data plotted against it needs calibrating by hand.');
     expect(await page.getByTestId('label-axes-second-x').count()).toBe(0);
 
-    // V8: an axis that cannot be read says why, and nothing can be applied
+    // V8: an axis that cannot be read says why, and nothing can be applied. ⚑ CHANGED (David,
+    // 2026-10-17): its X labels 0, 2, 4, 9, 8, 10 are vetted, the misprinted 9 corrected from its
+    // neighbours and shown as read; its Y still has a single label, so nothing can be applied.
     await openAndCapture(fixture('labels-refused'));
     await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
-    expect(await textOf('label-axes-x')).toBe('X could not be read: the labels do not fit one linear or one log scale.');
+    expect(await textOf('label-axes-x')).toBe('X: 0, 2, 4, 6 (read as "9"), 8, 10');
     expect(await textOf('label-axes-y')).toBe('Y could not be read: only one label sits at a tick mark; two are needed.');
+    expect(await page.getByTestId('label-axes-y').locator('svg').count()).toBe(1); // the warning triangle, as everywhere
     expect(await page.getByRole('button', { name: 'Apply', exact: true }).isDisabled()).toBe(true);
     // Cancel takes the offer away; calibrating by hand is unchanged
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();

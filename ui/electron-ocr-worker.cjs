@@ -13,6 +13,10 @@ const path = require('path')
 const { parentPort } = require('worker_threads')
 const { decodePng } = require('./electron-ocr-png.cjs')
 const { readPixels } = require('./electron-ocr-paddle.cjs')
+const figtype = require('./electron-figtype.cjs')
+const figdet = require('./electron-figdet.cjs')
+const chartdete = require('./electron-chartdete-onnx.cjs')
+const DETECTOR = process.env.PLOTTRACER_DETECTOR !== 'rfdetr' && fs.existsSync(chartdete.MODEL_DIR) ? 'chartdete' : 'rfdetr'
 
 const MODEL_DIR = path.join(__dirname, 'ocr-model')
 
@@ -29,15 +33,36 @@ async function startEngine() {
 }
 
 let engine = null
+// ⚑ The graph-type models (v2.7, electron-figtype.cjs) share this thread and its onnxruntime-web:
+// one runtime in the app, started only when the graph type is first suggested.
+let models = null
+let detector = null
 
-parentPort.on('message', async ({ id, pngBase64, options }) => {
+parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
   try {
     const image = decodePng(Buffer.from(String(pngBase64), 'base64'))
+    if (kind === 'figtype') {
+      if (!models) models = figtype.startModels(require('onnxruntime-web'))
+      parentPort.postMessage({ id, answer: await figtype.classify(await models, image) })
+      return
+    }
+    // the chart-element detector (v2.7), loaded on first use, like the classifiers: ChartDete when its pack is
+    // installed (electron-chartdete-onnx.cjs; measured better on axes and legends), else RF-DETR
+    // (electron-figdet.cjs); PLOTTRACER_DETECTOR=rfdetr asks for RF-DETR, to compare
+    if (kind === 'figdet') {
+      const det = DETECTOR === 'chartdete' ? chartdete : figdet
+      if (!detector) detector = DETECTOR === 'chartdete' ? chartdete.startChartDete(require('onnxruntime-web')) : figdet.startDetector(require('onnxruntime-web'))
+      // the answer says which detector gave it, for the comparison switch and for the packaged-app test
+      parentPort.postMessage({ id, answer: { ...(await det.detect(await detector, image)), detector: DETECTOR } })
+      return
+    }
     if (!engine) engine = startEngine()
     parentPort.postMessage({ id, answer: await readPixels(await engine, image, options) })
   } catch (e) {
     // ⚑ A failed START is forgotten, so the next read tries again cleanly.
     if (engine) engine.catch(() => (engine = null))
+    if (models) models.catch(() => (models = null))
+    if (detector) detector.catch(() => (detector = null))
     parentPort.postMessage({ id, error: e && e.message ? e.message : String(e) })
   }
 })

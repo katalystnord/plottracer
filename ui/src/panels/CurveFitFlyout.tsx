@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { FloatingPanel } from '../FloatingPanel.js';
 import { CurveFitIcon } from '../icons.js';
 import type { CurveFitModelId } from '../../../engine/curveFitPanel.js';
@@ -136,9 +137,7 @@ export function CurveFitFlyout({
         </div>
       )}
       {error && (
-        <p data-testid="curve-fit-error" style={{ color: theme.color.error, marginBottom: 0 }}>
-          {error}
-        </p>
+        <WarningLine id="curve-fit-error" text={error} />
       )}
     </FloatingPanel>
   );

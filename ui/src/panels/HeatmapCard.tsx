@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { heatmapGridLine } from '../../../engine/heatmapRun.js';
 
 /**
@@ -309,9 +310,7 @@ export function HeatmapCard({
           </span>
         )}
         {error && (
-          <span data-testid="heatmap-error" style={{ color: theme.color.error }}>
-            {error}
-          </span>
+          <WarningLine id="heatmap-error" text={error} />
         )}
     </div>
   );

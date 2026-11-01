@@ -107,6 +107,7 @@ import errorBarsSvg from '../../icons/custom/error-bars.svg?raw';
 // button scale (David) and clashed with the set's clean line style. Same
 // 24x24 / currentColor / stroke style as the rest of custom/.
 import cameraSvg from '../../icons/custom/camera.svg?raw';
+import warningSvg from '../../icons/custom/warning.svg?raw';
 // "Auto-trace"/"Auto-extract" (v0.8) -- icons/custom/auto-trace.svg, a magic
 // wand + sparkles: the universal "select/extract automatically" symbol. Replaces
 // the paint-bucket the Auto-trace-by-colour panel borrowed from Segment Fill
@@ -214,6 +215,7 @@ export const SettingsIcon = () => <Icon svg={settingsSvg} />;
 export const MeasureIcon = () => <Icon svg={measureSvg} />;
 export const ImageEditIcon = () => <Icon svg={imageEditSvg} />;
 export const CameraIcon = () => <Icon svg={cameraSvg} />;
+export const WarningIcon = ({ size }: { size?: number } = {}) => <Icon svg={warningSvg} size={size} />;
 export const AutoTraceIcon = () => <Icon svg={autoTraceSvg} />;
 export const SelectBoxIcon = () => <Icon svg={selectBoxSvg} />;
 export const SelectLassoIcon = () => <Icon svg={selectLassoSvg} />;

@@ -46,6 +46,18 @@ declare global {
        * intercepts a close once the renderer is actually handling it. */
       notifyCloseGuardReady: () => void;
       /**
+       * The graph type suggestion (v2.7): the graph-type models' raw logits for a captured
+       * figure, or a refusal sentence. engine/figureType.ts turns them into the suggestion.
+       */
+      classifyFigure: (pngBase64: string) => Promise<{ own?: number[]; docling?: number[]; error?: string }>;
+      /** The chart-element detector's boxes for one figure (v2.7, ui/electron-figdet.cjs). */
+      detectChartElements: (pngBase64: string) => Promise<{
+        detections?: { cls: string; box: { x0: number; y0: number; x1: number; y1: number }; score: number }[];
+        /** Which detector answered: ChartDete when its pack is installed, else RF-DETR (v2.7). */
+        detector?: 'chartdete' | 'rfdetr';
+        error?: string;
+      }>;
+      /**
        * Read the text in an already-cropped, already-turned region (v2.4).
        *
        * ⚑ The renderer takes the crop, because it holds the figure's pixels and

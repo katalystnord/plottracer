@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { SidebarSection, SidebarHeading } from '../layout.js';
 import { formatCurveFitEquation, type CurveFitState } from '../../../engine/curveFitPanel.js';
 
@@ -46,9 +47,10 @@ export function CurveFitCard({ state, seriesName }: CurveFitCardProps) {
             line speak for itself. Absent for a polynomial, which is solved
             directly and has nothing to converge. */}
         {state.converged === false && (
-          <span data-testid="curve-fit-not-converged" style={{ color: theme.color.error }}>
-            This fit did not settle - the curve is where the solver stopped, not a result. Try another model or a restricted x-range.
-          </span>
+          <WarningLine
+            id="curve-fit-not-converged"
+            text="This fit did not settle - the curve is where the solver stopped, not a result. Try another model or a restricted x-range."
+          />
         )}
       </div>
     </SidebarSection>

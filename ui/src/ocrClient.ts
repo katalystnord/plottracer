@@ -1,4 +1,6 @@
-import { cropForOcr, upscaleForOcr } from '../../engine/ocrRegion.js';
+import { cropForOcr, upscaleBy, upscaleForOcr, type QuarterTurn } from '../../engine/ocrRegion.js';
+import { labelBands, labelCrops, pictureAxes, type BandWord, type CropRead, type Detection } from '../../engine/pictureAxes.js';
+import type { AxesFromLabels } from '../../engine/labelCalibration.js';
 import type { CropRect } from '../../engine/imageEdit.js';
 import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
 import { wordsToTicks } from '../../engine/ocrWordsToTicks.js';
@@ -240,4 +242,56 @@ export async function readRegionWords(
     text: w.text,
     bbox: { x0: rect.x + w.bbox.x0 * sx, y0: rect.y + w.bbox.y0 * sy, x1: rect.x + w.bbox.x1 * sx, y1: rect.y + w.bbox.y1 * sy },
   }));
+}
+
+/**
+ * The chart-element detector's boxes for a captured figure (v2.7): the plot area, tick labels, the legend
+ * and its entries, in the figure's own pixels. Runs in the OCR's worker, offline, tracked so the status
+ * ring runs while it does.
+ */
+export async function detectChartElements(img: { data: Uint8ClampedArray; width: number; height: number }): Promise<Detection[] | OcrFailure> {
+  const api = window.electronAPI;
+  if (!api?.detectChartElements) return { error: NO_BRIDGE };
+  const png = encodeCrop(img);
+  if (!png) return { error: 'Could not prepare the figure to be read.' };
+  const found = await work.track(api.detectChartElements(png.base64));
+  if (found.error !== undefined) return { error: found.error };
+  return found.detections ?? [];
+}
+
+/**
+ * The axes of a PICTURE from its labels (v2.7; engine/pictureAxes.ts): the detector finds the plot area
+ * and the tick labels; PaddleOCR reads each label's crop (a tall one also turned a quarter each way) and
+ * finds and reads the words in the strip along each axis; the labels lead. Everything runs in the OCR's
+ * worker, offline.
+ */
+export async function readPictureAxes(img: { data: Uint8ClampedArray; width: number; height: number }): Promise<AxesFromLabels | OcrFailure> {
+  const api = window.electronAPI;
+  if (!api) return { error: NO_BRIDGE };
+  const detected = await detectChartElements(img);
+  if (isOcrFailure(detected)) return detected;
+  const dets: Detection[] = detected;
+  const size = { width: img.width, height: img.height };
+  const cropReads: CropRead[][] = [];
+  for (const c of labelCrops(dets, size)) {
+    const reads: CropRead[] = [];
+    for (const turn of c.turns) {
+      // the research turned a crop with Pillow, counterclockwise; cropForOcr turns clockwise
+      const quarter = (turn === 90 ? 3 : turn === 270 ? 1 : 0) as QuarterTurn;
+      const crop = cropForOcr(img.data, img.width, img.height, { x: c.box.x0, y: c.box.y0, width: c.box.x1 - c.box.x0, height: c.box.y1 - c.box.y0 }, quarter);
+      const enc = crop && encodeCrop(crop);
+      if (!enc) continue;
+      const a = await work.track(api.readText(enc.base64));
+      if (a.error === undefined) reads.push({ text: a.text ?? '', confidence: a.confidence ?? 0 });
+    }
+    cropReads.push(reads);
+  }
+  const bandWords: BandWord[][] = [];
+  for (const b of labelBands(dets, size)) {
+    const crop = cropForOcr(img.data, img.width, img.height, { x: b.box.x0, y: b.box.y0, width: b.box.x1 - b.box.x0, height: b.box.y1 - b.box.y0 }, 0);
+    const enc = crop && encodeCrop(upscaleBy(crop, b.factor));
+    const a = enc ? await work.track(api.readText(enc.base64, { detectorBoxes: true })) : null;
+    bandWords.push(a && a.error === undefined ? (a.words ?? []).map((w) => ({ text: w.text, confidence: w.confidence, bbox: w.bbox })) : []);
+  }
+  return pictureAxes(dets, cropReads, bandWords, size, img);
 }
