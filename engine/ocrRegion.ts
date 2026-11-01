@@ -231,7 +231,12 @@ export const OCR_MIN_HEIGHT = 48;
  */
 export function upscaleForOcr(crop: OcrCrop, minHeight = OCR_MIN_HEIGHT): OcrCrop {
   if (crop.height <= 0 || crop.height >= minHeight) return crop;
-  const factor = Math.min(6, Math.ceil(minHeight / crop.height));
+  return upscaleBy(crop, Math.min(6, Math.ceil(minHeight / crop.height)));
+}
+
+/** The same bilinear enlargement by a whole factor the caller chose (v2.7: the strip along an axis is
+ *  enlarged by what its labels' height needs, not the strip's). A factor under 2 returns the crop. */
+export function upscaleBy(crop: OcrCrop, factor: number): OcrCrop {
   if (factor < 2) return crop;
   const width = crop.width * factor;
   const height = crop.height * factor;

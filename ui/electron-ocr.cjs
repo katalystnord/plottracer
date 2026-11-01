@@ -125,6 +125,35 @@ function classifyFigure(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
   })
 }
 
+/**
+ * The chart-element detector's boxes for one captured figure (Automatic graph extraction, v2.7):
+ * `{ detections: [{ cls, box, score }] }`, or `{ error }` with a sentence. Same thread, same bound and
+ * the same rule as `readText`: a refusal is a value, never a hang.
+ */
+function detectChartElements(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
+  // COMPARISON BUILD ONLY: ChartDete in its own Python, when asked for at launch (electron-chartdete.cjs)
+  if (process.env.PLOTTRACER_DETECTOR === 'chartdete') return require('./electron-chartdete.cjs').detectWithChartDete(pngBase64)
+  return new Promise((resolve) => {
+    const id = nextId++
+    let timer = null
+    pending.set(id, (answer) => {
+      if (timer) clearTimeout(timer)
+      resolve(answer && answer.error ? { error: answer.error.replace(/^Could not read the text:/, 'Could not find the chart\'s axes:') } : answer)
+    })
+    timer = setTimeout(() => {
+      if (!pending.has(id)) return
+      dropWorker(
+        `The axis reader did not answer within ${Math.round(timeoutMs / 1000)} seconds, so it was stopped. Try again, or calibrate by hand.`
+      )
+    }, timeoutMs)
+    try {
+      getWorker().postMessage({ id, kind: 'figdet', pngBase64: String(pngBase64) })
+    } catch (e) {
+      dropWorker(`Could not find the chart's axes: ${e && e.message ? e.message : String(e)}`)
+    }
+  })
+}
+
 /** Let the reader's thread go when the app is quitting. */
 async function shutdownOcr() {
   const w = worker
@@ -133,4 +162,4 @@ async function shutdownOcr() {
   if (w) await w.terminate()
 }
 
-module.exports = { readText, classifyFigure, shutdownOcr }
+module.exports = { readText, classifyFigure, detectChartElements, shutdownOcr }

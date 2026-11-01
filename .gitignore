@@ -9,3 +9,7 @@ __pycache__/
 # Mutation-testing output (Stryker): HTML report + per-mutant sandboxes
 reports/
 .stryker-tmp/
+
+# v2.7: the chart-element detector (117 MB) is not committed until its size is decided (8-bit, or Git LFS);
+# see docs/v2.7-figure-type.md. Copy it from plottracer-ref research/v2.7-figdet (rfdetr_infer.py export).
+ui/figdet-model/detector.onnx

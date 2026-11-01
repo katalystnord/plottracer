@@ -116,13 +116,17 @@ interface NumberStyle {
   dotThousands?: boolean;
 }
 
+/** A label without a trailing percent sign: "95%" is the number 95, as printed (the unit is the axis's,
+ * not ours to apply). Found on a real figure whose whole Y axis was "70%" ... "100%", 2026-10-19. */
+const unsigned = (s: string) => s.trim().replace(/\s*%$/, '');
+
 /** A printed number, the minus sign (U+2212) understood, and commas and dots as the
  * figure uses them: decimal commas when `decimalComma`, else commas are thousands
  * separators ("1,000"); dots are thousands separators when `dotThousands` ("1.000",
  * "1.000.000", "1.000,5"), else decimal points. Undecided, "1,250" or "1.250" would be
  * either, so the figure's other labels decide (labelsOf). */
 function parseNumber(s: string, style: NumberStyle = {}): { value: number } | null {
-  let t = s.trim().replace(/\u2212/g, '-').replace(/[\u2009\u202f\u00a0]/g, '');
+  let t = unsigned(s).replace(/\u2212/g, '-').replace(/[\u2009\u202f\u00a0]/g, '');
   if (style.dotThousands && DOT_THOUSANDS.test(t)) t = t.replace(/\./g, '').replace(',', '.');
   else if (style.decimalComma && /^[+-]?\d+,\d+$/.test(t)) t = t.replace(',', '.');
   else if (/^[+-]?[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
@@ -175,16 +179,16 @@ function joinTouching(text: readonly PlacedText[]): PlacedText[] {
  * joined into 10 to that power (V9), and scale factors kept apart (V8). */
 function labelsOf(pieces: readonly PlacedText[]): { labels: Label[]; factors: PlacedText[] } {
   const text = joinTouching(pieces);
-  const decimalComma = text.some((t) => DECIMAL_COMMA.test(t.str.trim()));
+  const decimalComma = text.some((t) => DECIMAL_COMMA.test(unsigned(t.str)));
   // ⚑ A tick label with three decimals ("1.000") is highly uncommon (David, 2026-10-17): a dot with
   // three digits after it is a thousands separator, unless the figure shows real decimal dots
   // ("0.995", "2.5"); on a figure with decimal commas a dot can only be a thousands separator.
   // ⚑ And thousands step in round amounts (1.000, 1.250, 1.500), so every three-digit group must be
   // a multiple of 50; 2.242, 2.244 or 1.005, 1.010 are decimals (David: "what would the steps be?").
-  const dotted = text.map((t) => t.str.trim()).filter((t) => DOT_THOUSANDS.test(t));
+  const dotted = text.map((t) => unsigned(t.str)).filter((t) => DOT_THOUSANDS.test(t));
   const roundGroups = dotted.every((t) => (t.replace(/,.*$/, '').match(/\.(\d{3})/g) ?? []).every((g) => Number(g.slice(1)) % 50 === 0));
   const dotThousands = decimalComma || text.some((t) => /^[+\-\u2212]?[1-9]\d{0,2}(\.\d{3}){2,}/.test(t.str.trim()))
-    || (dotted.length > 0 && roundGroups && !text.some((t) => DOT_DECIMAL.test(t.str.trim())));
+    || (dotted.length > 0 && roundGroups && !text.some((t) => DOT_DECIMAL.test(unsigned(t.str))));
   const style: NumberStyle = { decimalComma, dotThousands };
   const used = new Set<number>();
   const labels: Label[] = [];
@@ -577,8 +581,17 @@ export function readAxesFromLabels(d: PlacedDrawing, text: readonly PlacedText[]
   const inPicture = (b: Box) => (b.x0 + b.x1) / 2 >= 0 && (b.y0 + b.y1) / 2 >= 0 && (b.x0 + b.x1) / 2 <= size.width && (b.y0 + b.y1) / 2 <= size.height;
   const { labels, factors } = labelsOf(text.filter((t) => inPicture(t.box)));
   const ticks = ticksOf(d, size);
-  const x = readAxis('x', ticks.x, labels, factors, k);
-  const y = readAxis('y', ticks.y, labels, factors, k);
+  // ⚑ A label the OTHER axis paired is not "not used": the "0" at the corner belongs to one axis and sat
+  // within the other's reach, which reported it as unused on every figure (found on pictures, v2.7)
+  const x0 = readAxis('x', ticks.x, labels, factors, k);
+  const y0 = readAxis('y', ticks.y, labels, factors, k);
+  const usedBy = (a: AxisFromLabels) => new Set(a.pairs.map((p) => `${p.labelBox.x0},${p.labelBox.y0},${p.labelBox.x1},${p.labelBox.y1}`));
+  const notUsedElsewhere = (a: AxisFromLabels, other: AxisFromLabels): AxisFromLabels => {
+    const used = usedBy(other);
+    return { ...a, unused: a.unused.filter((u) => u.label === null || !used.has(`${u.box.x0},${u.box.y0},${u.box.x1},${u.box.y1}`)) };
+  };
+  const x = notUsedElsewhere(x0, y0);
+  const y = notUsedElsewhere(y0, x0);
   let points: AxesFromLabels['points'] = null;
   if (x.ok && y.ok) {
     const [x1, x2] = outermost(x), [y1, y2] = outermost(y);
