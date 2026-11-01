@@ -394,7 +394,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       // only reached by choosing Select first).
       // On a type whose record is LINES (v2.6), a click on any line picks it, so
       // the active series being empty does not mean there is nothing to select.
-      if (dataPointCount === 0) return 'No points yet - switch to Add points (3) to place some, then come back to Select.';
+      if (dataPointCount === 0) return 'No points yet - pick a tool in Data extraction (4) to add some, then come back to Select.';
       if (config.id === 'xy' || config.id === 'contour')
         return 'Click any line to pick it, then click a point or drag a box over its points: Del removes, arrows nudge. To clear wrong bits from several lines at once, drag a box with the Eraser. (Data points only - calibration handles are safe.)';
       return 'Click a point to select it, or drag a box to select a range. Then Del removes, arrows nudge. (Data points only - calibration handles are safe.)';
@@ -563,6 +563,8 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
       return config.id === 'xy' || config.id === 'contour'
         ? 'Eraser - click a data point to remove it, or drag a box over wrong bits: every point of every line inside it is removed.'
         : 'Eraser - click a data point to remove it.';
+    if (mode === 'extract')
+      return 'Data extraction - pick a tool in the card. A click on the figure adds nothing until one is picked.';
     if (mode === 'cut') return 'Cut - click a line where it should be cut: it becomes two lines there. A closed line opens at the cut.';
     if (mode === 'find-lines')
       return 'Find lines - pick the lines’ colour (or take it from the image with the pipette), then press Find lines: every line of that colour becomes its own line. A plain click does nothing.';
@@ -573,7 +575,7 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     // was also the one with no guidance for it. Caught on the screenshot bench.
     if (mode === 'error-bars') {
       if (dataPointCount === 0)
-        return 'Error bars - place the data points first (tool 3), then drag from a point out to its cap.';
+        return 'Error bars - place the data points first (Data extraction, 4), then drag from a point out to its cap.';
       return 'Error bars - drag from a data point out to its error cap; a cap is placed on each side, the lower one mirrored as a starting position. To move a cap, pick its series under Recorded, then drag the cap.';
     }
     if (mode === 'pan') return 'Pan and zoom only - pick a tool from the left rail to edit.';
@@ -688,7 +690,7 @@ export function noPointsHint({
   if (config.id === 'categorical')
     return mode === 'place-point'
       ? 'No points yet - click each category’s marker in turn to record its value.'
-      : 'No points yet - pick Add points (3) from the tool rail and click each category’s marker.';
+      : 'No points yet - pick Place points in Data extraction (4) and click each category’s marker.';
   // ⚑⚑ A SPAN IS DRAGGED, EXACTLY AS A BAR IS (v2.5), and it fell through to the
   // one-click wording because it is `axesKind: 'bar'` without being `id: 'bar'`.
   // That is the categorical-Line note directly above, at a new site and in the
@@ -701,28 +703,10 @@ export function noPointsHint({
       : config.axesKind === 'bar'
         ? 'No points yet - click the end of each bar to record its value.'
         : 'No points yet - click on the image to add data points.';
-  // Pan / Select / Eraser / Measure / Image-edit / Error-bars: a canvas click
-  // adds nothing in any of them, so point at the tools that DO capture.
-  //
-  // ⚑ Auto-extract is permanently greyed for Box Plot/categorical Line
-  // (59f94a6), so naming it here put two panels on screen recommending what
-  // the other refuses -- a FOURTH instance of the contradiction class this
-  // hint was written to kill. Found by the v1.3 gate; reachable with zero
-  // points via Select/Pan/Measure/Error-bars/Edit-image on a calibrated
-  // chart of either type. Bar itself is the exception (v2.0 Phase 7): its
-  // own Auto-extract now finds bars by colour correctly, so this hint
-  // names it again for Bar specifically, same as the generic fallback does.
-  // ⚑ Span has Auto-extract too - `bounding-box`, which fits it better than it
-  // fits Bar (a box IS the datum for a span) - so it gets the same two offers.
-  if (config.id === 'bar' || config.id === 'span')
-    return `No points yet - drag each ${config.id === 'span' ? 'span' : 'bar'} corner to corner (Add points, 3), or pick Auto-extract (4) to find ${config.id === 'span' ? 'them' : 'bars'} by colour.`;
-  if (config.axesKind === 'bar') return 'No points yet - pick Add points (3) from the tool rail and click the end of each bar.';
-  // ⚑ Only offer Auto-extract where the type HAS it. Pie declares
-  // autoExtractKind 'none', so its rail button is disabled and hotkey 4 is a
-  // no-op -- and this fallback still told a pie user to pick it. That is the
-  // exact contradiction the branch above was written to kill, at a new site.
-  // (Round-2 audit.)
-  return config.autoExtractKind === 'none'
-    ? 'No points yet - pick Add points (3) from the tool rail.'
-    : 'No points yet - pick Add points (3) or Auto-extract (4) from the tool rail.';
+  // Pan / Select / Eraser / Measure / Image-edit / Error-bars, and the Data extraction card with nothing picked: a
+  // canvas click adds nothing in any of them, so point at the card that DOES capture (v2.7: Add points, Auto-extract
+  // and Cut are its tools now). Which tools apply is the card's to show, greyed in place, so the hint names none of
+  // them - the contradiction this function was written against cannot come back through a tool name.
+  if (mode === 'extract') return 'No points yet - pick a tool in the Data extraction card.';
+  return 'No points yet - pick a tool in Data extraction (4).';
 }

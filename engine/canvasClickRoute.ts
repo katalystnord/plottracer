@@ -88,6 +88,9 @@ export function routeCanvasClick({
   // Eyedropper intercepts the click before any tool action.
   if (eyedropper) return { kind: 'sample-colour', target: eyedropper };
   if (mode === 'pan') return { kind: 'ignore' };
+  // The Data extraction card is open with nothing picked (v2.7): the user has not chosen how to get points yet,
+  // and the fallthrough at the bottom of this router would ADD one.
+  if (mode === 'extract') return { kind: 'ignore' };
   // Error bars are captured by DRAGGING, not clicking (ckpt 79). An explicit
   // branch, because a stray click would otherwise drop a data point into the
   // active series while the user was aiming at a cap.

@@ -30,11 +30,36 @@ export type ToolMode =
   | 'error-bars'
   | 'interpolate'
   | 'find-lines'
-  | 'cut';
+  | 'cut'
+  // The Data extraction card is open and none of its tools is picked: a click on the figure adds nothing.
+  | 'extract';
 
 /** The modes fronted by the single Auto-extract rail tool. Find lines (v2.6)
  * comes first because, where it applies, it does the whole job in one press. */
 export const AUTO_EXTRACT_MODES: readonly ToolMode[] = ['find-lines', 'segment-fill', 'color-trace', 'interpolate'];
+
+/**
+ * The Data extraction tool (rail 4, v2.7): Place point, the Auto-extract mechanisms and Cut, in one card, in the
+ * order David settled (docs/v2.7-workflow-walk.md, The Data extraction card). Each keeps its own mode and canvas
+ * behaviour; `'extract'` is the card open with none of them picked, which is how it always opens.
+ */
+export const DATA_EXTRACTION_TOOLS: readonly ToolMode[] = ['find-lines', 'color-trace', 'segment-fill', 'interpolate', 'place-point', 'cut'];
+export const DATA_EXTRACTION_MODES: readonly ToolMode[] = ['extract', ...DATA_EXTRACTION_TOOLS];
+
+/**
+ * Which of the card's tools apply to a graph type; the others are greyed in their place. The automatic ones are
+ * `autoExtractModesFor`'s answer, Split a line goes with Find lines (lines are the record), and Place points
+ * applies everywhere but a heatmap, whose cells are read at the end of the calibration card.
+ */
+export function dataExtractionToolsFor(
+  config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'id'>
+): readonly ToolMode[] {
+  if (config.id === 'heatmap') return [];
+  const auto = autoExtractModesFor(config.autoExtractKind, config.id);
+  return DATA_EXTRACTION_TOOLS.filter(
+    (m) => auto.includes(m) || m === 'place-point' || (m === 'cut' && findLinesKind(config.id) !== null)
+  );
+}
 
 /**
  * Does Find lines apply to this graph type, and as what?

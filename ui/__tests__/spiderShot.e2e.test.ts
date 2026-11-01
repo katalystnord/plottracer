@@ -93,6 +93,9 @@ describe.runIf(RUN)('spider screenshot harness', () => {
     }
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(300);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01): pick Place points in the Data extraction card.
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('extract-tool-place-point').click();
 
     // Capture two axes, so the live ray has moved on and the table has values.
     await clickAt(...spoke(0, 6, R * 0.7));

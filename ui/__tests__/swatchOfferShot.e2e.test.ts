@@ -81,9 +81,9 @@ describe.runIf(RUN)('swatch hold-back offer shot', () => {
     // in exactly that colour at x 763-790 - measured off the PNG, which is the
     // whole reason this sample was chosen.
     // The wand fronts the mechanisms (v0.8), same as `workspace.e2e.test.ts`.
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-colour').click();
-    await page.locator('[data-testid="auto-extract-colour"][aria-pressed="true"]').waitFor();
+    if ((await page.getByTestId('data-extraction-card').count()) === 0) await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('extract-tool-color-trace').click();
+    await page.locator('[data-testid="extract-tool-color-trace"][aria-pressed="true"]').waitFor();
     await page.waitForTimeout(300);
     await page.getByTestId('color-trace-color').fill('#c0392b');
     await page.waitForTimeout(200);

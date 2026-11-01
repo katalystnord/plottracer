@@ -109,7 +109,7 @@ export type KeyAction =
   | { type: 'set-mode'; mode: ToolMode }
   | { type: 'select-tool' }
   | { type: 'toggle-image-edit' }
-  | { type: 'toggle-auto-extract' }
+  | { type: 'toggle-data-extraction' }
   | { type: 'toggle-error-bars' }
   | { type: 'toggle-measure' }
   | { type: 'toggle-marks' }
@@ -184,7 +184,8 @@ export function stepSelectablePoint(
  * button's `disabled` so a key cannot do what the greyed button cannot.
  *
  * Hotkeys 0-9 run straight down the rail (2026-07-22 redesign; Edit image and
- * Calibrate traded places, David 2026-10-31): 0 Pan · 1 Edit img · 2 Calibrate · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars ·
+ * Calibrate traded places, David 2026-10-31): 0 Pan · 1 Edit img · 2 Calibrate · 3 (Legend, to come) ·
+ * 4 Data extraction (Add, Auto-extract and Cut in one card, v2.7) · 5 Select · 6 Error bars ·
  * 7 Measure · 8 Curve fit · 9 Geometry. Curve Fit (8) / Geometry (9) are fly-out
  * panels: opened by triggering their rail button, skipped when disabled.
  * Clear-all (top bar) and the Eraser have NO key - both destructive, kept out of
@@ -194,8 +195,9 @@ export function resolveDigit(key: string, s: KeyboardState): KeyAction | null {
   if (key === '0') return { type: 'set-mode', mode: 'pan' };
   if (key === '1' && s.canvasHasImage) return { type: 'toggle-image-edit' };
   if (key === '2' && s.figureCaptured) return { type: 'set-mode', mode: 'calibrate' };
-  if (key === '3' && s.isCalibrated) return { type: 'set-mode', mode: 'place-point' };
-  if (key === '4' && s.isCalibrated && (s.autoExtractKind ?? 'curve') !== 'none') return { type: 'toggle-auto-extract' };
+  // 3 waits for the Legend tool (David, 2026-10-31). 4 opens Data extraction on every graph: a tool that does not
+  // apply is greyed inside the card, so the card itself always opens.
+  if (key === '4' && s.isCalibrated) return { type: 'toggle-data-extraction' };
   // Hotkey 5 activates Select with the current sub-mode but does NOT open the
   // picker (that's the rail button / its arrow) -- see 'select-tool'.
   if (key === '5' && s.isCalibrated) return { type: 'select-tool' };

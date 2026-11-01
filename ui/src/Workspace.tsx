@@ -12,7 +12,7 @@ import {
   type SessionSnapshot,
 } from '../../engine/calibrationSession.js';
 import { describeCaptureProgress } from '../../engine/captureProgress.js';
-import { AUTO_EXTRACT_MODES, autoExtractModesFor, findLinesKind, type ToolMode } from '../../engine/toolMode.js';
+import { AUTO_EXTRACT_MODES, DATA_EXTRACTION_MODES, dataExtractionToolsFor, findLinesKind, type ToolMode } from '../../engine/toolMode.js';
 import { findLinesInWorker } from './findLinesClient.js';
 import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
 import { inferLevelsInScale } from '../../algorithms/findLines/levels.js';
@@ -84,11 +84,9 @@ import {
 } from './layout.js';
 import {
   HandIcon,
-  PlusIcon,
   CalibrateIcon,
   DeleteIcon,
   EraseIcon,
-  CutLineIcon,
   SelectBoxIcon,
   SelectLassoIcon,
   SelectSeriesIcon,
@@ -131,7 +129,7 @@ import { BarTable } from './panels/BarTable.js';
 import { SpiderTable } from './panels/SpiderTable.js';
 import { SpreadsheetTable } from './panels/SpreadsheetTable.js';
 import { HeatmapCellsTable } from './panels/HeatmapCellsTable.js';
-import { AUTO_EXTRACT_CHOICES, AutoExtractCard, COLOR_TRACE_PREVIEW_RGBA } from './panels/AutoExtractCard.js';
+import { DataExtractionCard, COLOR_TRACE_PREVIEW_RGBA } from './panels/DataExtractionCard.js';
 import { SeriesPanel } from './panels/SeriesPanel.js';
 import { EXAMPLES, MANUAL_URL } from './examples.js';
 import { ExplodedSliceControl } from './ExplodedSliceControl.js';
@@ -901,8 +899,8 @@ export function Workspace() {
         ? 'mode-image-edit'
         : mode === 'error-bars'
         ? 'mode-error-bars'
-        : AUTO_EXTRACT_MODES.includes(mode)
-        ? 'mode-auto-extract'
+        : DATA_EXTRACTION_MODES.includes(mode)
+        ? 'mode-data-extraction'
         : null;
     if (!triggerId) return; // no card open -> leave the last position (it's hidden anyway)
     const btn = row.querySelector<HTMLElement>(`[data-testid="${triggerId}"]`);
@@ -1922,49 +1920,24 @@ export function Workspace() {
     });
   }, []);
 
-  // Auto-extract (v0.8) -- the single wand tool fronting the three tracing
-  // mechanisms. Toggling enters the last-used mechanism (default flood-fill) and
-  // opens its card; toggling again restores the prior tool. `setAutoExtractMech`
-  // is the card's mechanism switcher. Mirrors the Measure/Error-bars toggle.
-  const preAutoExtractModeRef = useRef<ToolMode>('pan');
-  const lastAutoExtractMechRef = useRef<ToolMode>('segment-fill');
-  const toggleAutoExtract = useCallback(() => {
-    // The rail button greys out for Box Plot/categorical Line; the `4` hotkey is
-    // the other door, so the rule lives here where both converge. Every OTHER
-    // mechanism here is a curve tool and would record one of these types' own
-    // datum wrong (a box's whiskers, an ordinal click) -- Histogram used to be
-    // refused here too, until its own bounding-box path landed (2026-07-30).
-    if ((session.getConfig().autoExtractKind ?? 'curve') === 'none') return;
-    // ⚑ A spider or a bar has exactly ONE mechanism: the axis-aware colour trace
-    // for a spider, the bounding-box colour trace for a bar. Flood-fill and Guide
-    // points are curve tools with nowhere sensible to file their output (a
-    // spider's slots are its axes; a bar's two slots are its measured ends, not
-    // a curve to follow), so they are not offered -- and this is where the card
-    // is ENTERED, so without this the last-used mechanism could open a card
-    // whose button would silently do nothing.
-    if (autoExtractModesFor(session.getConfig().autoExtractKind).length === 1) lastAutoExtractMechRef.current = 'color-trace';
-    // Find lines exists only on XY and Contour: a last-used mechanism this type
-    // does not offer would open a card with nothing selected.
-    {
-      const offered = autoExtractModesFor(session.getConfig().autoExtractKind, session.getConfig().id);
-      if (offered.length && !offered.includes(lastAutoExtractMechRef.current)) lastAutoExtractMechRef.current = offered[0]!;
-    }
+  // Data extraction (rail 4, v2.7) -- one tool fronting Place points, the automatic mechanisms and Cut. Toggling
+  // opens its card with NOTHING picked (David, 2026-11-01: "Let the user pick, even if it is only one"), and
+  // toggling again restores the prior tool. `pickExtractionTool` is the card's switcher. Mirrors the Measure /
+  // Error-bars toggle.
+  const preDataExtractionModeRef = useRef<ToolMode>('pan');
+  const toggleDataExtraction = useCallback(() => {
     setSegmentFillError(null);
     setColorTraceInfo(null);
     setMode((m) => {
-      if (AUTO_EXTRACT_MODES.includes(m)) {
-        lastAutoExtractMechRef.current = m;
-        return preAutoExtractModeRef.current;
-      }
-      preAutoExtractModeRef.current = m;
-      return lastAutoExtractMechRef.current;
+      if (DATA_EXTRACTION_MODES.includes(m)) return preDataExtractionModeRef.current;
+      preDataExtractionModeRef.current = m;
+      return 'extract';
     });
-  }, [session]);
-  const setAutoExtractMech = useCallback((mech: ToolMode) => {
+  }, []);
+  const pickExtractionTool = useCallback((tool: ToolMode) => {
     setSegmentFillError(null);
     setColorTraceInfo(null);
-    lastAutoExtractMechRef.current = mech;
-    setMode(mech);
+    setMode(tool);
   }, []);
 
   // Undo/redo (checkpoint 38, see CLAUDE.md). Snapshot-based: the session
@@ -3359,7 +3332,7 @@ export function Workspace() {
     // (Place Point / Segment Fill) must drop back to Calibrate. Pan and Measure
     // work fine uncalibrated (Measure's Distance/Set-scale need no axes), so a
     // measurement undo shouldn't kick the user out of the Measure card.
-    setMode((m) => (!s.getAxes() && (m === 'place-point' || m === 'eraser' || m === 'segment-fill' || m === 'color-trace' || m === 'interpolate') ? 'calibrate' : m));
+    setMode((m) => (!s.getAxes() && (DATA_EXTRACTION_MODES.includes(m) || m === 'eraser') ? 'calibrate' : m));
     // ⚑ An auto-extract mode must also drop when it is not one the RESTORED
     // config actually offers (59f94a6 closed the rail button and the `4`
     // hotkey, but not this door). Undoing back across a graph-type change
@@ -3371,9 +3344,9 @@ export function Workspace() {
     // not. Generalized (v2.0 Phase 7) off autoExtractModesFor rather than
     // "any bar-family type": Bar itself now offers color-trace (bounding-box
     // detection), so it alone must NOT be kicked out of that one mechanism.
-    setMode((m) => (AUTO_EXTRACT_MODES.includes(m) && !autoExtractModesFor(s.getConfig().autoExtractKind, s.getConfig().id).includes(m) ? 'place-point' : m));
-    // Cut exists only where lines are the record (audit D7)
-    setMode((m) => (m === 'cut' && !findLinesKind(s.getConfig().id) ? 'place-point' : m));
+    // Since v2.7 one rule for every tool in the Data extraction card: a picked tool the restored type greys goes
+    // back to the card with nothing picked (Cut too: it exists only where lines are the record, audit D7).
+    setMode((m) => (m !== 'extract' && DATA_EXTRACTION_MODES.includes(m) && !dataExtractionToolsFor(s.getConfig()).includes(m) ? 'extract' : m));
   }, []);
 
   // --- Import another digitizer's project ---------------------------------
@@ -3552,7 +3525,8 @@ export function Workspace() {
       setScaleDraftPx(null);
       setPending([]);
       const calibrated = s.isCalibrated();
-      setMode(calibrated ? 'place-point' : 'calibrate');
+      // ⚑ No tool is picked for the user (v2.7): a calibrated figure opens on Pan, the next step is theirs.
+      setMode(calibrated ? 'pan' : 'calibrate');
       setCalibExpanded(!calibrated); // calibrated -> folded; not -> show the steps
     },
     [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale, setOcrProposals, setOcrError, setOcrBand, setOcrAngleNotice, setCalibExpanded]
@@ -3831,7 +3805,7 @@ export function Workspace() {
         case 'set-mode': setMode(action.mode); return;
         case 'select-tool': setMode('select'); setSelectFoldoutOpen(false); return;
         case 'toggle-image-edit': toggleImageEdit(); return;
-        case 'toggle-auto-extract': toggleAutoExtract(); return;
+        case 'toggle-data-extraction': toggleDataExtraction(); return;
         case 'toggle-error-bars': toggleErrorBars(); return;
         case 'toggle-measure': toggleMeasure(); return;
         case 'toggle-marks': setMarksHidden((v) => !v); return;
@@ -3857,7 +3831,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleAutoExtract, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, lineSelection, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleDataExtraction, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, lineSelection, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -3932,7 +3906,7 @@ export function Workspace() {
       const next = new CalibrationSession(nextConfig);
       if (inputs) next.adoptCalibration(inputs);
       swapSession(id, next);
-      setMode(keep ? 'place-point' : 'calibrate');
+      setMode(keep ? 'pan' : 'calibrate'); // no tool is picked for the user (v2.7)
       setCalibExpanded(!keep); // a kept calibration is done -> stay folded (ckpt 86)
       commit();
     },
@@ -4815,7 +4789,9 @@ export function Workspace() {
 
   const runCalibration = useCallback(() => {
     if (session.runCalibration()) {
-      setMode('place-point');
+      // ⚑ Nothing is picked after Calibrate (David, 2026-11-01): the next step is the user's choice, the Legend or
+      // Data extraction. Until v2.7 this switched to Add points.
+      setMode('pan');
       // Fold the card on success (checkpoint 86). The card overlays the canvas,
       // and post-calibration the user is placing points -- a thin chip bar keeps
       // the figure clear. Options/global fields now render inside the EXPANDED
@@ -7311,14 +7287,11 @@ export function Workspace() {
   const handleAddDataset = useCallback(() => {
     session.addDataset();
     setGeometryClosed(false); // a fresh series has no geometry -- don't inherit the prior series' toggle
-    // Stay in the current TRACING tool across "+ Add" -- place-point OR an
-    // auto-extract mechanism (By-colour / Flood-fill / Guide points). Tracing a
-    // multi-curve figure means adding a series per curve; kicking back to
-    // place-point each time forced re-opening the tool for every curve (David,
-    // playtest). Only fall back to place-point from a non-tracing mode.
-    if (axes && mode !== 'place-point' && !AUTO_EXTRACT_MODES.includes(mode)) setMode('place-point');
+    // Stay in the current tool across "+ Add": tracing a multi-curve figure means adding a series per curve, and
+    // being moved each time forced re-opening the tool for every curve (David, playtest). Since v2.7 no tool is
+    // picked for the user at all, so "+ Add" no longer falls back to Add points from a non-tracing one.
     commit();
-  }, [session, axes, commit, mode]);
+  }, [session, commit]);
 
   // Renaming keeps its in-progress text HERE rather than in the session, so the
   // session never holds a duplicate or blank name (see seriesNames.ts on why
@@ -10165,65 +10138,20 @@ export function Workspace() {
             }}
           />
           </RailGroup>
-          {/* Get data points onto the plot, then refine them: Add + Auto-extract
-              are the two ways to GET points; Select + Eraser refine them; Error
+          {/* Get data points onto the plot, then refine them: Data extraction holds every way to GET points (v2.7,
+              Place points + the automatic tools + Split a line, in one card); Select + Eraser refine them; Error
               bars attach uncertainty. */}
           <RailGroup>
           <IconButton
-            testId="mode-place-point"
-            icon={<PlusIcon />}
-            label="Add points"
-            shortcut="3"
-            pressed={mode === 'place-point'}
-            disabled={toolDisabled('place-point', !axes)}
-            disabledReason={toolReason('place-point', 'Calibrate the axes first')}
-            onClick={() => setMode('place-point')}
-          />
-          <IconButton
-            testId="mode-auto-extract"
+            testId="mode-data-extraction"
             icon={<AutoTraceIcon />}
-            // ⚑ Named from the card's own list for this type, so the tooltip
-            // cannot leave out a mechanism the card offers (it once omitted Find lines).
-            label={`Auto-extract (${AUTO_EXTRACT_CHOICES.filter((c) => autoExtractModesFor(config.autoExtractKind, config.id).includes(c.m)).map((c) => c.label.toLowerCase()).join(' / ') || 'flood-fill / by colour / guide points'})`}
+            label="Data extraction"
             shortcut="4"
-            pressed={AUTO_EXTRACT_MODES.includes(mode)}
-            // ⚑ Bar-family types are excluded, and this is a CORRECTNESS gate, not a
-            // missing feature. Every auto-extract mechanism here is a CURVE tool:
-            // pointsFromColumnRuns records the MIDDLE of each column run and the blob
-            // detector records a region's centroid. On a curve that is the curve. On a
-            // filled bar it is the bar's midpoint -- so a bar of true value 10 was
-            // silently recorded as 5 (verified against the algorithms, 2026-07-25).
-            // Point-group types (Box Plot / Histogram) were already excluded; plain Bar
-            // and Line (categorical X) were not, which left a reachable path to
-            // confidently wrong numbers -- the tenet-1 defect, worse than the tool
-            // simply being absent. A bar-aware capture is a model change, not a new
-            // shape on the colour trace: see the bar design pass.
-            // ⚑ Spider is the one slot type auto-extract IS offered for, and
-            // the exception is a correctness one too: its slots ARE the axes the
-            // trace searches, so every reading has a home the tool measured it
-            // against. v2.0 Phase 7 makes Bar a SECOND correctness exception: a
-            // bar blob's own bounding box IS its two ends (engine/barDetectRun.ts),
-            // so it no longer belongs in this refused bucket at all -- see
-            // BAR_AXES_CONFIG's autoExtractKind. Histogram joined it 2026-07-30 --
-            // a bin's bounding box is the same shape, just read as top corners
-            // rather than opposite ones (addBarDetectBoxes's own comment). Box
-            // Plot, categorical Line, Heatmap and Pie remain refused: none has
-            // anything a colour trace could read as its own record (five
-            // letter-values; an ordinal click; a cell whose value IS its colour;
-            // a slice measured by its two edges). ⚑ Each says so ITSELF now, via
-            // `autoExtractRefusal` -- this comment is description, not the gate.
-            disabled={toolDisabled('auto-extract', !axes || (config.autoExtractKind ?? 'curve') === 'none')}
-            disabledReason={
-              marksHiddenIn('auto-extract')
-                ? MARKS_HIDDEN_REASON
-                : !axes
-                ? 'Calibrate the axes first'
-                : // The type says why it refuses -- see `autoExtractRefusal`. This
-                  // was a `config.id === …` cascade in which a new type joined the
-                  // contentless generic branch by default.
-                  (config.autoExtractRefusal ?? 'Not available for this graph type')
-            }
-            onClick={toggleAutoExtract}
+            pressed={DATA_EXTRACTION_MODES.includes(mode)}
+            // ⚑ Open on every calibrated graph: a tool that does not apply is greyed INSIDE the card, in its place.
+            disabled={toolDisabled('data-extraction', !axes)}
+            disabledReason={toolReason('data-extraction', 'Calibrate the axes first')}
+            onClick={toggleDataExtraction}
             foldout
           />
           {/* Select multi-tool (v1.1 #6, Ketcher): the rail face shows the active
@@ -10288,20 +10216,6 @@ export function Workspace() {
             disabledReason={toolReason('eraser', 'Add data points first')}
             onClick={() => setMode('eraser')}
           />
-          {/* Cut (v2.6, K2): correcting a found line - beside the eraser, since
-              both change a line at the point you click. Only where lines are
-              the record (XY, Contour). */}
-          {findLinesKind(config.id) && (
-            <IconButton
-              testId="mode-cut"
-              icon={<CutLineIcon />}
-              label="Cut a line - click a line where it should become two"
-              pressed={mode === 'cut'}
-              disabled={toolDisabled('cut', dataPoints.length === 0 && !datasetInfos.some((d) => d.pointCount > 0))}
-              disabledReason={toolReason('cut', 'Add or find lines first')}
-              onClick={() => setMode('cut')}
-            />
-          )}
           </RailGroup>
           {/* Analyze (downstream / derived -- Tenet 9): Measure + the Curve Fit /
               Geometry fly-outs (8, 9). */}
@@ -10382,12 +10296,14 @@ export function Workspace() {
               the three tracing mechanisms. The selector switches MODE (each keeps
               its own canvas behaviour) and shows that mechanism's controls, which
               used to live in three places (sidebar / top-bar panel / tips). */}
-          {AUTO_EXTRACT_MODES.includes(mode) && (
-            <AutoExtractCard
+          {DATA_EXTRACTION_MODES.includes(mode) && (
+            <DataExtractionCard
               mode={mode}
               config={config}
+              applies={dataExtractionToolsFor(config)}
+              into={{ name: activeInfo?.name ?? '', color: activeInfo ? rgbToHex(activeInfo.color) : theme.color.border.regular }}
               tupleNoun={tupleNoun}
-              onSetMechanism={setAutoExtractMech}
+              onPickTool={pickExtractionTool}
               segmentFillThreshold={segmentFillThreshold}
               onSegmentFillThresholdChange={setSegmentFillThreshold}
               segmentFillError={segmentFillError}

@@ -132,6 +132,9 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       await confirmValue('10');
       await page.getByTestId('run-calibration').click();
       await page.waitForTimeout(150);
+      // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01): pick Place points in the Data extraction card.
+      await page.getByTestId('mode-data-extraction').click();
+      await page.getByTestId('extract-tool-place-point').click();
 
       await clickAt(250, 175);
       // The spreadsheet renders the point as separate X/Y value cells now
@@ -312,6 +315,9 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       await clickAt(100, 100); await confirmValue('10');
       await page.getByTestId('run-calibration').click();
       await page.waitForTimeout(150);
+      // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01): pick Place points in the Data extraction card.
+      await page.getByTestId('mode-data-extraction').click();
+      await page.getByTestId('extract-tool-place-point').click();
       await clickAt(250, 175);
       const rowNums = async () => {
         const cells = await page.getByTestId('points-table').locator('tbody tr').first().locator('td').allInnerTexts();

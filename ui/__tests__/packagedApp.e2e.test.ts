@@ -194,8 +194,8 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     await confirm(String(a.y2.value));
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(600);
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    if ((await page.getByTestId('data-extraction-card').count()) === 0) await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('extract-tool-find-lines').click();
     await page.getByTestId('color-trace-color').fill('#222222');
     await page.getByTestId('find-lines-run').click();
     await expect

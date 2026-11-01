@@ -55,6 +55,9 @@ describe.runIf(RUN)('crowded shot', () => {
     await clickAt(100, 744); await clickAt(825, 744); await confirm('6');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(500);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01): pick Place points in the Data extraction card.
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('extract-tool-place-point').click();
     await drag(105, 744, 180, 305);   // Flax
     await drag(228, 744, 300, 383);   // Hemp - the real bar
     await drag(240, 560, 258, 578);   // the swatch, same band

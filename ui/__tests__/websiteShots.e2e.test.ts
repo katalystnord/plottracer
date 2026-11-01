@@ -102,10 +102,9 @@ interface Driver {
 
 /** By-colour auto-extract, through the wand that fronts it. */
 async function traceColour(d: Driver, hex: string, shape?: 'curve' | 'scatter', opts?: { minBlob?: string; tolerance?: string }) {
-  const pressed = await d.testId('mode-auto-extract').getAttribute('aria-pressed');
-  if (pressed !== 'true') await d.testId('mode-auto-extract').click();
-  await d.testId('auto-extract-colour').click();
-  await d.page.locator('[data-testid="auto-extract-colour"][aria-pressed="true"]').waitFor();
+  if ((await d.testId('data-extraction-card').count()) === 0) await d.testId('mode-data-extraction').click();
+  await d.testId('extract-tool-color-trace').click();
+  await d.page.locator('[data-testid="extract-tool-color-trace"][aria-pressed="true"]').waitFor();
   await d.wait(200);
   await d.testId('color-trace-color').fill(hex);
   if (shape && (await d.testId('color-trace-shape').count()) > 0) {
@@ -148,10 +147,9 @@ const CARDS: Card[] = [
         a['x1']!.px + (x / 12) * (a['x2']!.px - a['x1']!.px),
         a['y1']!.py + (y / 100) * (a['y2']!.py - a['y1']!.py),
       ];
-      const pressed = await d.testId('mode-auto-extract').getAttribute('aria-pressed');
-      if (pressed !== 'true') await d.testId('mode-auto-extract').click();
-      await d.testId('auto-extract-guide').click();
-      await d.page.locator('[data-testid="auto-extract-guide"][aria-pressed="true"]').waitFor();
+      if ((await d.testId('data-extraction-card').count()) === 0) await d.testId('mode-data-extraction').click();
+      await d.testId('extract-tool-interpolate').click();
+      await d.page.locator('[data-testid="extract-tool-interpolate"][aria-pressed="true"]').waitFor();
       await d.wait(250);
       // Two of the four, as the caption says: a handful of anchors each, and the
       // spline fills between them.

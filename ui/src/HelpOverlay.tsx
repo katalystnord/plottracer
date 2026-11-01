@@ -40,7 +40,6 @@ import {
   HandIcon,
   CalibrateIcon,
   ImageEditIcon,
-  PlusIcon,
   AutoTraceIcon,
   SelectBoxIcon,
   ErrorBarsIcon,
@@ -67,8 +66,8 @@ const WORKFLOW: Array<[string, string]> = [
 
 /**
  * ⚑⚑ THE ICONS ARE THE POINT OF THIS LIST, not decoration (David's call).
- * The tool rail is icons ONLY - no labels - so a card that says "3 - Place
- * point" tells you the name of something you still cannot find. Showing the
+ * The tool rail is icons ONLY - no labels - so a card that says "4 - Data
+ * extraction" tells you the name of something you still cannot find. Showing the
  * SAME glyph the rail draws is what turns the row into a lookup: match the
  * picture, press the digit.
  *
@@ -81,10 +80,10 @@ const WORKFLOW: Array<[string, string]> = [
  */
 const TOOLS: Array<[string, string, () => React.JSX.Element]> = [
   ['0', 'Pan', HandIcon],
-  ['1', 'Calibrate', CalibrateIcon],
-  ['2', 'Edit image', ImageEditIcon],
-  ['3', 'Place point', PlusIcon],
-  ['4', 'Auto-extract', AutoTraceIcon],
+  ['1', 'Edit image', ImageEditIcon],
+  ['2', 'Calibrate', CalibrateIcon],
+  // 3 is the Legend tool's, still to come (David, 2026-10-31); until then the key does nothing and has no row.
+  ['4', 'Data extraction', AutoTraceIcon],
   ['5', 'Select', SelectBoxIcon],
   ['6', 'Error bars', ErrorBarsIcon],
   ['7', 'Measure', MeasureIcon],

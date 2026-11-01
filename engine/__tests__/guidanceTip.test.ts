@@ -708,20 +708,12 @@ describe('noPointsHint', () => {
     }
   });
 
-  it('points a non-capturing tool back at the rail, per graph type', () => {
-    // Pan / Select / Eraser / Measure / Image-edit / Error-bars all land here.
-    expect(noPointsHint({ mode: 'select', config: BAR_AXES_CONFIG })).toBe(
-      'No points yet - drag each bar corner to corner (Add points, 3), or pick Auto-extract (4) to find bars by colour.'
-    );
-    expect(noPointsHint({ mode: 'select', config: BOX_PLOT_AXES_CONFIG })).toBe(
-      'No points yet - pick Add points (3) from the tool rail and click the end of each bar.'
-    );
-    expect(noPointsHint({ mode: 'select', config: PIE_AXES_CONFIG })).toBe(
-      'No points yet - pick Add points (3) from the tool rail.'
-    );
-    expect(noPointsHint({ mode: 'select', config: XY_AXES_CONFIG })).toBe(
-      'No points yet - pick Add points (3) or Auto-extract (4) from the tool rail.'
-    );
+  it('points a non-capturing tool at Data extraction (4), on every graph type', () => {
+    // Pan / Select / Eraser / Measure / Image-edit / Error-bars all land here. Since v2.7 one card holds every way
+    // of getting points, and it greys what does not apply - so the hint names the card, never a tool in it.
+    for (const config of [BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG, PIE_AXES_CONFIG, XY_AXES_CONFIG]) {
+      expect(noPointsHint({ mode: 'select', config }), config.id).toBe('No points yet - pick a tool in Data extraction (4).');
+    }
   });
 
   it('sends a HEATMAP user to its card, and never to a tool that cannot capture it', () => {
@@ -762,12 +754,11 @@ describe('the two surfaces must not contradict each other about Auto-extract', (
     }
   });
 
-  it('the hint names Auto-extract exactly when the rail has a mechanism to offer', () => {
-    // The two answers come from different files; this is the join.
+  it('the hint never names Auto-extract: since v2.7 its mechanisms are tools in the Data extraction card', () => {
     for (const config of ALL_CONFIGS) {
-      const offered = autoExtractModesFor(config.autoExtractKind).length > 0;
-      const hint = noPointsHint({ mode: 'select', config });
-      expect(hint.includes('Auto-extract'), `${config.id}`).toBe(offered);
+      for (const mode of ALL_MODES) {
+        expect(noPointsHint({ mode, config }).includes('Auto-extract'), `${config.id} / ${mode}`).toBe(false);
+      }
     }
   });
 
@@ -822,9 +813,9 @@ describe('guidanceTip - select', () => {
     expect(guidanceTip(base({ mode: 'select', selectedPointCount: 2 }))).toContain('2 points selected');
   });
 
-  it('sends the user to Add when there is nothing to select', () => {
+  it('sends the user to Data extraction when there is nothing to select', () => {
     expect(guidanceTip(base({ mode: 'select', dataPointCount: 0 }))).toContain(
-      'switch to Add points (3) to place some'
+      'pick a tool in Data extraction (4) to add some'
     );
   });
 

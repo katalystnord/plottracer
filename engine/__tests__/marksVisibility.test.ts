@@ -160,8 +160,8 @@ describe('hiding every mark at once', () => {
   });
 
   it('the tool digits are inert too, matching the greyed rail', () => {
-    expect(press('3')).toEqual({ type: 'set-mode', mode: 'place-point' });
-    expect(press('3', { marksHidden: true })).toEqual({ type: 'consume' });
+    expect(press('4')).toEqual({ type: 'toggle-data-extraction' });
+    expect(press('4', { marksHidden: true })).toEqual({ type: 'consume' });
   });
 
   /**

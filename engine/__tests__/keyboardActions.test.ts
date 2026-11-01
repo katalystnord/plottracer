@@ -338,8 +338,8 @@ describe('the digit hotkeys mirror the rail, and each guard matches its button',
     expect(resolveDigit('0', s)).toEqual({ type: 'set-mode', mode: 'pan' });
     expect(resolveDigit('1', s)).toEqual({ type: 'toggle-image-edit' });
     expect(resolveDigit('2', s)).toEqual({ type: 'set-mode', mode: 'calibrate' });
-    expect(resolveDigit('3', s)).toEqual({ type: 'set-mode', mode: 'place-point' });
-    expect(resolveDigit('4', s)).toEqual({ type: 'toggle-auto-extract' });
+    expect(resolveDigit('3', s)).toBeNull(); // waits for the Legend tool
+    expect(resolveDigit('4', s)).toEqual({ type: 'toggle-data-extraction' });
     expect(resolveDigit('5', s)).toEqual({ type: 'select-tool' });
     expect(resolveDigit('6', s)).toEqual({ type: 'toggle-error-bars' });
     expect(resolveDigit('7', s)).toEqual({ type: 'toggle-measure' });
@@ -350,17 +350,15 @@ describe('the digit hotkeys mirror the rail, and each guard matches its button',
   it('refuses a key whose button would be greyed', () => {
     expect(resolveDigit('1', state({ canvasHasImage: false }))).toBeNull();
     expect(resolveDigit('2', state({ figureCaptured: false }))).toBeNull();
-    expect(resolveDigit('3', state({ isCalibrated: false }))).toBeNull();
+    expect(resolveDigit('4', state({ isCalibrated: false }))).toBeNull();
     expect(resolveDigit('5', state({ isCalibrated: false }))).toBeNull();
     expect(resolveDigit('6', state({ hasAnyPoints: () => false }))).toBeNull();
     expect(resolveDigit('7', state({ figureCaptured: false }))).toBeNull();
   });
 
-  it('⚑ refuses 4 on a graph type that refuses auto-extract', () => {
-    // The rail button is disabled for autoExtractKind 'none' (Box Plot,
-    // categorical Line, Pie); the hotkey must not do what the button cannot.
-    expect(resolveDigit('4', state({ autoExtractKind: 'none' }))).toBeNull();
-    expect(resolveDigit('4', state({ autoExtractKind: undefined }))).toEqual({ type: 'toggle-auto-extract' });
+  it('4 opens Data extraction on every graph type - a tool that does not apply is greyed inside the card (v2.7)', () => {
+    expect(resolveDigit('4', state({ autoExtractKind: 'none' }))).toEqual({ type: 'toggle-data-extraction' });
+    expect(resolveDigit('4', state({ autoExtractKind: undefined }))).toEqual({ type: 'toggle-data-extraction' });
     expect(resolveDigit('4', state({ isCalibrated: false }))).toBeNull();
   });
 
@@ -385,7 +383,7 @@ describe('the digit hotkeys mirror the rail, and each guard matches its button',
   });
 
   it('does not suppress the browser default - these keys have none worth taking', () => {
-    expect(resolveKeyDown(press('3'), state())!.preventDefault).toBe(false);
+    expect(resolveKeyDown(press('4'), state())!.preventDefault).toBe(false);
   });
 });
 

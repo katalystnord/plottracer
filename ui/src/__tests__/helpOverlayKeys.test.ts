@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { resolveDigit, type KeyboardState } from '../../../engine/keyboardActions.js';
 
 /**
  * The F1 card promises keyboard shortcuts. This asserts it is not lying.
@@ -62,9 +63,37 @@ function tableRows(name: string): Array<[string, string]> {
 describe('the tool digits the card promises are the digits the ladder handles', () => {
   const rows = tableRows('TOOLS');
 
-  it('lists ten tools, 0 through 9', () => {
-    expect(rows.map(([k]) => k)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+  it('lists every digit the ladder handles, 0 through 9 down the rail (3 waits for the Legend tool)', () => {
+    expect(rows.map(([k]) => k)).toEqual(['0', '1', '2', '4', '5', '6', '7', '8', '9']);
+    expect(keyboard).not.toContain(`key === '3'`);
   });
+
+  // ⚑ WHAT EACH DIGIT DOES, not only that it is handled. Edit image and Calibrate traded places in v2.7 and this
+  // card went on saying 1 Calibrate, 2 Edit image, because both digits were still handled. Asked of the ladder
+  // itself, with every tool available, so a row naming the wrong tool fails here.
+  const DOES: Record<string, unknown> = {
+    Pan: { type: 'set-mode', mode: 'pan' },
+    'Edit image': { type: 'toggle-image-edit' },
+    Calibrate: { type: 'set-mode', mode: 'calibrate' },
+    'Data extraction': { type: 'toggle-data-extraction' },
+    Select: { type: 'select-tool' },
+    'Error bars': { type: 'toggle-error-bars' },
+    Measure: { type: 'toggle-measure' },
+    'Curve fit': { type: 'click', selector: '[data-testid="curve-fit-trigger"]:not([disabled])' },
+    Geometry: { type: 'click', selector: '[data-testid="geometry-trigger"]:not([disabled])' },
+  };
+  const everythingAvailable = {
+    figureCaptured: true,
+    canvasHasImage: true,
+    isCalibrated: true,
+    hasAnyPoints: () => true,
+  } as unknown as KeyboardState;
+  for (const [digit, name] of tableRows('TOOLS')) {
+    it(`the '${digit}' row names what '${digit}' does: ${name}`, () => {
+      expect(DOES[name], `no expectation for ${name}`).toBeDefined();
+      expect(resolveDigit(digit, everythingAvailable)).toEqual(DOES[name]);
+    });
+  }
 
   for (const [digit] of tableRows('TOOLS')) {
     it(`resolveDigit really handles the '${digit}' key`, () => {
@@ -129,13 +158,12 @@ describe('the card is reachable both ways, which is the keystone requirement', (
 
 describe('the tool rows show the rail’s OWN glyphs', () => {
   // ⚑ David's call, and it is the keystone rule rather than decoration: the
-  // rail is icons with no labels, so "3 - Place point" names something the
+  // rail is icons with no labels, so "4 - Data extraction" names something the
   // user still cannot find. The card has to show the picture to be a lookup.
   const RAIL_ICONS = [
     'HandIcon',
     'CalibrateIcon',
     'ImageEditIcon',
-    'PlusIcon',
     'AutoTraceIcon',
     'SelectBoxIcon',
     'ErrorBarsIcon',
@@ -165,7 +193,7 @@ describe('the tool rows show the rail’s OWN glyphs', () => {
     const start = overlay.indexOf('const TOOLS: Array<');
     const body = overlay.slice(start, overlay.indexOf('];', start));
     const rows = [...body.matchAll(/\['(\d)',\s*'[^']*',\s*(\w+)\]/g)];
-    expect(rows).toHaveLength(10);
+    expect(rows).toHaveLength(tableRows('TOOLS').length);
   });
 });
 

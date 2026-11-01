@@ -540,20 +540,26 @@ async function calibrateXYStandard() {
   await confirmValue('10');
   await page.getByTestId('run-calibration').click();
   await page.waitForTimeout(150);
+  // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); nearly every caller places points next, so the
+  // helper does what that user does next. A test of what Calibrate itself leaves behind does not use this helper.
+  await pickTool('place-point');
 }
 
-// Auto-extract umbrella (v0.8): the wand tool (mode-auto-extract) fronts the
-// three tracing mechanisms via a fold-out card. Opens the card if needed, then
-// selects the mechanism (flood-fill / colour / guide points).
-async function selectAutoExtract(mech: 'flood' | 'colour' | 'guide') {
-  const pressed = await page.getByTestId('mode-auto-extract').getAttribute('aria-pressed');
-  if (pressed !== 'true') await page.getByTestId('mode-auto-extract').click();
-  await page.getByTestId(`auto-extract-${mech}`).click();
-  // Wait until the mechanism (and thus `mode`) is actually active before returning,
-  // or a following canvas click can be routed as the PREVIOUS mode -- the arming
-  // race that intermittently flaked the interpolation/guide tests. aria-pressed is
-  // `mode === m`, so this is the deterministic "mode is armed" signal.
-  await page.locator(`[data-testid="auto-extract-${mech}"][aria-pressed="true"]`).waitFor({ state: 'visible' });
+// The Data extraction tool (rail 4, v2.7): one card holding every way to get points - Place points, the automatic
+// tools and Split a line. It opens with nothing picked (David, 2026-11-01), so a test picks a tool exactly as a user
+// does: open the card from the rail if it is not open, then press the tool in it.
+async function pickTool(tool: 'find-lines' | 'color-trace' | 'segment-fill' | 'interpolate' | 'place-point' | 'cut') {
+  if ((await page.getByTestId('data-extraction-card').count()) === 0) await page.getByTestId('mode-data-extraction').click();
+  await page.getByTestId(`extract-tool-${tool}`).click();
+  // Wait until the tool (and thus `mode`) is actually active before returning, or a following canvas click can be
+  // routed as the PREVIOUS mode -- the arming race that intermittently flaked the interpolation/guide tests.
+  // aria-pressed is `mode === tool`, so this is the deterministic "mode is armed" signal.
+  await page.locator(`[data-testid="extract-tool-${tool}"][aria-pressed="true"]`).waitFor({ state: 'visible' });
+}
+
+// The automatic tools by their old short names, which the tests below were written against.
+async function selectAutoExtract(mech: 'flood' | 'colour' | 'guide' | 'find') {
+  await pickTool(({ flood: 'segment-fill', colour: 'color-trace', guide: 'interpolate', find: 'find-lines' } as const)[mech]);
 }
 
 /**
@@ -643,6 +649,7 @@ describe('Workspace: XY axes', () => {
     await page.getByTestId('run-calibration').click();
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(250, 175);
     await expectRow([5, 5]);
   });
@@ -759,6 +766,7 @@ describe('Workspace: XY axes', () => {
     await confirmValue('10');
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(250, 175);
     await expectRow([5, 5]);
   });
@@ -800,21 +808,79 @@ describe('Workspace: XY axes', () => {
 });
 
 describe('Workspace: tool mode', () => {
-  it('disables Place Point until calibrated, and lands in Place Point automatically once calibration succeeds', async () => {
+  // ⚑ The Data extraction tool (rail 4, v2.7; David 2026-10-31 and 2026-11-01, docs/v2.7-workflow-walk.md): Place
+  // point, Auto-extract and Cut in one card, which opens with nothing picked. Calibrate picks no tool after it.
+  it('Calibrate picks no tool: the next step is the user\'s, and a click on the figure adds nothing', async () => {
     await resetWorkspace('xy');
-    expect(await page.getByTestId('mode-place-point').isDisabled()).toBe(true);
+    expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(true);
+    await clickAt(100, 250);
+    await confirmValue('0');
+    await clickAt(400, 250);
+    await confirmValue('10');
+    await confirmValue('0');
+    await clickAt(100, 100);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
+    expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(false);
+    expect(await page.getByTestId('mode-data-extraction').getAttribute('aria-pressed')).toBe('false');
+    expect(await page.getByTestId('data-extraction-card').count()).toBe(0);
+    await clickAt(250, 175);
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(0);
+  });
+
+  it('Data extraction opens its card with nothing picked; a click adds nothing until Place points is picked', async () => {
+    await resetWorkspace('xy');
     await calibrateXYStandard();
-    expect(await page.getByTestId('mode-place-point').isDisabled()).toBe(false);
-    // No manual mode switch here -- calibrating should have auto-advanced
-    // to Place Point, so this click adds a point immediately.
+    await page.getByTestId('mode-pan').click();
+
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
+    for (const tool of ['find-lines', 'color-trace', 'segment-fill', 'interpolate', 'place-point', 'cut']) {
+      expect(await page.getByTestId(`extract-tool-${tool}`).getAttribute('aria-pressed'), tool).toBe('false');
+      expect(await page.getByTestId(`extract-tool-${tool}`).isDisabled(), tool).toBe(false); // XY: every tool applies
+    }
+    expect(await textOf('tips-bar')).toMatch(/pick a tool in the card/i);
+    expect(await textOf('data-extraction-into')).toContain('Series 1');
+    await clickAt(250, 175);
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(0);
+
+    await page.getByTestId('extract-tool-place-point').click();
     await clickAt(250, 175);
     await expectRow([5, 5]);
+
+    // the rail button again folds the card and goes back to the tool before it
+    await page.getByTestId('mode-data-extraction').click();
+    expect(await page.getByTestId('data-extraction-card').count()).toBe(0);
+    expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('the card keeps every tool in its place, greyed where it does not apply: a box plot offers only Place points', async () => {
+    await resetWorkspace('boxplot');
+    // the bar walk: the value axis (two values) and the category axis (its two ends, and the count)
+    await declineCommonOrigin();
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(100, 400);
+    await clickAt(500, 400);
+    await confirmValue('4');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
+
+    await page.getByTestId('mode-data-extraction').click();
+    for (const tool of ['find-lines', 'color-trace', 'segment-fill', 'interpolate', 'cut']) {
+      expect(await page.getByTestId(`extract-tool-${tool}`).isDisabled(), tool).toBe(true);
+    }
+    expect(await page.getByTestId('extract-tool-place-point').isDisabled()).toBe(false);
+    expect(await page.getByTestId('extract-tool-place-point').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('Pan mode makes clicks inert and turns a would-be handle drag into a background pan instead', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point mode
+    await calibrateXYStandard(); // ends on Place points
 
     await page.getByTestId('mode-pan').click();
     await clickAt(250, 175); // would be (5.000, 5.000) in Place Point mode
@@ -833,7 +899,7 @@ describe('Workspace: tool mode', () => {
 
   it('switching back to Calibrate mode after calibration ignores clicks (no stray points) but still allows handle drags, which lose the calibration', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point mode
+    await calibrateXYStandard(); // ends on Place points
 
     await page.getByTestId('mode-calibrate').click();
     await clickAt(250, 175);
@@ -846,7 +912,7 @@ describe('Workspace: tool mode', () => {
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175);
     // Y1@250=0, new Y2@0=10, query at local y=175 -> (250-175)/(250-0)*10 = 3.000.
     await expectRow([5, 3]);
@@ -854,7 +920,7 @@ describe('Workspace: tool mode', () => {
 
   it('adds a point back into curve order, not at the end (insert-in-place, v1.1 #1)', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point mode
+    await calibrateXYStandard(); // ends on Place points
     // On one horizontal line (py=200 -> y=3.333): place the two ends, then a
     // point that belongs BETWEEN them last.
     await clickAt(160, 200); // x=2 (left end)
@@ -868,7 +934,7 @@ describe('Workspace: tool mode', () => {
 
   it('reorders points into a nearest-neighbour path with Sort ↝ nearest, undoable (checkpoint 130)', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point mode
+    await calibrateXYStandard(); // ends on Place points
     // Three points on one horizontal line (py=200 -> y=3.333). Placing them
     // left-to-right, insert-in-place (v1.1 #1) keeps them in order: x=2, 5, 8.
     await clickAt(160, 200); // x=2
@@ -916,22 +982,23 @@ describe('Workspace: tool mode', () => {
     await clickAt(100, 100); // Y2
     await confirmValue('10');
     await page.getByTestId('run-calibration').click();
-    await page.waitForTimeout(150); // lands in Place Point mode automatically
+    await page.waitForTimeout(150); // Calibrate picks no tool (David, 2026-11-01)
 
     // Hotkeys run 0-9 down the rail (2026-07-22 redesign; Edit image and Calibrate traded places, David
-    // 2026-10-31): 0 Pan · 1 Edit img · 2 Calibrate · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars ·
-    // 7 Measure · 8 Curve fit · 9 Geometry.
+    // 2026-10-31; Data extraction on 4 holds Add, Auto-extract and Cut, v2.7): 0 Pan · 1 Edit img · 2 Calibrate ·
+    // 3 (waits for Legend) · 4 Data extraction · 5 Select · 6 Error bars · 7 Measure · 8 Curve fit · 9 Geometry.
     await page.keyboard.press('0');
     expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
 
     await page.keyboard.press('2');
     expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
 
-    await page.keyboard.press('3');
-    expect(await page.getByTestId('mode-place-point').getAttribute('aria-pressed')).toBe('true');
+    await page.keyboard.press('3'); // nothing on 3 yet: the tool stays as it was
+    expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
 
     await page.keyboard.press('4');
-    expect(await page.getByTestId('mode-auto-extract').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('mode-data-extraction').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('data-extraction-card').count()).toBe(1);
 
     await page.keyboard.press('5');
     expect(await page.getByTestId('mode-select').getAttribute('aria-pressed')).toBe('true');
@@ -963,6 +1030,9 @@ describe('Workspace: Bar axes', () => {
     await confirmValue(String(categories));
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   // A tuple-shaped row's numeric read: tuple-derived-N (the Value cell), never
@@ -1015,12 +1085,12 @@ describe('Workspace: Bar axes', () => {
 
   // ⚑ v2.0: both ends of a bar are measured, not "click anywhere on the value
   // axis" (the wording that invited the midpoint error 59f94a6 blocked on the
-  // automated path). Add points is the manual capture tool and the tips bar
+  // automated path). Place points is the manual capture tool and the tips bar
   // is the only place the app can say how to aim it.
   it('tells you to drag corner to corner, never "anywhere on the image"', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     const tip = await textOf('tips-bar');
     expect(tip).toMatch(/opposite corner/i);
     // ⚑ v2.5 says what each corner is FOR rather than asserting a precondition:
@@ -1105,28 +1175,25 @@ describe('Workspace: Bar axes', () => {
     expect(await textOf('bar-cell-0-0')).toMatch(/\[7\]/);
   }, 30000);
 
-  // v2.0 Phase 7: Auto-extract is now a REAL option for Bar (a bar blob's own
-  // bounding box is its two ends), so the empty-table hint names it again --
-  // the opposite of the pre-Phase-7 rule this test used to guard (Auto-extract
-  // permanently greyed, so naming it would have been the contradiction
-  // 9612378 was written to sweep). Box Plot/categorical Line still refuse it
-  // outright and must still not name it -- see the next test.
-  it('the empty-table hint recommends BOTH Add points and Auto-extract for a bar chart', async () => {
+  // ⚑ Since v2.7 every way of getting points is a tool in the Data extraction card (4), greyed in place where it
+  // does not apply (David, 2026-10-31), so the empty-table hint names the card and never a tool in it: it cannot
+  // recommend a tool the card greys, which is the contradiction 9612378 was written to sweep.
+  it('the empty-table hint sends a bar chart to Data extraction (4), naming no tool in it', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
     await page.getByTestId('mode-select').click(); // a tool whose canvas click captures nothing
     const hint = await textOf('no-points');
-    expect(hint).toMatch(/Add points/i);
-    expect(hint).toMatch(/Auto-extract/i);
+    expect(hint).toMatch(/Data extraction \(4\)/);
+    expect(hint).not.toMatch(/Add points|Auto-extract/i);
   });
 
-  it('...but the hint still never sends a Box Plot to its still-greyed-out Auto-extract', async () => {
+  it('...and a Box Plot the same way, never to a tool its card greys', async () => {
     await resetWorkspace('boxplot');
     await calibrateBarStandard();
     await page.getByTestId('mode-select').click();
     const hint = await textOf('no-points');
-    expect(hint).not.toMatch(/Auto-extract/i);
-    expect(hint).toMatch(/Add points/i);
+    expect(hint).not.toMatch(/Add points|Auto-extract/i);
+    expect(hint).toMatch(/Data extraction \(4\)/);
   });
 
   // ⚑⚑ v2.3: STACKING IS ASKED ON THE CALIBRATION CARD, and the Series card's
@@ -1617,7 +1684,7 @@ describe('Workspace: Bar auto-extract by colour (v2.0 Phase 7)', () => {
   it('picking a colour puts it on an empty series straight away, before any trace', async () => {
     await openBarTruthProject();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     await page.getByTestId('color-trace-eyedropper').click();
     await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
 
@@ -1683,6 +1750,9 @@ describe('Workspace: Candlestick', () => {
     await confirmValue(String(categories));
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('asks for four marks by name, and draws the candle only when all four are placed', async () => {
@@ -1851,6 +1921,9 @@ describe('Workspace: Box Plot / Point Groups', () => {
     await confirmValue(String(categories));
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('is a first-class dropdown type (checkpoint 107): selecting it auto-carries the groups, no hidden toggle', async () => {
@@ -2058,6 +2131,9 @@ describe('Workspace: Polar axes', () => {
     await confirmValues(['20']); // r only: a circular figure is asked for no angle here
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('walks a 3-step calibration where the origin needs no typed value, then reads back r and θ', async () => {
@@ -2081,6 +2157,7 @@ describe('Workspace: Polar axes', () => {
     // hits the Konva shape instead of the Stage background and never
     // reaches onImageClick, same as the XY/Bar tests' query points above).
     // dist=150, r = ((20-10)/300)*(150-300)+10 = 5.
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(250, 300);
     await expectRow([5, 0]);
   });
@@ -2112,6 +2189,7 @@ describe('Workspace: Polar axes', () => {
     // (350,300) is half of P1's own offset, so it is r=3 at θ=0 in the figure's
     // own frame. Read as a CIRCLE it would be 0: dist12 is 150-100=50, giving
     // ((12-6)/50)*(50-100)+6 = 0. The whole point of the toggle, in one row.
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(350, 300);
     await expectRow([3, 0]);
   });
@@ -2165,6 +2243,9 @@ describe('Workspace: Ternary axes', () => {
     await confirmValue('');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('walks a 3-step calibration naming each corner as the figure does, then reads back a, b, c', async () => {
@@ -2187,6 +2268,7 @@ describe('Workspace: Ternary axes', () => {
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
     // Midpoint of A-B (neither corner's own pixel) -> a 50/50 split, c=0.
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(100, 200);
     await expectRow([50, 50, 0]);
   });
@@ -2230,6 +2312,9 @@ describe('Workspace: Map axes', () => {
     await confirmValue('30');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('walks a 2-step calibration where only P2 needs a typed value, then reads back X and Y', async () => {
@@ -2262,6 +2347,7 @@ describe('Workspace: Map axes', () => {
     const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
     const query = screenToImage(view, 200, 150); // not any handle's own pixel
 
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(200, 150);
     const data = await rowValues();
     expect(data[0]).toBeCloseTo((query.x * 30) / dist, 0);
@@ -2323,6 +2409,9 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     await page.keyboard.type('2024/01/01 00:00');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('walks a 5-step calibration mixing value-less and 1-2 value steps, gating Calibrate on the global field', async () => {
@@ -2363,6 +2452,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     // Query point deliberately not any handle's own pixel (see the note on
     // shared-handle clicks in the XY describe block above) and chosen to
     // keep the pen/chart law-of-cosines term inside acos's valid domain.
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(300, 320);
     const cells = await rowCells();
     expect(cells).toHaveLength(2);
@@ -2612,6 +2702,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(150);
     // Two bars clear of the baseline (y=400 is value 0, 30 px to the unit):
     // 1.67 to 5.00 and 2.33 to 5.67.
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await dragMarker(150, 350, 150, 250);
     await dragMarker(350, 330, 350, 230);
 
@@ -3311,7 +3402,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     // Point at local (250, 200): Y = (250-200)/(250-100)*0.01 = 0.00333...
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 200);
 
     const csvPath = tempFilePath('csv');
@@ -3617,6 +3708,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     for (const py of [385, 355, 325, 295, 265]) {
       await clickAt(300, py); // reads back exactly 0.5, 1.5, 2.5, 3.5, 4.5
     }
@@ -3675,6 +3767,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await dragMarker(300, 400, 300, 250); // baseline (value 0) to value 5, one bar
 
     const csvPath = tempFilePath('csv');
@@ -3713,7 +3806,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // nothing" in By-colour -- so following the panel meant clicking the curve and
     // concluding the app was broken. Caught on a screenshot, not by a test.
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point, no points yet
+    await calibrateXYStandard(); // ends on Place points, no points yet
 
     expect(await page.getByTestId('no-points').textContent()).toContain('click on the image');
 
@@ -3747,24 +3840,21 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
-    const tool = page.getByTestId('mode-auto-extract');
-    expect(await tool.isDisabled()).toBe(false);
-
-    await tool.click();
-    await page.waitForTimeout(100);
-    expect(await tool.getAttribute('aria-pressed')).toBe('true');
-    // Only By colour applies -- Flood-fill/Guide points are curve tools with
-    // no slot to file their output into (a bar's two slots are its measured
-    // ends, not a curve to follow), same reasoning as the spider's own
-    // single-mechanism restriction.
-    expect(await page.getByTestId('auto-extract-flood').count()).toBe(0);
-    expect(await page.getByTestId('auto-extract-guide').count()).toBe(0);
-    expect(await page.getByTestId('auto-extract-colour').count()).toBe(1);
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
+    // Only Colour trace applies of the automatic tools -- Fill a region / Follow guide points are curve tools with
+    // no slot to file their output into (a bar's two slots are its measured ends, not a curve to follow), same
+    // reasoning as the spider's own single-mechanism restriction. Since v2.7 they keep their place in the card,
+    // greyed (David, 2026-10-31).
+    expect(await page.getByTestId('extract-tool-segment-fill').isDisabled()).toBe(true);
+    expect(await page.getByTestId('extract-tool-interpolate').isDisabled()).toBe(true);
+    expect(await page.getByTestId('extract-tool-color-trace').isDisabled()).toBe(false);
+    await pickTool('color-trace');
     // No curve/scatter shape choice either -- a bar's shape is always its box.
     expect(await page.getByTestId('color-trace-shape').isVisible()).toBe(false);
   });
 
-  it('...but still refuses it outright on a Box Plot, and says why', async () => {
+  it('...but still refuses Colour trace outright on a Box Plot, and says why', async () => {
     // Box Plot shares Bar's calibration but has no "opposite corners" a
     // bounding box could mean for its own five-value record, so it stays in
     // the refused bucket Bar itself has now left.
@@ -3781,23 +3871,22 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
-    const tool = page.getByTestId('mode-auto-extract');
+    // ⚑ Since v2.7 the refusal lives INSIDE the Data extraction card (David, 2026-10-31): the card opens on every
+    // graph, by its button or by 4, and Colour trace is greyed in its place.
+    await page.keyboard.press('4');
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
+    const tool = page.getByTestId('extract-tool-color-trace');
     expect(await tool.isDisabled()).toBe(true);
     // The greyed tool explains itself (the v1.0.2 B3 pattern) rather than leaving a
     // dead button -- Parallel Universe David has to learn WHY on screen. A disabled
-    // <button> suppresses its own tooltip in Chromium, so IconButton puts the title
-    // on a wrapping span and keeps aria-label on the button; assert the latter.
-    expect(await tool.getAttribute('aria-label')).toContain('five values');
-
-    // The hotkey must not sneak past the greyed button.
-    await page.keyboard.press('4');
-    await page.waitForTimeout(100);
-    expect(await tool.getAttribute('aria-pressed')).toBe('false');
+    // <button> suppresses its own tooltip in Chromium, so the card puts the title
+    // on a wrapping span; assert that.
+    expect(await tool.locator('xpath=..').getAttribute('title')).toContain('five values');
 
     // ...while an XY figure still has it, so the gate is graph-type-specific.
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
+    expect(await page.getByTestId('extract-tool-color-trace').isDisabled()).toBe(false);
   });
 
   it('⚑⚑ A2 - clicking a cell selects THAT cell\'s series, not whichever was active', async () => {
@@ -3918,6 +4007,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await dragMarker(250, 400, 250, 250); // bar 1 (category 0)
     await dragMarker(400, 400, 400, 200); // bar 2 (category 1)
     await page.getByTestId('bar-category-name-0').dblclick();
@@ -4166,14 +4256,15 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 });
 
 describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
-  it('the tool-rail button is disabled until calibrated', async () => {
+  it('the tool-rail button (Data extraction, since v2.7) is disabled until calibrated', async () => {
     await resetWorkspace('xy');
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(true);
+    expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(true);
     await calibrateXYStandard();
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
+    expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(false);
+    expect(await page.getByTestId('extract-tool-segment-fill').isDisabled()).toBe(false);
   });
 
-  it('Auto-extract is disabled for Box Plot / categorical Line, unlike Place Point', async () => {
+  it('the automatic tools are greyed for Box Plot / categorical Line, unlike Place Point', async () => {
     // ⚑ REVERSED TWICE. First reversed 2026-07-25 to pin the defect: every
     // auto-extract mechanism was a curve tool, and on a filled bar
     // pointsFromColumnRuns recorded the bar's MIDPOINT, so a bar of true value
@@ -4198,8 +4289,13 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
-    expect(await page.getByTestId('mode-place-point').isDisabled()).toBe(false); // still allowed
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(true); // no group slot for a curve trace
+    // ⚑ Since v2.7 the tools sit in the Data extraction card, greyed in place where they do not apply (David,
+    // 2026-10-31).
+    await page.getByTestId('mode-data-extraction').click();
+    expect(await page.getByTestId('extract-tool-place-point').isDisabled()).toBe(false); // still allowed
+    for (const t of ['segment-fill', 'color-trace', 'interpolate']) {
+      expect(await page.getByTestId(`extract-tool-${t}`).isDisabled(), t).toBe(true); // no group slot for a curve trace
+    }
   });
 
   // Local canvas (143,236) lands on the sample chart's real plotted curve
@@ -4297,9 +4393,9 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
 describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
   it('is disabled until calibrated, then enabled', async () => {
     await resetWorkspace('xy');
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(true);
+    expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(true);
     await calibrateXYStandard();
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
+    expect(await page.getByTestId('extract-tool-interpolate').isDisabled()).toBe(false);
   });
 
   it('fills a derived curve from a few guide points (more points than were clicked)', async () => {
@@ -4307,7 +4403,7 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     await calibrateXYStandard();
 
     await selectAutoExtract('guide');
-    expect(await page.getByTestId('auto-extract-guide').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('extract-tool-interpolate').getAttribute('aria-pressed')).toBe('true');
 
     // Three well-separated guide points along a curve (canvas-local coords).
     await clickAt(420, 450);
@@ -4394,7 +4490,7 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     // the derived row shifted by 0.0002 anyway. The click must CLEAR.
     expect(await page.locator('[data-testid^="point-row-"][aria-selected="true"]').count()).toBe(0);
     // ...and nudging does nothing to it.
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowUp');
     await page.waitForTimeout(150);
     const after = await rowValues(1);
@@ -4475,19 +4571,20 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     expect(lines.filter((l) => l.endsWith(',anchor')).length).toBe(2);
   });
 
-  it('shortcut 4 selects the Auto-extract tool once calibrated (v0.8)', async () => {
-    // Interpolate no longer has its own hotkey -- it's a mechanism inside the
-    // Auto-extract umbrella (hotkey 4 after the 2026-07-22 rail renumber), which
-    // opens on the last-used mechanism.
+  it('shortcut 4 opens the Data extraction card once calibrated, with nothing picked (v2.7)', async () => {
+    // Interpolate has no hotkey of its own -- it is a tool inside the Data extraction card (4), which opens with
+    // nothing picked (David, 2026-11-01: "Let the user pick, even if it is only one").
     await resetWorkspace('xy');
     await calibrateXYStandard();
+    await page.keyboard.press('0'); // leave the card the helper opened
     await page.keyboard.press('4');
-    expect(await page.getByTestId('mode-auto-extract').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('mode-data-extraction').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('extract-tool-interpolate').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('the Eraser tool removes a clicked data point (2026-07-22)', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point mode
+    await calibrateXYStandard(); // ends on Place points
     await clickAt(250, 175);
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(1);
 
@@ -4540,7 +4637,7 @@ describe('Workspace: Interpolation-assist (checkpoint 120)', () => {
     // Click inside the card's own footprint, low enough to be over its (text-only)
     // hint rather than the selector row. Before the fix the card swallowed this;
     // now the container is pointer-events:none so the click reaches the canvas.
-    const card = await page.getByTestId('auto-extract-card').boundingBox();
+    const card = await page.getByTestId('data-extraction-card').boundingBox();
     if (!card) throw new Error('auto-extract card has no bounding box');
     await refreshCanvasBox();
     const lx = card.x - canvasBox.x + card.width / 2;
@@ -4874,7 +4971,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
 
     // Add a third point -> geometry RE-DERIVES live (arc length grows), no re-run
     // and no re-open of the fold-out.
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(310, 130); // data (7, 8)
     await page.waitForTimeout(80);
     expect(await textOf('geometry-summary')).not.toContain('Arc length = 5.00000');
@@ -4988,14 +5085,14 @@ describe('Workspace: Grid Line Removal (checkpoint 28)', () => {
 });
 
 describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
-  it('is unreachable before calibration (colour trace lives inside Auto-extract, v0.8)', async () => {
-    // Colour trace is now a mechanism inside the Auto-extract umbrella, which is
+  it('is unreachable before calibration (colour trace lives inside Data extraction, v2.7)', async () => {
+    // Colour trace is a tool inside the Data extraction card, whose rail button is
     // greyed until calibrated -- tracing produces data points and those need a
     // coordinate system. The old "click Trace, get a Calibrate-first reason" path
     // is replaced by the tool simply being disabled (the button's state IS the
     // reason), consistent with the other tracing mechanisms.
     await resetWorkspace('xy');
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(true);
+    expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(true);
   });
 
   it('a bare canvas click in "By colour" mode does NOT drop a stray data point (v0.8 audit #1)', async () => {
@@ -5034,7 +5131,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     // until calibrated (v0.8), so calibrate first, then open the colour mechanism.
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
 
     // The sample's navy curve at a tolerance that matches it: a real, bounded
     // highlight (not zero, not the whole image).
@@ -5054,9 +5151,9 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     expect(count20).toBeLessThan(count160);
 
     // Leaving the colour mechanism tears the preview down -- the overlay never
-    // lingers. (Toggling the wand off exits Auto-extract; the docked card isn't
+    // lingers. (The rail button folds the Data extraction card; the docked card isn't
     // an Escape-dismissable popover anymore.)
-    await page.getByTestId('mode-auto-extract').click();
+    await page.getByTestId('mode-data-extraction').click();
     await page.waitForTimeout(150);
     expect(await page.getByTestId('color-trace-preview').count()).toBe(0);
   });
@@ -5065,7 +5162,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
 
     // The min-marker-size control is scatter-only: absent for a curve.
     expect(await page.getByTestId('color-trace-min-blob').count()).toBe(0);
@@ -5097,7 +5194,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     await page.getByTestId('color-trace-color').fill('#1f4e79');
     await page.getByTestId('color-trace-tolerance').fill('160');
     await page.waitForTimeout(150);
@@ -5207,7 +5304,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     await page.getByTestId('color-trace-eyedropper').click();
     await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
 
@@ -5226,7 +5323,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     await page.getByTestId('color-trace-eyedropper').click();
     await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
     await page.getByTestId('eyedropper-cancel').click();
@@ -5238,7 +5335,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     await page.getByTestId('color-trace-eyedropper').click();
     await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
 
@@ -5261,7 +5358,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
 
     // Clear the default calibration-box region, then arm the trace eyedropper.
     await page.getByTestId('color-trace-region-clear').click();
@@ -5294,7 +5391,7 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
 
     // Auto-extract ▸ Scattered points on the navy markers.
     await selectAutoExtract('colour');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     // calibrateXYStandard's synthetic box does not bound this example's markers,
     // so clear the default calibration-box region to detect over the whole image
     // (the region default itself is exercised in the B1 test above).
@@ -6148,7 +6245,7 @@ describe('Workspace: keyboard point nudge (checkpoint 106)', () => {
   it('arrow keys nudge the selected point (zoom-scaled), and each nudge is its own undo step', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // reads (5,5); the newest point is auto-selected
     await expectRow([5, 5]);
 
@@ -6176,7 +6273,7 @@ describe('Workspace: keyboard point nudge (checkpoint 106)', () => {
   it('Del removes the selected point', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // one point, auto-selected
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
     await page.keyboard.press('Delete');
@@ -6211,7 +6308,7 @@ describe('Workspace: Enter / Esc / Del global keys', () => {
   it('Esc clears the active point selection (so a following Del deletes nothing)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // one point, auto-selected
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
     await page.keyboard.press('Escape'); // back out of the selection
@@ -6270,7 +6367,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('Ctrl+Left pans while a tool (Place Point) is active', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     const before = await viewOffset();
     await dragButton(300, 300, 380, 360, { ctrl: true });
     const after = await viewOffset();
@@ -6282,7 +6379,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('the middle button pans while a tool is active', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     const before = await viewOffset();
     await dragButton(300, 300, 380, 360, { button: 'middle' });
     const after = await viewOffset();
@@ -6293,7 +6390,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('a plain left-drag in a tool mode neither pans nor places a point', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     const before = await viewOffset();
     await dragButton(300, 300, 380, 360); // plain left, clearly a drag
     const after = await viewOffset();
@@ -6304,7 +6401,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('Space+Left pans while a tool (Place Point) is active, placing no point', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     const before = await viewOffset();
     await dragButton(300, 300, 380, 360, { space: true });
     const after = await viewOffset();
@@ -6315,7 +6412,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('a Space+Left drag starting on a marker pans without moving the point', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // point at (5, 5)
     await expectRow([5, 5]);
     const before = await viewOffset();
@@ -6327,7 +6424,7 @@ describe('Workspace: mouse model + context menu', () => {
 
   it('Space is not stolen from a focused text field (the reverted-bug regression)', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point; series-name field is present
+    await calibrateXYStandard(); // ends on Place points; series-name field is present
     const name = page.getByTestId('series-name');
     await name.fill('');
     await name.focus();
@@ -6338,9 +6435,9 @@ describe('Workspace: mouse model + context menu', () => {
   it('Space does NOT arm a pan while a control (a focused button) has focus (audit B1/C4)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    // Focus a real button (the Place Point rail tool) and keep it focused: Space
+    // Focus a real button (the Data extraction rail tool) and keep it focused: Space
     // is that button's activation key, so a Space+Left drag must NOT pan.
-    await page.getByTestId('mode-place-point').focus();
+    await page.getByTestId('mode-data-extraction').focus();
     const before = await viewOffset();
     await refreshCanvasBox();
     await page.keyboard.down('Space'); // no blur -- button stays focused
@@ -6356,7 +6453,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('right-clicking a data point offers Delete point, which removes it', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // one point
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
     await refreshCanvasBox();
@@ -6384,7 +6481,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('a middle-drag starting on a marker pans the view without moving the point', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // point at (5, 5)
     await expectRow([5, 5]);
     const before = await viewOffset();
@@ -6397,7 +6494,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('a Ctrl+Left drag starting on a marker pans without moving the point', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // point at (5, 5)
     await expectRow([5, 5]);
     const before = await viewOffset();
@@ -6410,7 +6507,7 @@ describe('Workspace: mouse model + context menu', () => {
   it('right-clicking a data point offers Edit value, which opens its inline editor', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // point 0 at (5, 5)
     await refreshCanvasBox();
     await page.mouse.click(canvasBox.x + 250, canvasBox.y + 175, { button: 'right' });
@@ -6450,19 +6547,18 @@ describe('Workspace: mouse model + context menu', () => {
 describe('Workspace: primary-modified keys defer to the native menu', () => {
   it('Ctrl+3 does not delete a point and Ctrl+1 does not switch tools', async () => {
     await resetWorkspace('xy');
-    await calibrateXYStandard(); // lands in Place Point
-    await page.getByTestId('mode-place-point').click();
+    await calibrateXYStandard(); // ends on Place points
     await clickAt(250, 175); // one point
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
     // Bare '3' would delete the active point; Ctrl+3 must NOT (it is the menu's).
     await page.keyboard.press('Control+3');
     await page.waitForTimeout(80);
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
-    // Bare '1' would switch to Calibrate; Ctrl+1 (menu "Actual Size") must NOT.
+    // Bare '1' would open Edit image; Ctrl+1 (menu "Actual Size") must NOT switch tools.
     await page.keyboard.press('Control+1');
     await page.waitForTimeout(80);
-    expect(await page.getByTestId('mode-place-point').getAttribute('aria-pressed')).toBe('true');
-    expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('false');
+    expect(await page.getByTestId('extract-tool-place-point').getAttribute('aria-pressed')).toBe('true');
+    expect(await page.getByTestId('mode-image-edit').getAttribute('aria-pressed')).toBe('false');
   });
 });
 
@@ -6525,6 +6621,7 @@ describe('Workspace: categorical line (checkpoint 101)', () => {
     expect(await textOf('calibrated-status')).toMatch(/Calibrated/);
 
     // Place points at different x positions (out of order).
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(350, 200);
     await clickAt(200, 150);
 
@@ -6747,7 +6844,7 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
   it('a data point can be dropped on the origin even though a calibration handle sits there', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard(); // X1/Y1 share the origin pixel (100,250)
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
 
     // Clicking the origin -- directly on top of the X1/Y1 handles -- must place
     // a data point (0,0), not get swallowed by the handle (handles are inert
@@ -6769,7 +6866,7 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
     // it never got the same fix. One rule, two callers, one of them not using it.
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // definitely unsaved work
 
     // The user opens Export, picks CSV, and then CANCELS the save dialog.
@@ -6792,7 +6889,7 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
   it('warns before discarding unsaved work when the axes type is changed', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard(); // now dirty (calibration committed)
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // a data point, definitely unsaved work
 
     dialogMessages = [];
@@ -6940,7 +7037,7 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
 
     it('a measure click snaps to a data point and never moves or deletes it (v1.1)', async () => {
       await resetWorkspace('xy');
-      await calibrateXYStandard(); // lands in Place Point
+      await calibrateXYStandard(); // ends on Place points
       await clickAt(250, 175); // a data point at (5,5)
       const before = await page.getByTestId('point-row-0').innerText();
 
@@ -6955,7 +7052,7 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
       expect(await page.locator('[data-testid^="measure-row-"]').count()).toBe(1);
 
       // Back in Place Point, the data point is untouched: still one, same value.
-      await page.getByTestId('mode-place-point').click();
+      await pickTool('place-point');
       expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(1);
       expect(await page.getByTestId('point-row-0').innerText()).toBe(before);
     });
@@ -7926,6 +8023,7 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(250, 200); // one decade up from Y1
     await page.waitForTimeout(200);
     // Linear would read ~334 here; a log axis reads 10.
@@ -8166,7 +8264,7 @@ describe('Workspace: changing graph type is non-destructive (checkpoint 87)', ()
   it('is UNDOABLE -- Ctrl+Z brings the whole old document back', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(200, 200);
     await clickAt(300, 150);
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(2);
@@ -8210,7 +8308,7 @@ describe('Workspace: calibration options survive calibration (checkpoint 86)', (
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
     // Trace some data -- the thing you must not lose.
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(200, 200);
     await clickAt(300, 150);
     expect(await page.locator('[data-testid^="point-row-"]').count()).toBe(2);
@@ -8260,7 +8358,7 @@ describe('Workspace: calibration options survive calibration (checkpoint 86)', (
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
 
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(250, 175); // a third of the way up from Y1
     const linear = await textOf('point-row-0');
 
@@ -8404,9 +8502,9 @@ describe('Workspace: the loupe dodges an open tool card (2026-07-20)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('flood');
-    await page.getByTestId('auto-extract-card').waitFor({ state: 'visible' });
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     await refreshCanvasBox();
-    const card = await page.getByTestId('auto-extract-card').boundingBox();
+    const card = await page.getByTestId('data-extraction-card').boundingBox();
     if (!card) throw new Error('auto-extract card not visible');
     // Hover the CENTRE of the card itself.
     await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2, { steps: 3 });
@@ -8459,9 +8557,11 @@ describe('Workspace: error capture (checkpoint 79)', () => {
 
     // The empty-ACTIVE-series case is still reachable, because the rail gate asks
     // whether ANY series has points while the tip speaks for the active one.
+    // ⚑ "+ Add" keeps the current tool since v2.7 (no tool is picked for the user, David 2026-11-01), so Error
+    // bars is still the tool after it; pressing its rail button again would fold it.
     await page.getByTestId('add-series').click();
     await page.waitForTimeout(100);
-    await page.getByTestId('mode-error-bars').click();
+    expect(await page.getByTestId('mode-error-bars').getAttribute('aria-pressed')).toBe('true');
     tip = (await textOf('tips-bar')) ?? '';
     expect(tip).toContain('place the data points first');
     expect(tip).not.toContain('calibrate the axes to begin');
@@ -8604,7 +8704,7 @@ describe('Workspace: error capture (checkpoint 79)', () => {
 
     // Back in Place Point: select the datum via its table row (a canvas click
     // here would ADD a point), then press Del.
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await page.getByTestId('point-row-0').click();
     await page.keyboard.press('Delete');
     await page.waitForTimeout(150);
@@ -9221,6 +9321,9 @@ describe('spider charts', () => {
     }
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('prefills the centre value and lets an axis go unnamed', async () => {
@@ -9458,23 +9561,23 @@ describe('spider charts', () => {
     await page.getByTestId('spider-value-0-2').waitFor({ state: 'visible' });
   });
 
-  it('offers Auto-extract, with the axis-aware mechanism as the only one', async () => {
+  it('offers Colour trace, the axis-aware mechanism, as the only automatic tool', async () => {
     // ⚑ Spider is the one point-group type auto-extract is offered for, and the
     // exception is a correctness one: its slots ARE the axes the trace searches, so
-    // every reading has a home it was measured against. Flood-fill and Guide points
-    // stay out - they produce ordinary points, which a spider series has no slot
-    // for, so they would have run and recorded nothing. A button that does nothing
-    // reads as broken, not as inapplicable.
+    // every reading has a home it was measured against. Fill a region and Follow guide
+    // points do not apply - they produce ordinary points, which a spider series has no
+    // slot for, so they would have run and recorded nothing. Since v2.7 they keep their
+    // place in the Data extraction card, greyed (David, 2026-10-31).
     await resetWorkspace('spider');
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
-    expect(await page.getByTestId('mode-auto-extract').isDisabled()).toBe(false);
+    expect(await page.getByTestId('extract-tool-color-trace').isDisabled()).toBe(false);
 
     await selectAutoExtract('colour');
-    expect(await page.getByTestId('auto-extract-flood').count()).toBe(0);
-    expect(await page.getByTestId('auto-extract-guide').count()).toBe(0);
+    expect(await page.getByTestId('extract-tool-segment-fill').isDisabled()).toBe(true);
+    expect(await page.getByTestId('extract-tool-interpolate').isDisabled()).toBe(true);
     // Nothing to choose between curve and scatter: the rays decide where to read.
     expect(await page.getByTestId('color-trace-shape').isVisible()).toBe(false);
-    expect(await textOf('auto-extract-card')).toMatch(/one reading per axis/i);
+    expect(await textOf('data-extraction-card')).toMatch(/one reading per axis/i);
   });
 
   it('traces the bundled figure and recovers its published values', async () => {
@@ -9688,7 +9791,7 @@ describe('spider charts', () => {
     expect(await textOf('tips-bar')).toContain('Weight'); // the one asked for
 
     // And a capture lands in the slot that was aimed at, not the first gap.
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(...spoke(1, 3, R / 4));
     await page.waitForTimeout(150);
     expect(await textOf('spider-cell-0-1')).toMatch(/\d/);
@@ -9914,7 +10017,9 @@ describe('pie charts (v1.6)', () => {
       await page.getByTestId('global-field-total').fill('100');
       await page.getByTestId('run-calibration').click();
       await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
-      await page.getByTestId('mode-place-point').click();
+      // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+      // does what that user does next.
+      await pickTool('place-point');
     }
 
     it('offers the closing click ON THE FIGURE, and only once it is possible', async () => {
@@ -9977,7 +10082,9 @@ describe('pie charts (v1.6)', () => {
       await page.getByTestId('global-field-total').fill('100');
       await page.getByTestId('run-calibration').click();
       await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
-      await page.getByTestId('mode-place-point').click();
+      // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+      // does what that user does next.
+      await pickTool('place-point');
     }
 
     it('is not offered before there is a pie to have slices of', async () => {
@@ -10527,7 +10634,7 @@ describe('heatmap capture (v2.2)', () => {
   it('⚑ while every type whose record IS points still counts them', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(200, 200);
     await clickAt(300, 150);
     expect(await textOf('series-option-0')).toBe('Series 1 (2)');
@@ -11333,7 +11440,10 @@ describe('heatmap capture (v2.2)', () => {
     expect(await textOf('heatmap-selected-cell')).toBe('2,1');
 
     // From the figure: a click inside a different cell moves the pick, and adds
-    // NOTHING to the series.
+    // NOTHING to the series. ⚑ With the Select tool: since v2.7 Calibrate leaves the user on Pan (David,
+    // 2026-11-01), where a click is inert, and Place points is greyed on a heatmap; this click used to reach the
+    // cell pick through Place point's fallthrough.
+    await page.getByTestId('mode-select').click();
     const middle = await imageToLocal(
       truth.frame.x1.x + (truth.frame.x2.x - truth.frame.x1.x) * 0.75,
       (truth.frame.x1.y + truth.frame.y2.y) / 2
@@ -11585,7 +11695,7 @@ describe('heatmap capture (v2.2)', () => {
     expect(await remove.getAttribute('title')).toMatch(/last two boundaries/);
   });
 
-  it('a refused auto-extract says WHY on the button, not "Not available for this graph type"', async () => {
+  it('a refused extraction tool says WHY on the button, not "Not available for this graph type"', async () => {
     // ⚑⚑ REFUSE WITH THE REQUIREMENT. Heatmap and Pie declare `autoExtractKind:
     // 'none'` and used to fall through a `config.id === …` cascade to the
     // contentless generic sentence -- so the two types where the reason is the
@@ -11597,19 +11707,18 @@ describe('heatmap capture (v2.2)', () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmapDeclaring('1', '1');
     await page.waitForTimeout(200);
-    const wand = page.getByTestId('mode-auto-extract');
-    expect(await wand.isDisabled()).toBe(true);
-    // ⚑ BOTH surfaces, because a disabled <button> suppresses its own tooltip in
-    // Chromium: IconButton puts the visible tooltip on the WRAPPING SPAN and
-    // keeps `aria-label` on the button for assistive tech. Asserting only one
-    // would pass while the other silently carried nothing.
-    const spoken = await wand.getAttribute('aria-label');
-    const tooltip = await wand.locator('xpath=..').getAttribute('title');
-    for (const reason of [spoken, tooltip]) {
-      expect(reason, 'the reason reaches this surface at all').toBeTruthy();
-      expect(reason).not.toMatch(/not available for this graph type/i);
-      expect(reason).toMatch(/colour/i); // a cell's value IS its colour
-      expect(reason).toMatch(/Read cells/); // and it names what to do instead
+    // ⚑ Since v2.7 the refusal sits on the tools inside the Data extraction card, each greyed in its place (David,
+    // 2026-10-31), and on a heatmap every one of them is greyed: its cells are read at the end of the calibration
+    // card (David, 2026-11-01). A disabled <button> suppresses its own tooltip in Chromium, so the card puts the
+    // reason on the WRAPPING SPAN.
+    await page.getByTestId('mode-data-extraction').click();
+    for (const tool of ['find-lines', 'color-trace', 'segment-fill', 'interpolate', 'place-point', 'cut']) {
+      const button = page.getByTestId(`extract-tool-${tool}`);
+      expect(await button.isDisabled(), tool).toBe(true);
+      const reason = await button.locator('xpath=..').getAttribute('title');
+      expect(reason, `${tool}: the reason reaches the tooltip at all`).toBeTruthy();
+      expect(reason).not.toMatch(/not available for this graph type|not for this graph type/i);
+      expect(reason).toMatch(/Read cells/); // it names what to do instead
     }
   });
 
@@ -11879,7 +11988,7 @@ describe('hiding every mark on the figure', () => {
   async function placeTwoPoints() {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     await clickAt(200, 200);
     await clickAt(260, 170);
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBeGreaterThan(0);
@@ -11919,17 +12028,17 @@ describe('hiding every mark on the figure', () => {
   it('greys the tools that cannot act, and each says why', async () => {
     await placeTwoPoints();
     await page.getByTestId('toggle-marks').click();
-    for (const tool of ['mode-calibrate', 'mode-place-point', 'mode-select', 'mode-eraser', 'mode-measure']) {
+    for (const tool of ['mode-calibrate', 'mode-data-extraction', 'mode-select', 'mode-eraser', 'mode-measure']) {
       expect(await page.getByTestId(tool).isDisabled()).toBe(true);
     }
     // The sentence naming the way out rides on the wrapping span (a disabled
     // <button> suppresses its own title in Chromium - IconButton's own memo).
-    const reason = await page.getByTestId('mode-place-point').locator('xpath=..').getAttribute('title');
+    const reason = await page.getByTestId('mode-data-extraction').locator('xpath=..').getAttribute('title');
     expect(reason).toMatch(/marks are hidden/i);
     expect(reason).toMatch(/show/i);
 
     await page.getByTestId('toggle-marks').click();
-    for (const tool of ['mode-calibrate', 'mode-place-point', 'mode-select', 'mode-eraser', 'mode-measure']) {
+    for (const tool of ['mode-calibrate', 'mode-data-extraction', 'mode-select', 'mode-eraser', 'mode-measure']) {
       expect(await page.getByTestId(tool).isDisabled()).toBe(false);
     }
   });
@@ -12017,6 +12126,9 @@ describe('Workspace: Span chart capture (v2.5)', () => {
     await confirmValue('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150);
+    // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01); the callers place points next, so the helper
+    // does what that user does next.
+    await pickTool('place-point');
   }
 
   it('records a span from ONE drag, corner to opposite corner - the gesture the tips bar names', async () => {
@@ -12121,6 +12233,7 @@ describe('Workspace: a stacked bar chart', () => {
     // 30px per unit: y=400 is 0, y=100 is 10.
     const yFor = (v: number) => 400 - v * 30;
     // Series 1, standing on the baseline, two tall.
+    await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
     await clickAt(150, yFor(0));
     await clickAt(150, yFor(2));
     // Series 2, on top of it, three tall.
@@ -12258,8 +12371,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await confirmValue('10');
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
   }
 
   it('V12, V12a, V13: on a drawn PDF figure Find lines reads the drawing and says so; on a picture it reads pixels', async () => {
@@ -12306,16 +12418,18 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/^Read from the figure’s drawing: 1 line found.*1 place to check/);
     expect(await textOf('places-to-check')).toMatch(/Series 1 has 101 corners and 6 markers on it: the markers may be the data\. To take them as their own series, use By colour ▸ Scattered points on their colour\./);
     // the reader it names is right there in the card
-    expect(await page.getByTestId('auto-extract-colour').count()).toBe(1);
+    expect(await page.getByTestId('extract-tool-color-trace').count()).toBe(1);
   }, 120000);
 
   it('V15: By colour, Scattered points, on a drawn figure places one point per marker, read from the drawing', async () => {
     await openDrawnFigure('markers-scatter');
     const red = vTruth('markers-scatter').lines[0]!.points;
-    // the leftmost red marker: well clear of the legend in the upper right
-    const p = vImg([...red].sort((a, b) => a[0] - b[0])[0]!);
+    // the middle red marker from left to right: clear of the legend in the upper right, and of the Data extraction
+    // card on the left (v2.7), which covers the leftmost one at this window size
+    const byX = [...red].sort((a, b) => a[0] - b[0]);
+    const p = vImg(byX[Math.floor(byX.length / 2)]!);
     // the card's own By colour mechanism, its eyedropper, its Shape choice, then Trace
-    await page.getByTestId('auto-extract-colour').click();
+    await page.getByTestId('extract-tool-color-trace').click();
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(p[0], p[1]);
     await page.getByTestId('color-trace-shape').selectOption('scatter');
@@ -12341,7 +12455,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // E2: Scattered points on the same colour reads the 6 markers, and says the bars are not read
     await page.getByTestId('undo').click();
     const m = vImg(L[0]!);
-    await page.getByTestId('auto-extract-colour').click();
+    await page.getByTestId('extract-tool-color-trace').click();
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(m[0], m[1]);
     await page.getByTestId('color-trace-shape').selectOption('scatter');
@@ -12385,8 +12499,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
     // By colour, its eyedropper on the first bar, then Trace
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-colour').click();
+    await pickTool('color-trace');
     await page.getByTestId('color-trace-eyedropper').click();
     const span = t.category.to[0] - t.category.from[0];
     const onBar = vImg([t.category.from[0] + span / 6, (t.value[0]![1] + (t.value[0]![1] + (t.value[1]![1] - t.value[0]![1]) * (t.series[0]!.heights[0]! / t.value[1]![0]))) / 2]);
@@ -12690,8 +12803,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const L24 = t.lines.filter((l) => l.level === 24).sort((p, q) => q.points.length - p.points.length)[0]!;
     const [mx, my] = L24.points[Math.floor(L24.points.length / 2)]!;
     const sx = (a.x2.px - a.x1.px) / (a.x2.value - a.x1.value), sy = (a.y2.py - a.y1.py) / (a.y2.value - a.y1.value);
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(a.x1.px + (mx - a.x1.value) * sx, a.y1.py + (my - a.y1.value) * sy);
     await page.getByTestId('find-lines-run').click();
@@ -12721,7 +12833,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const loop = (truth.series as { closed?: boolean; points: { x: number; y: number }[] }[]).find((s) => s.closed)!;
     const sx = (a.x2.px - a.x1.px) / (a.x2.value - a.x1.value);
     const sy = (a.y2.py - a.y1.py) / (a.y2.value - a.y1.value);
-    await page.getByTestId('mode-place-point').click();
+    await pickTool('place-point');
     let clicks = 0;
     for (let i = 0; i < loop.points.length - 6; i += 12) {
       const p = loop.points[i]!;
@@ -12759,8 +12871,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
       a.y1.py + (p.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value)),
     ] as const;
 
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
     const [cx, cy] = toPx(t.series[0]!.points[Math.floor(t.series[0]!.points.length / 3)]!);
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(cx, cy);
@@ -12790,8 +12901,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.mouse.up();
     await page.getByTestId('crop-apply').click();
     await page.waitForTimeout(200);
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
 
     // a second press says it replaces the first press's lines - and does
     expect(await textOf('find-lines-run')).toBe('Find lines again');
@@ -12872,8 +12982,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     ] as const;
     const options = () => page.getByTestId('series-select').locator('option').count();
     const pointsIn = async (i: number) => Number(((await textOf(`series-option-${i}`)) ?? '').match(/\((\d+)\)\s*$/)?.[1] ?? 0);
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
 
     // F1/F2: the solid curve, by one click on it - one series, the colour taken from the click
     await page.getByTestId('find-lines-one').click();
@@ -12925,8 +13034,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
       a.x1.px + (p.x - a.x1.value) * ((a.x2.px - a.x1.px) / (a.x2.value - a.x1.value)),
       a.y1.py + (p.y - a.y1.value) * ((a.y2.py - a.y1.py) / (a.y2.value - a.y1.value)),
     ] as const;
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(...toPx(t.series[0]!.points[Math.floor(t.series[0]!.points.length / 3)]!));
     await page.getByTestId('find-lines-run').click();
@@ -13069,8 +13177,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await confirmValue(String(a.y2.value));
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
     const p0 = truth.series[0]!.points[5]!;
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(
@@ -13119,11 +13226,11 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
 
-    // Auto-extract offers Find lines first, tagged as a first version.
-    await page.getByTestId('mode-auto-extract').click();
-    const tabs = page.getByTestId('auto-extract-card').locator('button[aria-pressed]');
+    // The Data extraction card offers Find lines first, tagged as a first version once picked.
+    await page.getByTestId('mode-data-extraction').click();
+    const tabs = page.getByTestId('data-extraction-card').locator('button[aria-pressed]');
     expect(await tabs.first().textContent()).toBe('Find lines');
-    await page.getByTestId('auto-extract-find').click();
+    await page.getByTestId('extract-tool-find-lines').click();
     expect(await textOf('tips-bar')).toMatch(/pick the lines’ colour/);
     expect(await textOf('find-lines-first-version')).toBe('first version');
     // Pick the colour the way the card says - with the pipette, on a line. The
@@ -13163,8 +13270,9 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => page.getByTestId('series-level').inputValue(), { timeout: 5000 }).toBe(reads);
     expect(await textOf('series-level-from-label')).toBe('from label');
 
-    // Cut a line where the rail tool says: click ON a line.
-    await page.getByTestId('mode-cut').click();
+    // Cut a line where the tool says: click ON a line. Since v2.7 it is Split a line, in the Data extraction card
+    // (David, 2026-10-31).
+    await pickTool('cut');
     expect(await textOf('tips-bar')).toMatch(/click a line where it should be cut/);
     const optsBefore = await page.getByTestId('series-select').locator('option').allTextContents();
     const open = truth.series.find((s) => {
@@ -13397,8 +13505,7 @@ describe('Workspace: Settings (v2.7)', () => {
     await confirmValue(String(a.y2.value));
     await page.getByTestId('run-calibration').click();
     await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
-    await page.getByTestId('mode-auto-extract').click();
-    await page.getByTestId('auto-extract-find').click();
+    await pickTool('find-lines');
     expect(await textOf('find-lines-labels-off')).toBe('Label reading is off (Settings).');
     expect(await textOf('find-lines-controls')).not.toMatch(/reads each line/);
     const p0 = truth.series[0]!.points[5]!;

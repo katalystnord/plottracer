@@ -1,6 +1,6 @@
 import { theme, glassSurface } from '../theme.js';
 import { EyedropperIcon } from '../icons.js';
-import { autoExtractModesFor, type ToolMode } from '../../../engine/toolMode.js';
+import { findLinesKind, type ToolMode } from '../../../engine/toolMode.js';
 import type { AxesTypeConfig, CalibratedAxes } from '../../../engine/axesTypeConfigs.js';
 
 /** The colour-match preview overlay's paint colour (checkpoint 121): a bright,
@@ -8,12 +8,16 @@ import type { AxesTypeConfig, CalibratedAxes } from '../../../engine/axesTypeCon
  * typical scientific figures and isn't easily mistaken for a series colour. */
 export const COLOR_TRACE_PREVIEW_RGBA: readonly [number, number, number, number] = [255, 0, 200, 150];
 
-export interface AutoExtractCardProps {
+export interface DataExtractionCardProps {
   mode: ToolMode;
-  config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'id'>;
+  config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'autoExtractRefusal' | 'id'>;
+  /** The card's tools that apply to this graph type (`dataExtractionToolsFor`); the others are greyed in place. */
+  applies: readonly ToolMode[];
+  /** The series picked in the Series panel, which every tool records into. Shown, never picked here. */
+  into: { name: string; color: string };
   /** What one captured shape is called on this type - "bar", "bin", "box". */
   tupleNoun: string;
-  onSetMechanism: (mode: ToolMode) => void;
+  onPickTool: (mode: ToolMode) => void;
 
   segmentFillThreshold: number;
   onSegmentFillThresholdChange: (value: number) => void;
@@ -90,10 +94,12 @@ export interface AutoExtractCardProps {
 }
 
 /**
- * The Auto-extract umbrella card (v0.8, David) - one wand tool fronting the
- * three tracing mechanisms. The selector switches MODE (each keeps its own
- * canvas behaviour) and shows that mechanism's controls, which used to live in
- * three places (sidebar / top-bar panel / tips).
+ * The Data extraction card, rail 4 (v2.7; David 2026-10-31, docs/v2.7-workflow-walk.md). Place point, the three
+ * Auto-extract mechanisms, Find lines and Cut, in one card, as he settled it: the series it records into, the
+ * automatic tools that find one series each, tracing by hand, and Split a line. It opens with nothing picked
+ * ("Let the user pick, even if it is only one"), and a tool that does not apply to the graph type is greyed in
+ * its place. Picking a tool switches MODE, so each keeps its own canvas behaviour, and shows that tool's controls
+ * below. As narrow as it can be: extra height is better than width.
  *
  * ⚑ The card is click-THROUGH (`pointerEvents: 'none'`) and only its actual
  * controls re-enable pointer events. It floats over the figure, and Guide
@@ -101,21 +107,31 @@ export interface AutoExtractCardProps {
  * click in the card's footprint silently did nothing, which is the recurring
  * "I clicked and nothing happened" failure this project keeps rediscovering.
  */
-/** The card's mechanisms, in the order it shows them - also what an agent is
- * told the card offers (v2.7), so the two can never name them differently. */
-export const AUTO_EXTRACT_CHOICES: readonly { m: ToolMode; id: string; label: string; hint: string }[] = [
-  { m: 'find-lines', id: 'find', label: 'Find lines', hint: 'every line of a colour' },
-  { m: 'segment-fill', id: 'flood', label: 'Flood-fill', hint: 'solid line' },
-  { m: 'color-trace', id: 'colour', label: 'By colour', hint: 'dashed / coloured' },
-  { m: 'interpolate', id: 'guide', label: 'Guide points', hint: 'by eye' },
-];
+/** Each tool's name in the card, in `DATA_EXTRACTION_TOOLS`' order. */
+export const DATA_EXTRACTION_LABELS: Readonly<Partial<Record<ToolMode, string>>> = {
+  'find-lines': 'Find lines',
+  'color-trace': 'Colour trace',
+  'segment-fill': 'Fill a region',
+  interpolate: 'Follow guide points',
+  'place-point': 'Place points',
+  cut: 'Split a line',
+};
 
-export function AutoExtractCard(props: AutoExtractCardProps) {
+/** Why a greyed tool does not apply here, said on hover as a greyed rail tool says it. */
+function notHereReason(m: ToolMode, config: DataExtractionCardProps['config']): string {
+  if (config.id === 'heatmap') return 'A heatmap is read from its grid: Read cells, at the end of the calibration card.';
+  if ((m === 'find-lines' || m === 'cut') && findLinesKind(config.id) === null) return 'Only where lines are the record (XY, Contour).';
+  return config.autoExtractRefusal ?? 'Not for this graph type.';
+}
+
+export function DataExtractionCard(props: DataExtractionCardProps) {
   const {
     mode,
     config,
+    applies,
+    into,
     tupleNoun,
-    onSetMechanism,
+    onPickTool,
     segmentFillThreshold,
     onSegmentFillThresholdChange,
     segmentFillError,
@@ -165,9 +181,39 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
       </button>
     </div>
   );
+  // One of the card's tools. A greyed one keeps its place and says why on hover; the wrapper carries the title
+  // because a disabled button gets no pointer events (the rail does the same).
+  const toolButton = (m: ToolMode) => {
+    const on = mode === m;
+    const usable = applies.includes(m);
+    return (
+      <span title={usable ? undefined : notHereReason(m, config)} style={{ pointerEvents: 'auto', display: 'flex' }}>
+        <button
+          type="button"
+          data-testid={`extract-tool-${m}`}
+          aria-pressed={on}
+          disabled={!usable}
+          onClick={() => onPickTool(m)}
+          style={{
+            flex: 1,
+            fontSize: theme.font.size.small,
+            padding: '4px 2px',
+            borderRadius: theme.border.radius.regular,
+            cursor: usable ? 'pointer' : 'default',
+            border: `1px solid ${on ? theme.color.primary.main : theme.color.border.regular}`,
+            background: on ? theme.color.primary.main : theme.color.background.primary,
+            color: on ? '#fff' : theme.color.text.primary,
+            opacity: usable ? 1 : 0.45,
+          }}
+        >
+          {DATA_EXTRACTION_LABELS[m]}
+        </button>
+      </span>
+    );
+  };
   return (
     <div
-      data-testid="auto-extract-card"
+      data-testid="data-extraction-card"
       style={{
         // The card floats over the figure but must NOT swallow canvas
         // clicks meant to place points UNDER it (Guide points / Flood-fill
@@ -182,48 +228,29 @@ export function AutoExtractCard(props: AutoExtractCardProps) {
         borderRadius: 8,
         boxShadow: '0 2px 8px rgba(103, 104, 132, 0.22)',
         padding: '8px 10px',
-        width: 288,
+        width: 232,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
         fontSize: theme.font.size.regular,
       }}
     >
-      <strong style={{ fontSize: theme.font.size.regular }}>Auto-extract</strong>
-      {/* Mechanism selector: pick the one that fits how the curve is
-          drawn (not the graph type -- the app can't tell solid from
-          dashed). */}
-      <div style={{ display: 'flex', gap: 4 }}>
-        {AUTO_EXTRACT_CHOICES
-          // ⚑ A spider or a bar gets ONE mechanism (autoExtractModesFor). The
-          // other two are curve tools that produce ordinary points, and neither
-          // a spider's axis slots nor a bar's two-corner slots have anywhere to
-          // file one: they would have run and recorded nothing, which reads as
-          // a broken button rather than as a tool that does not apply here.
-          .filter(({ m }) => autoExtractModesFor(config.autoExtractKind, config.id).includes(m))
-          .map(({ m, id, label }) => (
-          <button
-            key={id}
-            type="button"
-            data-testid={`auto-extract-${id}`}
-            aria-pressed={mode === m}
-            onClick={() => onSetMechanism(m)}
-            style={{
-              pointerEvents: 'auto', // container is click-through; controls opt back in
-              flex: 1,
-              fontSize: theme.font.size.small,
-              padding: '4px 2px',
-              borderRadius: theme.border.radius.regular,
-              cursor: 'pointer',
-              border: `1px solid ${mode === m ? theme.color.primary.main : theme.color.border.regular}`,
-              background: mode === m ? theme.color.primary.main : theme.color.background.primary,
-              color: mode === m ? '#fff' : theme.color.text.primary,
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      <strong style={{ fontSize: theme.font.size.regular }}>Data extraction</strong>
+      <span data-testid="data-extraction-into" style={{ display: 'flex', alignItems: 'center', gap: 6, color: theme.color.text.secondary }}>
+        Into:
+        <span style={{ width: 10, height: 10, borderRadius: 2, background: into.color, flex: '0 0 auto' }} />
+        <span style={{ color: theme.color.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{into.name}</span>
+      </span>
+      <span style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>Find individual series</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+        {toolButton('find-lines')}
+        {toolButton('color-trace')}
+        {toolButton('segment-fill')}
+        {toolButton('interpolate')}
       </div>
+      <span style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>Trace by hand</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>{toolButton('place-point')}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 6 }}>{toolButton('cut')}</div>
 
       {mode === 'find-lines' && findLines && (
         <div data-testid="find-lines-controls" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>
