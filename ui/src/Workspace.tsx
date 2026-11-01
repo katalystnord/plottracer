@@ -10127,7 +10127,7 @@ export function Workspace() {
               the canvas cannot answer differently - the drift that once left a
               live "Edit value…" menu item with no editor behind it. */}
           <div ref={railColRef} style={{ display: 'flex', flexDirection: 'column', gap: 6, pointerEvents: 'none' }}>
-          {/* View & set up: Pan · Calibrate · Edit image. Image prep is available
+          {/* View & set up: Pan · Edit image · Calibrate (Edit image first since David, 2026-10-31). Image prep is available
               BEFORE capture too (rotate a sideways scan, crop, fine-deskew) and
               THEN capture; enabled whenever there's an image. */}
           <RailGroup data-testid="tool-rail">
@@ -10140,10 +10140,21 @@ export function Workspace() {
             onClick={() => setMode('pan')}
           />
           <IconButton
+            testId="mode-image-edit"
+            icon={<ImageEditIcon />}
+            label="Edit image (rotate / flip)"
+            shortcut="1"
+            pressed={mode === 'image-edit'}
+            disabled={toolDisabled('image-edit', !canvasHasImage)}
+            disabledReason={toolReason('image-edit', 'Open an image first')}
+            onClick={toggleImageEdit}
+            foldout
+          />
+          <IconButton
             testId="mode-calibrate"
             icon={<CalibrateIcon />}
             label="Calibrate"
-            shortcut="1"
+            shortcut="2"
             pressed={mode === 'calibrate'}
             disabled={toolDisabled('calibrate', !figureCaptured)}
             disabledReason={toolReason('calibrate', canvasHasImage ? 'Capture the figure first' : 'Open an image first')}
@@ -10152,17 +10163,6 @@ export function Workspace() {
               // after calibration the card is folded; the tool opens it again (David, 2026-10-31)
               setCalibExpanded(true);
             }}
-          />
-          <IconButton
-            testId="mode-image-edit"
-            icon={<ImageEditIcon />}
-            label="Edit image (rotate / flip)"
-            shortcut="2"
-            pressed={mode === 'image-edit'}
-            disabled={toolDisabled('image-edit', !canvasHasImage)}
-            disabledReason={toolReason('image-edit', 'Open an image first')}
-            onClick={toggleImageEdit}
-            foldout
           />
           </RailGroup>
           {/* Get data points onto the plot, then refine them: Add + Auto-extract

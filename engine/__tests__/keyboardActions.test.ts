@@ -332,11 +332,12 @@ describe('Q / W walk the selection', () => {
 });
 
 describe('the digit hotkeys mirror the rail, and each guard matches its button', () => {
+  // ⚑ Edit image and Calibrate traded places (David, 2026-10-31): 0 Pan, 1 Edit image, 2 Calibrate.
   it('maps 0-9 straight down the rail', () => {
     const s = state();
     expect(resolveDigit('0', s)).toEqual({ type: 'set-mode', mode: 'pan' });
-    expect(resolveDigit('1', s)).toEqual({ type: 'set-mode', mode: 'calibrate' });
-    expect(resolveDigit('2', s)).toEqual({ type: 'toggle-image-edit' });
+    expect(resolveDigit('1', s)).toEqual({ type: 'toggle-image-edit' });
+    expect(resolveDigit('2', s)).toEqual({ type: 'set-mode', mode: 'calibrate' });
     expect(resolveDigit('3', s)).toEqual({ type: 'set-mode', mode: 'place-point' });
     expect(resolveDigit('4', s)).toEqual({ type: 'toggle-auto-extract' });
     expect(resolveDigit('5', s)).toEqual({ type: 'select-tool' });
@@ -347,8 +348,8 @@ describe('the digit hotkeys mirror the rail, and each guard matches its button',
   });
 
   it('refuses a key whose button would be greyed', () => {
-    expect(resolveDigit('1', state({ figureCaptured: false }))).toBeNull();
-    expect(resolveDigit('2', state({ canvasHasImage: false }))).toBeNull();
+    expect(resolveDigit('1', state({ canvasHasImage: false }))).toBeNull();
+    expect(resolveDigit('2', state({ figureCaptured: false }))).toBeNull();
     expect(resolveDigit('3', state({ isCalibrated: false }))).toBeNull();
     expect(resolveDigit('5', state({ isCalibrated: false }))).toBeNull();
     expect(resolveDigit('6', state({ hasAnyPoints: () => false }))).toBeNull();

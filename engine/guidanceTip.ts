@@ -235,10 +235,10 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
   // Before capture, the only real actions are frame (pan/zoom) + Capture. Say
   // so, and state the WYSIWYG model so the framing is deliberate (David).
   if (mode === 'image-edit' && !figureCaptured) return 'Prep the source: rotate, flip, crop or fine-deskew - then press Capture to freeze the cleaned-up figure.';
-  // ⚑ Said "(tool 9)" until the v1.3 gate -- 9 is Geometry; Edit image is 2. The
+  // ⚑ Said "(tool 9)" until the v1.3 gate -- 9 is Geometry; Edit image is 1 (2 until v2.7). The
   // rail was renumbered in v1.0.2 and this line, the FIRST one every first-run
   // user reads, kept pointing at the old slot.
-  if (!figureCaptured) return 'Frame the whole figure in the window (pan / zoom) - rotate / crop / deskew first if needed (tool 2) - then press Capture. What you see is what you capture.';
+  if (!figureCaptured) return 'Frame the whole figure in the window (pan / zoom) - rotate / crop / deskew first if needed (tool 1) - then press Capture. What you see is what you capture.';
   if (eyedropper === 'find-one') return 'Find this line: click the line on the image - only that line is found and added.';
   if (eyedropper === 'grid') return 'Eyedropper: click a gridline on the image to sample its colour.';
   if (eyedropper === 'series') return 'Eyedropper: click the series’ curve on the image to take its colour.';

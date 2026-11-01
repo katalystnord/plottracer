@@ -183,8 +183,8 @@ export function stepSelectablePoint(
  * Digit hotkeys mirror the rail order (v0.8, 0-based). Each guard matches its
  * button's `disabled` so a key cannot do what the greyed button cannot.
  *
- * Hotkeys 0-9 run straight down the rail (2026-07-22 redesign): 0 Pan ·
- * 1 Calibrate · 2 Edit img · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars ·
+ * Hotkeys 0-9 run straight down the rail (2026-07-22 redesign; Edit image and
+ * Calibrate traded places, David 2026-10-31): 0 Pan · 1 Edit img · 2 Calibrate · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars ·
  * 7 Measure · 8 Curve fit · 9 Geometry. Curve Fit (8) / Geometry (9) are fly-out
  * panels: opened by triggering their rail button, skipped when disabled.
  * Clear-all (top bar) and the Eraser have NO key - both destructive, kept out of
@@ -192,8 +192,8 @@ export function stepSelectablePoint(
  */
 export function resolveDigit(key: string, s: KeyboardState): KeyAction | null {
   if (key === '0') return { type: 'set-mode', mode: 'pan' };
-  if (key === '1' && s.figureCaptured) return { type: 'set-mode', mode: 'calibrate' };
-  if (key === '2' && s.canvasHasImage) return { type: 'toggle-image-edit' };
+  if (key === '1' && s.canvasHasImage) return { type: 'toggle-image-edit' };
+  if (key === '2' && s.figureCaptured) return { type: 'set-mode', mode: 'calibrate' };
   if (key === '3' && s.isCalibrated) return { type: 'set-mode', mode: 'place-point' };
   if (key === '4' && s.isCalibrated && (s.autoExtractKind ?? 'curve') !== 'none') return { type: 'toggle-auto-extract' };
   // Hotkey 5 activates Select with the current sub-mode but does NOT open the
@@ -233,7 +233,7 @@ export function resolveKeyDown(e: KeyPress, s: KeyboardState): ResolvedKey | nul
   // menu:zoom-in/out/fit/100 (electron-menu.cjs), wired to the canvas in
   // ImageCanvas (onMenuEvent). A renderer copy of those bindings would
   // DOUBLE-fire (menu accelerator + this keydown) and, worse, the modified digit
-  // would fall through to the bare-digit tool chain below (Ctrl+1 -> Calibrate,
+  // would fall through to the bare-digit tool chain below (Ctrl+1 -> Edit image,
   // Ctrl+3 -> delete a point). Guarding here fixes both.
   if (primaryMod(e)) return null;
 

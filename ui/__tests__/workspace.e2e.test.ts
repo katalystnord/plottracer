@@ -918,13 +918,13 @@ describe('Workspace: tool mode', () => {
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(150); // lands in Place Point mode automatically
 
-    // Hotkeys run 0-9 down the rail (2026-07-22 redesign): 0 Pan · 1 Calibrate ·
-    // 2 Edit img · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars · 7 Measure ·
-    // 8 Curve fit · 9 Geometry.
+    // Hotkeys run 0-9 down the rail (2026-07-22 redesign; Edit image and Calibrate traded places, David
+    // 2026-10-31): 0 Pan · 1 Edit img · 2 Calibrate · 3 Add · 4 Auto-extract · 5 Select · 6 Error bars ·
+    // 7 Measure · 8 Curve fit · 9 Geometry.
     await page.keyboard.press('0');
     expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
 
-    await page.keyboard.press('1');
+    await page.keyboard.press('2');
     expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
 
     await page.keyboard.press('3');
@@ -5827,8 +5827,8 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     await page.getByTestId('keytip-mode-calibrate').waitFor({ state: 'visible', timeout: 5000 });
     // The rail's own digit, promoted into the same badge the top bar shows -- and on
     // the SAME SIDE as the digit already there, so it reads as that number lighting up
-    // rather than as a second, different badge (David).
-    expect(await textOf('keytip-mode-calibrate')).toBe('1');
+    // rather than as a second, different badge (David). Calibrate is 2 since v2.7 (David, 2026-10-31).
+    expect(await textOf('keytip-mode-calibrate')).toBe('2');
 
     await page.keyboard.press('Escape');
     await expect.poll(() => page.getByTestId('keytip-mode-calibrate').count(), { timeout: 5000 }).toBe(0);
@@ -5856,10 +5856,26 @@ describe('Workspace: Alt key-tips (v1.6)', () => {
     // Tap Alt and LET GO -- the badges stay, which is what makes this a sequence
     // rather than a chord, and is how an Office user's fingers already work.
     await page.keyboard.press('Alt');
-    expect(await textOf('keytip-mode-calibrate')).toBe('1');
-    await page.keyboard.press('1');
+    expect(await textOf('keytip-mode-calibrate')).toBe('2');
+    await page.keyboard.press('2');
     expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('true');
     expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  // ⚑ Edit image and Calibrate traded places (David, 2026-10-31): the rail's first group runs Pan, Edit image,
+  // Calibrate, and the badges say 0, 1, 2 straight down it.
+  it('the rail starts Pan, Edit image, Calibrate, numbered 0, 1, 2 straight down', async () => {
+    await resetWorkspace('xy');
+    const order = await page.getByTestId('tool-rail').locator('[data-testid^="mode-"]').evaluateAll((els) =>
+      els.map((e) => e.getAttribute('data-testid'))
+    );
+    expect(order.slice(0, 3)).toEqual(['mode-pan', 'mode-image-edit', 'mode-calibrate']);
+    await page.keyboard.press('Alt');
+    expect(await textOf('keytip-mode-pan')).toBe('0');
+    expect(await textOf('keytip-mode-image-edit')).toBe('1');
+    expect(await textOf('keytip-mode-calibrate')).toBe('2');
+    await page.keyboard.press('1');
+    expect(await page.getByTestId('mode-image-edit').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('drops the badges when the window loses focus mid-hold', async () => {

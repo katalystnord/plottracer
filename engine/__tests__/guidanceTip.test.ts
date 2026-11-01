@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { resolveDigit, type KeyboardState } from '../keyboardActions.js';
 import {
   guidanceTip,
   guidanceTipBase,
@@ -101,11 +102,13 @@ describe('guidanceTip - the pre-capture gates come first', () => {
   it('sends an uncaptured figure to Capture, and names the EDIT tool by its real slot', () => {
     const tip = guidanceTip(base({ figureCaptured: false, mode: 'pan' }));
     expect(tip).toContain('press Capture');
-    // ⚑ Read "(tool 9)" until the v1.3 gate -- 9 is Geometry, Edit image is 2.
-    // The first line every first-run user reads pointed at the wrong rail slot
-    // for three releases. Assert the NUMBER, since that is what rotted.
-    expect(tip).toContain('(tool 2)');
-    expect(tip).not.toContain('(tool 9)');
+    // ⚑ Read "(tool 9)" until the v1.3 gate -- 9 is Geometry. The first line every
+    // first-run user reads pointed at the wrong rail slot for three releases, and
+    // the slot moved again in v2.7 (Edit image 2 -> 1). So the number is checked
+    // against the rail's own hotkey map, not against a number written here.
+    const slot = tip.match(/\(tool (\d)\)/)?.[1];
+    expect(slot).toBeDefined();
+    expect(resolveDigit(slot!, { canvasHasImage: true } as KeyboardState)).toEqual({ type: 'toggle-image-edit' });
   });
 
   it('image-edit before capture talks about prepping the source, not about cropping later', () => {
