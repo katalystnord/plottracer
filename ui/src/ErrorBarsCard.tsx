@@ -21,6 +21,7 @@
  * the caption's meaning lands, and the user writes it.
  */
 import { useState } from 'react';
+import { WarningLine } from './panels/WarningLine.js';
 import styled from '@emotion/styled';
 import { theme, glassSurface } from './theme.js';
 import { ChevronDownIcon } from './icons.js';
@@ -90,12 +91,6 @@ const Hint = styled('div')({
   fontSize: theme.font.size.small,
   color: theme.color.text.legend,
   lineHeight: 1.35,
-});
-
-const Notice = styled('div')({
-  fontSize: theme.font.size.small,
-  color: theme.color.error,
-  lineHeight: 1.3,
 });
 
 const Divider = styled('div')({ height: 1, background: theme.color.border.regular, margin: '2px 0' });
@@ -297,7 +292,7 @@ export function ErrorBarsCard({
             </Hint>
           )}
 
-          {notice && <Notice data-testid="error-bars-notice">{notice}</Notice>}
+          {notice && <WarningLine id="error-bars-notice" text={notice} />}
 
           {existing.length > 0 && (
             <>

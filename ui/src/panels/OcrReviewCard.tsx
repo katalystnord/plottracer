@@ -1,4 +1,5 @@
 import React from 'react';
+import { WarningLine } from './WarningLine.js';
 import { theme } from '../theme.js';
 import type { OcrProposal } from '../ocrClient.js';
 
@@ -303,7 +304,7 @@ export function OcrReviewCard({
                 corrected names with nothing, because a guessed angle read
                 nothing, is the expensive accident this card already guards
                 against for a stray backdrop click. */}
-            {notice}
+            <WarningLine id="ocr-angle-notice-text" text={notice} />
           </div>
         )}
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 13 }}>

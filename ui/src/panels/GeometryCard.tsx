@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { SidebarSection, SidebarHeading } from '../layout.js';
 import type { GeometryResult } from '../../../algorithms/geometry.js';
 
@@ -76,9 +77,7 @@ export function GeometryCard({ enabled, result, error, seriesName, tableOpen, on
             )}
           </>
         ) : (
-          <span data-testid="geometry-stale" style={{ color: theme.color.error }}>
-            ⚠ Can’t compute - {error}
-          </span>
+          <WarningLine id="geometry-stale" text={`Can’t compute - ${error}`} />
         )}
       </div>
     </SidebarSection>

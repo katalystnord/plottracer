@@ -1,5 +1,6 @@
 import React from 'react';
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import type { AxesFromLabels, AxisFromLabels } from '../../../engine/labelCalibration.js';
 
 /**
@@ -39,11 +40,16 @@ export function LabelAxesOffer({ read, onApply, onCancel }: LabelAxesOfferProps)
   const small = { fontSize: theme.font.size.small, color: theme.color.text.secondary } as const;
   return (
     <div data-testid="label-axes-offer" style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 12 }}>
-      {axes.map((a) => (
-        <span key={a.axis} data-testid={`label-axes-${a.axis}`} style={{ color: a.ok ? theme.color.text.primary : theme.color.error }}>
-          {a.ok ? axisLine(a) : `${name(a)} could not be read: ${a.reason}.`}
-        </span>
-      ))}
+      {axes.map((a) =>
+        a.ok ? (
+          <span key={a.axis} data-testid={`label-axes-${a.axis}`} style={{ color: theme.color.text.primary }}>
+            {axisLine(a)}
+          </span>
+        ) : (
+          // ⚑ an axis that could not be read is a can't-go-on message: the triangle, as everywhere (811ced5)
+          <WarningLine key={a.axis} id={`label-axes-${a.axis}`} text={`${name(a)} could not be read: ${a.reason}.`} />
+        )
+      )}
       {axes.map((a) =>
         a.ok && a.second ? (
           <span key={`s-${a.axis}`} data-testid={`label-axes-second-${a.axis}`} style={small}>

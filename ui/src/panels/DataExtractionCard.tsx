@@ -1,4 +1,5 @@
 import { theme, glassSurface } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { EyedropperIcon } from '../icons.js';
 import { findLinesKind, type ToolMode } from '../../../engine/toolMode.js';
 import type { AxesTypeConfig, CalibratedAxes } from '../../../engine/axesTypeConfigs.js';
@@ -321,7 +322,7 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
               <button type="button" data-testid="find-lines-fill-levels" onClick={findLines.onFillLevels} style={{ alignSelf: 'flex-start' }}>
                 Fill in the other levels
               </button>
-              {findLines.fillNotice && <span data-testid="find-lines-fill-notice">{findLines.fillNotice}</span>}
+              {findLines.fillNotice && <WarningLine id="find-lines-fill-notice" text={findLines.fillNotice} />}
             </div>
           )}
         </div>
@@ -343,7 +344,7 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
             />
           </label>
           {segmentFillError && (
-            <span data-testid="segment-fill-error" style={{ color: theme.color.error }}>{segmentFillError}</span>
+            <WarningLine id="segment-fill-error" text={segmentFillError} />
           )}
         </div>
       )}

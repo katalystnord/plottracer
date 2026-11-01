@@ -1,4 +1,5 @@
 import { theme } from '../theme.js';
+import { WarningLine } from './WarningLine.js';
 import { fmtValue } from '../format.js';
 import { TupleDeleteButton } from './TupleDeleteButton.js';
 import { ScrollNoticer } from './ScrollNoticer.js';
@@ -817,22 +818,24 @@ export function BarTable({
         reader's head - *is this table telling me everything?* - and because a
         reader should not have to scroll past one notice to find the other. */}
     {(table.advisory?.length ?? 0) > 0 && (
-      <div
-        data-testid="bar-off-baseline"
-        style={{ padding: 8, fontSize: 12.5, color: theme.color.error }}
-      >
-        {offBaselineMessage(table.advisory!, table.categoryNames, tupleNoun)}
+      <div style={{ padding: 8 }}>
+        <WarningLine id="bar-off-baseline" text={offBaselineMessage(table.advisory!, table.categoryNames, tupleNoun)} />
       </div>
     )}
     {(table.crowded?.length ?? 0) > 0 && (
       <div data-testid="bar-crowded" style={{ padding: 8, fontSize: 12.5 }}>
-        <div style={{ color: theme.color.error, marginBottom: 8 }}>
-          {crowdedIsSystematic(table.crowded!, table.categoryNames.length)
-            ? systematicCrowdedMessage(
-                new Set(table.crowded!.map((c) => c.categoryIndex)).size,
-                tupleNoun
-              )
-            : crowdedMessage(table.crowded!, table.categoryNames, tupleNoun)}
+        <div style={{ marginBottom: 8 }}>
+          <WarningLine
+            id="bar-crowded-message"
+            text={
+              crowdedIsSystematic(table.crowded!, table.categoryNames.length)
+                ? systematicCrowdedMessage(
+                    new Set(table.crowded!.map((c) => c.categoryIndex)).size,
+                    tupleNoun
+                  )
+                : crowdedMessage(table.crowded!, table.categoryNames, tupleNoun)
+            }
+          />
         </div>
         {/* ⚑⚑ THE READING ITSELF, NOT JUST A SENTENCE ABOUT IT. The message
             already carried the `tupleIndex` of the bar it is describing, and the
