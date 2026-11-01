@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maskRegion, paperColourAround } from '../imageEdit.js';
+import { maskRegion, paperColourAround, withMasksBlanked } from '../imageEdit.js';
 
 /**
  * ⚑⚑ MASKING AN AREA - the cases, as what the pixels afterwards must show.
@@ -95,5 +95,43 @@ describe('masking an area of the figure', () => {
   it('⚑ a degenerate drag masks nothing rather than painting the whole figure', () => {
     const src = figure(20, 20, [255, 255, 255], legend, [31, 119, 180]);
     expect(maskRegion(src, 20, 20, { x: 5, y: 5, width: 0, height: 0 })).toBeNull();
+  });
+});
+
+/**
+ * ⚑⚑ A MASK IS A RECTANGLE OVER THE FIGURE, NOT PAINT (David, 2026-11-01, docs/v2.7-workflow-walk.md: "then we
+ * change this of course"). The picture stays as it was; every reader sees it with each masked area blanked out in
+ * the paper colour around it, which is the same paint `maskRegion` applied for good until v2.7. Keeping the picture
+ * is what lets a masked area's corners be moved afterwards.
+ */
+describe('reading the figure through its masks', () => {
+  const legend = { x: 4, y: 4, width: 6, height: 6 };
+
+  it('the picture itself is left as it was', () => {
+    const src = figure(20, 20, [255, 255, 255], legend, [200, 0, 0]);
+    const before = Uint8ClampedArray.from(src);
+    withMasksBlanked(src, 20, 20, [legend]);
+    expect(src).toEqual(before);
+  });
+
+  it('a reader sees the masked area in the paper colour around it', () => {
+    const src = figure(20, 20, [250, 248, 240], legend, [200, 0, 0]);
+    const seen = withMasksBlanked(src, 20, 20, [legend]);
+    expect(pixel(seen, 20, 6, 6)).toEqual([250, 248, 240]);
+    expect(pixel(seen, 20, 0, 0)).toEqual([250, 248, 240]);
+  });
+
+  it('every masked area is blanked, each in the paper around it', () => {
+    const src = figure(20, 20, [255, 255, 255], legend, [0, 0, 200]);
+    const second = { x: 14, y: 14, width: 3, height: 3 };
+    for (let y = 14; y < 17; y += 1) for (let x = 14; x < 17; x += 1) src.set([0, 200, 0, 255], (y * 20 + x) * 4);
+    const seen = withMasksBlanked(src, 20, 20, [legend, second]);
+    expect(pixel(seen, 20, 6, 6)).toEqual([255, 255, 255]);
+    expect(pixel(seen, 20, 15, 15)).toEqual([255, 255, 255]);
+  });
+
+  it('with no masks the reader sees the picture as it is', () => {
+    const src = figure(20, 20, [255, 255, 255], legend, [200, 0, 0]);
+    expect(withMasksBlanked(src, 20, 20, [])).toBe(src);
   });
 });

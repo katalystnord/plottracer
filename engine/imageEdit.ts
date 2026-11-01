@@ -305,6 +305,38 @@ export function paperColourAround(
 }
 
 /**
+ * The figure as every reader sees it: the picture with each masked area blanked out in the paper colour around it
+ * (v2.7). A mask is a rectangle over the figure, not paint (David, 2026-11-01): the picture is never changed, so a
+ * masked area can be moved or removed and the pixels under it come back. Each area gets the paint `maskRegion`
+ * applied for good until v2.7, with its paper colour measured on the picture itself.
+ * Returns the picture itself when nothing is masked.
+ */
+export function withMasksBlanked(
+  src: Uint8ClampedArray,
+  w: number,
+  h: number,
+  regions: readonly CropRect[]
+): Uint8ClampedArray {
+  if (regions.length === 0) return src;
+  const out = new Uint8ClampedArray(src);
+  for (const r of regions) {
+    const c = clampCropRect(r, w, h);
+    if (!c) continue;
+    const [pr, pg, pb] = paperColourAround(src, w, h, c);
+    for (let y = c.y; y < c.y + c.height; y += 1) {
+      for (let x = c.x; x < c.x + c.width; x += 1) {
+        const d = (y * w + x) * 4;
+        out[d] = pr;
+        out[d + 1] = pg;
+        out[d + 2] = pb;
+        out[d + 3] = 255;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * ⚑⚑ MASK AN AREA OF THE FIGURE - paint it out with the paper colour around it.
  *
  * David, 2026-09-12, after a legend drawn INSIDE the plot box kept being read as

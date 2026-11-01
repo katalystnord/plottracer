@@ -140,7 +140,7 @@ import { useTraceChallenge, type TraceChallengeHost } from './games/useTraceChal
 import {
   applyImageEditOp,
   cropImage,
-  maskRegion,
+  withMasksBlanked,
   clampCropRect,
   rotateImageByAngle,
   straightenAngleFromPoints,
@@ -655,6 +655,11 @@ type ExportFormat = 'json' | 'xlsx' | 'ods' | TableFormat;
 // CLAUDE.md's keystone), just not how to operate the tool.
 
 
+
+/** A masked area's outline and shading (v2.7): a neutral grey, apart from the legend's own colour, so the two can
+ * be told apart (David, 2026-10-31). */
+const MASK_COLOR = '#6b6b6b';
+const MASK_SHADE = 'rgba(107, 107, 107, 0.35)';
 
 export function Workspace() {
   // ⚑ Settings (v2.7, docs/v2.7-settings-cases.md): read ONCE, before every
@@ -2100,23 +2105,35 @@ export function Workspace() {
     setCropMode(false);
     setCropRect(null);
   }, []);
+  /**
+   * The figure as every READER sees it (v2.7): the picture with each masked area blanked out in the paper colour
+   * around it (`withMasksBlanked`). A mask is a rectangle over the figure, not paint (David, 2026-11-01), so the
+   * readers ask here and the picture itself is never changed. What keeps the picture: the image edits (rotate,
+   * crop, deskew, grid removal, capture, so a mask is never baked in), the eyedropper (a series' colour is often
+   * picked from a legend swatch, and the legend is masked), the legend's own read, and the colour key.
+   */
+  const readingImage = useCallback((): ImageData | null | undefined => {
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return img;
+    const regions = sessionRef.current.getNotDataRegions();
+    if (regions.length === 0) return img;
+    const seen = withMasksBlanked(img.data, img.width, img.height, regions) as Uint8ClampedArray<ArrayBuffer>;
+    return new ImageData(seen, img.width, img.height);
+  }, []);
+
   /** Mask an area (Image ▸ Mask an area; an agent's mask_area too, on the mcp-server branch).
-   * Returns the refusal, else null once the area is painted out and recorded. */
+   * Returns the refusal, else null once the area is recorded. */
   const maskArea = useCallback((rect: { x: number; y: number; width: number; height: number }): string | null => {
     const img = imageCanvasRef.current?.getImageData();
     if (!img) return 'No figure is open.';
-    const masked = maskRegion(img.data, img.width, img.height, rect);
-    if (!masked) return 'That area is not inside the figure.';
-    // ⚑ AND IT REMEMBERS WHERE (v2.6). Painting the area out is what every
-    // reader needs; Find lines also needs to know WHERE it was, so a line
-    // passing behind a masked legend can be bridged across it (N4) rather
-    // than stopping at its edge. Recorded before the transform so the
-    // undoable snapshot it captures carries it.
+    // ⚑ RECORDED, NOT PAINTED (v2.7). The rectangle is the mask: every reader sees the area blanked through
+    // `readingImage`, and Find lines also uses WHERE it is to bridge a line passing behind a masked legend (N4).
     const c = clampCropRect(rect, img.width, img.height);
-    if (c) sessionRef.current.setNotDataRegions([...sessionRef.current.getNotDataRegions(), c]);
-    applyPixelTransform(masked, false);
+    if (!c) return 'That area is not inside the figure.';
+    sessionRef.current.setNotDataRegions([...sessionRef.current.getNotDataRegions(), c]);
+    commit();
     return null;
-  }, [applyPixelTransform]);
+  }, [commit]);
 
   // a new figure starts the legend card afresh: the session IS the figure, and
   // the card's read belongs to the figure it was taken from
@@ -2643,7 +2660,7 @@ export function Workspace() {
   const readCellsFor = useCallback(
     (grid: HeatmapState, readings: HeatmapCellReadings) => {
       const axesNow = sessionRef.current.getAxes();
-      const img = imageCanvasRef.current?.getImageData();
+      const img = readingImage();
       if (!axesNow || !img) return null;
       const image = { data: img.data, width: img.width, height: img.height };
       const { scale } = buildColorScale(
@@ -2662,7 +2679,7 @@ export function Workspace() {
         readings
       );
     },
-    [heatmapKinds, heatmapLabels]
+    [heatmapKinds, heatmapLabels, readingImage]
   );
 
   const restoreHeatmapGrid = useCallback(() => {
@@ -2921,7 +2938,7 @@ export function Workspace() {
 
   const runHeatmapDetect = useCallback(() => {
     setHeatmapError(null);
-    const img = imageCanvasRef.current?.getImageData();
+    const img = readingImage();
     const axes = sessionRef.current.getAxes();
     const bounds = heatmapBounds();
     if (!img || !axes || !bounds) {
@@ -2968,7 +2985,7 @@ export function Workspace() {
       applyHeatmapGridEdit(result.grid);
     }
     setHeatmapGridNote({ text: message, kind: 'detection' });
-  }, [applyHeatmapGridEdit, heatmapBounds, heatmapCounts, heatmapShownGrid]);
+  }, [applyHeatmapGridEdit, heatmapBounds, heatmapCounts, heatmapShownGrid, readingImage]);
 
   /**
    * Lay an evenly spaced grid over the plot, because the user asked for one.
@@ -3023,7 +3040,7 @@ export function Workspace() {
    */
   const runHeatmapRead = useCallback((readings: HeatmapCellReadings = heatmapCellReadings) => {
     setHeatmapError(null);
-    const img = imageCanvasRef.current?.getImageData();
+    const img = readingImage();
     const axes = sessionRef.current.getAxes();
     const bounds = heatmapBounds();
     if (!img || !axes || !bounds) {
@@ -3103,7 +3120,7 @@ export function Workspace() {
     // provenance describes the grid, and only the first is over.
     setHeatmapGridNote((note) => (note && noteRetiresOnRead(note.kind) ? null : note));
     return result.error === null && result.rows.length > 0;
-  }, [applyHeatmapGrid, heatmapBounds, heatmapCellReadings, heatmapKinds, heatmapLabels, heatmapShownGrid]);
+  }, [applyHeatmapGrid, heatmapBounds, heatmapCellReadings, heatmapKinds, heatmapLabels, heatmapShownGrid, readingImage]);
 
   /**
    * The Grid card's ENDING: read the cells, then close the card.
@@ -3173,7 +3190,7 @@ export function Workspace() {
     // typed, so nothing is recorded, nothing is re-read and no undo entry is
     // made - the alternative silently converted a glance into a measurement.
     if (edit.value === edit.seed) return;
-    const img = imageCanvasRef.current?.getImageData();
+    const img = readingImage();
     const image = img ? { data: img.data, width: img.width, height: img.height } : null;
     const { scale } = image
       ? buildColorScale(
@@ -3203,7 +3220,7 @@ export function Workspace() {
       return;
     }
     applyHeatmapCellReadings(readings);
-  }, [applyHeatmapCellReadings, editingHeatmapValue, heatmapCellReadings]);
+  }, [applyHeatmapCellReadings, editingHeatmapValue, heatmapCellReadings, readingImage]);
 
   /** Hand the cell back to the colour key - the other half of B16's menu.
    * ⚑ NOT `useKeyReadingForCell`: a plain function whose name begins with "use"
@@ -4195,7 +4212,7 @@ export function Workspace() {
       if (session.getConfig().id === 'contour') {
         const ai = session.getActiveDatasetIndex();
         const pts = session.getLinePoints(ai);
-        const imageData = imageCanvasRef.current?.getImageData();
+        const imageData = readingImage();
         if (pts && imageData && pts.length >= 6) {
           const ink = sampleInkRgb(imageData, pts[0]!.x, pts[0]!.y);
           if (inkClosesLoop(imageData.data, imageData.width, imageData.height, pts.map((p) => [p.x, p.y] as [number, number]), ink)) {
@@ -4205,7 +4222,7 @@ export function Workspace() {
         }
       }
     },
-    [session, mode]
+    [session, mode, readingImage]
   );
 
   const handleImageClick = useCallback(
@@ -4324,7 +4341,7 @@ export function Workspace() {
           return;
         }
         case 'segment-fill': {
-          const imageData = imageCanvasRef.current?.getImageData();
+          const imageData = readingImage();
           if (!imageData) {
             setSegmentFillError('No image loaded.');
             return;
@@ -4376,7 +4393,7 @@ export function Workspace() {
         }
       }
     },
-    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid, canvasHasImage, placePointAt, selectSubMode]
+    [session, mode, bump, commit, segmentFillThreshold, eyedropper, handleMeasureClick, figureCaptured, heatmapActive, heatmapShownGrid, canvasHasImage, placePointAt, selectSubMode, readingImage]
   );
 
   // Bar capture (v2.0): a drag's two opposite corners become a bar's two
@@ -4827,7 +4844,7 @@ export function Workspace() {
    */
   const readAxesFromFigureLabels = useCallback(() => {
     const read = pageDrawingReadRef.current;
-    const img = imageCanvasRef.current?.getImageData();
+    const img = readingImage();
     if (!read || !img) return;
     const prov = provenanceRef.current;
     const placed = placeDrawing(prov, read.drawing, read.text);
@@ -4844,7 +4861,7 @@ export function Workspace() {
     }
     setLabelAxesNotice(null);
     setLabelAxes(readAxesFromLabels(placed, text, { width: img.width, height: img.height }));
-  }, []);
+  }, [readingImage]);
 
   /** V6: fill X1, X2, Y1 and Y2 with the offered ticks and values, exactly as
    * the clicks and typed values would, and the Log boxes with what was read. */
@@ -5110,7 +5127,7 @@ export function Workspace() {
     async (band: { x: number; y: number; width: number; height: number }) => {
       setOcrArmed(false);
       setOcrError(null);
-      const image = imageCanvasRef.current?.getImageData();
+      const image = readingImage();
       // ⚑ A heatmap's columns and rows are bands like any other, so the read is
       // the same read - only where the dividers come from differs.
       const heat = ocrTarget === 'category' ? null : heatmapBandFrame(ocrTarget);
@@ -5144,7 +5161,7 @@ export function Workspace() {
       setOcrAngleNotice(null);
       setOcrProposals(answer.proposals);
     },
-    [session, ocrTarget, heatmapBandFrame, setOcrError, setOcrBand, setOcrAngleNotice, setOcrProposals]
+    [session, ocrTarget, heatmapBandFrame, setOcrError, setOcrBand, setOcrAngleNotice, setOcrProposals, readingImage]
   );
 
   /**
@@ -5171,7 +5188,7 @@ export function Workspace() {
   const rereadCategoryLabels = useCallback(
     async (degrees: number) => {
       const band = ocrBand;
-      const image = imageCanvasRef.current?.getImageData();
+      const image = readingImage();
       const edges = session.getCategoryAxis().getAxisEdges();
       if (!band || !image || !edges) return;
       setOcrRereading(true);
@@ -5201,7 +5218,7 @@ export function Workspace() {
         setOcrRereading(false);
       }
     },
-    [ocrBand, ocrAngleDeg, ocrMeasuredDeg, session]
+    [ocrBand, ocrAngleDeg, ocrMeasuredDeg, session, readingImage]
   );
 
   /**
@@ -5216,7 +5233,7 @@ export function Workspace() {
    * ⚑ One undo step, and the report says what happened either way.
    */
   const detectCategoryTicks = useCallback(() => {
-    const image = imageCanvasRef.current?.getImageData();
+    const image = readingImage();
     if (!image) return;
     const found = session.detectCategoryTicks(image);
     if (!found) {
@@ -5228,7 +5245,7 @@ export function Workspace() {
       categoryTickDetectionMessage(found.positions.length, found.expected, applied)
     );
     if (applied) commit();
-  }, [session, commit]);
+  }, [session, commit, readingImage]);
 
   /**
    * Apply the vetted names - the ONE place a reading becomes a record.
@@ -6582,7 +6599,7 @@ export function Workspace() {
       setColorTraceInfo(refusal);
       return;
     }
-    const imageData = imageCanvasRef.current!.getImageData()!;
+    const imageData = readingImage()!;
     const { data, width, height } = imageData;
     // ⚑ REFUSED AT THE GESTURE (F38). The colour box is free text - it has to
     // be, so a value can be pasted in - and an unparseable one used to become
@@ -6773,7 +6790,7 @@ export function Workspace() {
     adoptTracedColour();
     setColorTraceInfo(curveTraceReport(result.points.length, result.matched, width, height));
     commit();
-  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, colorTraceRegion, commit, setColorTraceInfoState]);
+  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, colorTraceRegion, commit, setColorTraceInfoState, readingImage]);
   const handleColorTrace = useCallback(() => colorTraceWith(colorTraceColor, colorTraceShape), [colorTraceWith, colorTraceColor, colorTraceShape]);
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
@@ -6786,7 +6803,7 @@ export function Workspace() {
   // the reads are refs/module functions the linter can't (and needn't) track.
   const colorTraceMask = useMemo<{ canvas: HTMLCanvasElement; count: number; pct: number } | null>(() => {
     if (mode !== 'color-trace' || !canvasHasImage) return null;
-    const imageData = imageCanvasRef.current?.getImageData();
+    const imageData = readingImage();
     if (!imageData) return null;
     const { width, height, data } = imageData;
     const canvas = document.createElement('canvas');
@@ -6900,7 +6917,7 @@ export function Workspace() {
 
   const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number] } = {}): Promise<{ text: string; error?: boolean; summary?: string }> => {
     const kind = findLinesKind(session.getConfig().id);
-    const imageData = imageCanvasRef.current?.getImageData();
+    const imageData = readingImage();
     const target = hexToRGB(colour);
     const box = calibrationBoxRegion(session.getPlacedPoints());
     if (!kind || !imageData || !session.getAxes() || !box) {
@@ -7079,7 +7096,7 @@ export function Workspace() {
     commit();
     const placesText = places.length ? `\nPlaces to check:\n${places.map((pl) => `  - ${pl.kind} at (${Math.round(pl.at[0])}, ${Math.round(pl.at[1])}): ${pl.text}`).join('\n')}` : '';
     return { text: `The Find lines card says: "${summary}"${placesText}`, summary };
-  }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices]);
+  }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices, readingImage]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
 
   /** Read series (the Series extraction card): each row's EXISTING tool on its
@@ -7137,7 +7154,7 @@ export function Workspace() {
   /** C4: unset contour levels filled in from the ones the user has set, in equal
    * steps between them - refused, and saying why, where the levels are uneven. */
   const handleFillLevels = useCallback(() => {
-    const imageData = imageCanvasRef.current?.getImageData();
+    const imageData = readingImage();
     if (!imageData) return;
     const infos = session.getDatasetInfos();
     const inputs = infos.map((i) => {
@@ -7176,7 +7193,7 @@ export function Workspace() {
     );
     if (filled) commit();
     else bump();
-  }, [session, commit, bump]);
+  }, [session, commit, bump, readingImage]);
 
   /** K2: cut the line nearest a click, there. */
   const cutAtPixel = useCallback(
@@ -7769,7 +7786,7 @@ export function Workspace() {
   // a candle re-read after a drag must still say what the figure says. The
   // session's pass is idempotent, so repeating it cannot walk one backwards.
   useEffect(() => {
-    const img = imageCanvasRef.current?.getImageData();
+    const img = readingImage();
     if (!img) return;
     if (sessionRef.current.readCandleDirections(img.data, img.width, img.height) > 0) {
       bump();
@@ -8082,6 +8099,12 @@ export function Workspace() {
         color: theme.color.primary.main,
       });
     }
+    // ⚑ Each masked area, shaded: since v2.7 a mask is a rectangle over the figure rather than paint, so this is
+    // the only sign of it on screen (David, 2026-11-01). Its own colour, apart from the legend's.
+    session.getNotDataRegions().forEach((r, i) => {
+      const { x, y, width: w, height: h } = r;
+      list.push({ id: `mask-${i}`, points: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }], closed: true, label: 'Masked', labelAt: { x, y: y - 4 }, color: MASK_COLOR, shade: MASK_SHADE });
+    });
     // the Legend detection card's marked box, until the read is accepted
     if (legendBox) {
       const { x, y, width: w, height: h } = legendBox;
@@ -8105,7 +8128,8 @@ export function Workspace() {
       }
     }
     return list;
-  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps, legendBox]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is what changes when a mask is added or moved
+  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, labelAxes, steps, legendBox, session, version]);
 
   // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
   // nothing if only its author knows it is possible -- that is the "shortcut-only
@@ -11729,6 +11753,10 @@ export function Workspace() {
           <span>{Math.round(canvasScale * 100)}%</span>
           <span data-testid="view-state">
             scale: {canvasView.scale.toFixed(3)}, offset: ({canvasView.offsetX.toFixed(1)}, {canvasView.offsetY.toFixed(1)})
+          </span>
+          {/* e2e readout: the masked areas are Konva shapes, which the DOM cannot see */}
+          <span data-testid="masked-areas" data-rects={JSON.stringify(session.getNotDataRegions())} style={{ display: 'none' }}>
+            {session.getNotDataRegions().length}
           </span>
           <span data-testid="calib-status">
             {axes ? 'Calibrated' : 'Not calibrated'}

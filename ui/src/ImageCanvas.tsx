@@ -199,6 +199,8 @@ export interface MeasureOverlay {
   label: string;
   labelAt: { x: number; y: number };
   color?: string;
+  /** Fills a closed shape: a masked area is shaded so it reads as covered (v2.7). */
+  shade?: string;
 }
 
 /** The Select tool's four sub-modes (v1.1 #6, mirroring Ketcher's select
@@ -2815,6 +2817,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                           stroke={col}
                           strokeWidth={2}
                           closed={o.closed ?? false}
+                          {...(o.shade ? { fill: o.shade } : {})}
                           listening={false}
                         />
                       )}

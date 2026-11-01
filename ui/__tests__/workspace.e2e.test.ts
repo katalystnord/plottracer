@@ -4310,6 +4310,69 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
   // fixture image both times). What's actually being verified -- a real
   // click on a real curve finds *some* bounded trace, not zero and not a
   // runaway fill -- doesn't need an exact number to be a meaningful check.
+  // ⚑⚑ A READER SEES THE FIGURE THROUGH ITS MASKS (v2.7). A mask no longer paints the picture (David, 2026-11-01),
+  // so each reader must ask for the figure with the masked areas blanked. Here Colour trace asks; the eyedropper
+  // does not, because a series' colour is often picked from a legend swatch and the legend is masked.
+  it('Colour trace finds nothing under a masked area, though the eyedropper still picks the ink there', async () => {
+    await resetWorkspace('xy');
+    // Calibrated corner to corner of the image, so the area Colour trace searches is the whole figure
+    const bl = await imagePoint(2, 698);
+    const br = await imagePoint(898, 698);
+    const tl = await imagePoint(2, 2);
+    await clickAt(bl.lx, bl.ly);
+    await confirmValue('0');
+    await clickAt(br.lx, br.ly);
+    await confirmValue('10');
+    await confirmValue('0');
+    await clickAt(tl.lx, tl.ly);
+    await confirmValue('10');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
+    await selectAutoExtract('colour');
+    // a pixel of the blue curve, found on the canvas itself so the aim does not depend on the fit
+    const curve = await page.getByTestId('base-canvas').evaluate((el) => {
+      const c = el as HTMLCanvasElement;
+      const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
+      for (let y = Math.round(c.height * 0.3); y < c.height; y += 1) {
+        for (let x = Math.round(c.width * 0.45); x < c.width; x += 1) {
+          const i = (y * c.width + x) * 4;
+          if (d[i + 2]! > 90 && d[i]! < 60 && d[i + 1]! < 110) return { x, y };
+        }
+      }
+      return null;
+    });
+    expect(curve, 'the blue curve is on the canvas').not.toBeNull();
+    const cbox = (await page.getByTestId('base-canvas').boundingBox())!;
+    const canvasBoxNow = (await page.locator('canvas').first().boundingBox())!;
+    const at = { lx: cbox.x - canvasBoxNow.x + curve!.x, ly: cbox.y - canvasBoxNow.y + curve!.y };
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickAt(at.lx, at.ly);
+    const ink = await page.getByTestId('color-trace-color').inputValue();
+    expect(ink).not.toMatch(/^#f{6}$/i);
+    // without a mask the trace finds the curve, so what follows is the mask's doing
+    await page.getByTestId('color-trace-run').click();
+    await expect.poll(() => page.getByTestId('points-table').locator('tbody tr').count()).toBeGreaterThan(5);
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => page.getByTestId('points-table').locator('tbody tr').count()).toBe(0);
+
+    // mask the whole figure, 900 x 700 image pixels, corner to corner
+    const a = await imagePoint(0, 0);
+    const b = await imagePoint(900, 700);
+    await page.getByTestId('mode-image-edit').click();
+    await page.getByTestId('image-edit-mask').click();
+    await dragMarker(a.lx + 1, a.ly + 1, b.lx - 1, b.ly - 1);
+    await page.getByTestId('crop-apply').click();
+    await expect.poll(() => textOf('masked-areas')).toBe('1');
+
+    await selectAutoExtract('colour');
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickAt(at.lx, at.ly);
+    expect(await page.getByTestId('color-trace-color').inputValue(), 'the eyedropper reads the picture itself').toBe(ink);
+    await page.getByTestId('color-trace-run').click();
+    await expect.poll(() => textOf('color-trace-info')).toMatch(/No pixels matched that colour/);
+    expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(0);
+  });
+
   it('traces a real curve from a single seed click without erroring, adding a plausible number of points', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
@@ -7475,14 +7538,17 @@ describe('Workspace: image editing (checkpoint 62)', () => {
    * ⚑ GATE 4: the walk clicks only what the card's own prompt asks for - "Drag a
    * rectangle over the area to paint out, such as a legend" - and then Apply.
    */
-  it('⚑⚑ masks a dragged rectangle out of the figure, leaving the image and the data where they are', async () => {
+  // ⚑⚑ v2.7: A MASK IS A RECTANGLE OVER THE FIGURE, NOT PAINT (David, 2026-11-01, "then we change this of
+  // course"). The picture keeps every pixel; the area is recorded, shaded on the canvas, and blanked for the
+  // readers (`withMasksBlanked`, whose unit cases say what a reader sees).
+  it('⚑⚑ masks a dragged rectangle: the picture keeps its pixels, and the image and the data stay where they are', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(250, 175); // a data point reading (5, 5)
 
     await page.getByTestId('mode-image-edit').click();
     await page.getByTestId('image-edit-mask').click();
-    expect(await page.getByTestId('crop-bar').innerText()).toMatch(/paint out/i);
+    expect(await page.getByTestId('crop-bar').innerText()).toMatch(/every tool should leave out/i);
     expect(await page.getByTestId('crop-apply').isDisabled()).toBe(true);
 
     // A patch of the figure's own ink, well right of the folded-out card.
@@ -7604,19 +7670,12 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     await page.getByTestId('crop-apply').click();
     await page.waitForTimeout(400);
 
-    // ⚑⚑ THE WALKTHROUGH ASKS WHETHER THE GESTURE WORKS, NOT WHETHER THE PAINT
-    // IS EXACT. Where the dragged rectangle lands depends on the view, the fit
-    // and the window, and chasing that to the pixel is how this case failed
-    // three times while the edit itself was never in doubt: `maskRegion` has
-    // six unit cases of its own saying every pixel inside the rectangle takes
-    // the paper colour, and those are the right instrument for it. What can
-    // only be answered here is that the drag reached the figure and Apply acted
-    // on it, so most of the ink in that area is gone.
+    // ⚑⚑ THE WALKTHROUGH ASKS WHETHER THE GESTURE WORKS. Where the dragged rectangle lands depends on the view,
+    // the fit and the window; what can only be answered here is that the drag reached the figure, Apply recorded
+    // the area, and the picture under it was left alone - its ink is all still there.
+    expect(await textOf('masked-areas')).toBe('1');
     const after = await inkIn(RECT_PX);
-    expect(
-      after.count,
-      `masking should have removed most of the ${before.count} ink pixels in that area`
-    ).toBeLessThan(before.count * 0.5);
+    expect(after.count, 'the picture keeps its pixels under a mask').toBe(before.count);
 
     // ⚑⚑ Masking removes EVIDENCE, not geometry: the image is the same size, the
     // point still reads (5, 5), and nothing claims the figure was cropped.
@@ -10231,12 +10290,14 @@ describe('Workspace: the F1 help card', () => {
 
     const text = (await card.textContent()) ?? '';
     expect(text).toContain('The workflow');
-    expect(text).toContain('Auto-extract');
+    // v2.7: Place point, Auto-extract and Cut are one tool, Data extraction (David, 2026-10-31)
+    expect(text).toContain('Data extraction');
+    expect(text).not.toContain('Auto-extract');
     expect(text).toContain('Geometry');
     // ⚑ The icons are the POINT of the tools list, not decoration: the rail is
     // icons with NO labels, so a text-only card names something the user still
-    // cannot find. Ten tools, ten glyphs.
-    expect(await card.locator('svg').count()).toBeGreaterThanOrEqual(10);
+    // cannot find. Nine numbered tools (3 waits for Legend), nine glyphs.
+    expect(await card.locator('svg').count()).toBeGreaterThanOrEqual(9);
   });
 
   it('offers the manual without navigating the app away', async () => {

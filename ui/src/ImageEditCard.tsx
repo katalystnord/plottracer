@@ -219,7 +219,7 @@ export function ImageEditCard({
               ) : (
                 <span>
                   {cropIntent === 'mask'
-                    ? 'Drag a rectangle over the area to paint out, such as a legend.'
+                    ? 'Drag a rectangle over the area every tool should leave out, such as a legend.'
                     : 'Drag a rectangle over the area to keep.'}
                 </span>
               )}

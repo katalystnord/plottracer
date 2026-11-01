@@ -59,7 +59,7 @@ const WORKFLOW: Array<[string, string]> = [
   ['Open a figure', 'An image, or a page from a PDF.'],
   ['Pick the graph type', 'XY, bar, pie, spider… the type decides what a datum IS.'],
   ['Calibrate', 'Click the prompted points and type their known values.'],
-  ['Capture', 'Place points by hand, drag a box for a bar, or auto-extract by colour.'],
+  ['Extract the data', 'Pick a tool in Data extraction: place points by hand, or find a series by its colour.'],
   ['Correct', 'Drag, nudge, delete. Nothing is committed until you export.'],
   ['Export', 'CSV, XLSX, ODS, JSON, LaTeX, MATLAB, Python, R - or save the project.'],
 ];
