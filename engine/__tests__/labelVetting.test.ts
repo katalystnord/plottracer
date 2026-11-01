@@ -98,6 +98,17 @@ describe('vetting tick mark / label pairs: a disagreeing pair is checked, reread
     expect(x.unused.find((u) => u.label === '30')?.reason).toBe('it does not fit the other labels, and its tick mark is off their spacing');
   });
 
+  // Measured 2026-10-17 (PMC5855060): "10,000" and "20,000" on the other axis switched the figure to
+  // decimal commas, because the sign class [+-−] was a RANGE from "+" to "−" that holds every
+  // digit; "1,000" became 1.0 and the vetting then made 500 into 0.5 to agree.
+  it('thousands separators are read as thousands: "10,000" elsewhere does not make "1,000" mean 1', () => {
+    const x = readX([label('0', 100, sure), label('500', 150, sure), label('1,000', 200, sure),
+      label('1,500', 250, sure), label('2,000', 300, sure), label('2,500', 350, sure),
+      { str: '10,000', box: { x0: 10, y0: 10, x1: 60, y1: 26 }, size: SIZE, confidence: 99 }]);
+    expect(x.ok).toBe(true);
+    expect(x.pairs.map((p) => p.value)).toEqual([0, 500, 1000, 1500, 2000, 2500]);
+  });
+
   it('an axis whose pairs all fit is read exactly as before, whatever their confidence', () => {
     const x = readX([label('0', 100, unsure), label('10', 150, unsure), label('20', 200, unsure),
       label('30', 250, unsure), label('40', 300, unsure), label('50', 350, unsure)]);
