@@ -69,6 +69,7 @@ export function barsFromDrawing(
   const tol = 0.05 * d.pxPerPt;
   const masks = opts.masks ?? [];
   const area = (b: Box) => (b.x1 - b.x0) * (b.y1 - b.y0);
+  const centreIn = (b: Box, r: Box) => { const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2; return cx >= r.x0 && cx <= r.x1 && cy >= r.y0 && cy <= r.y1; };
   const inside = (b: Box, r: Box) => b.x0 >= r.x0 - tol && b.y0 >= r.y0 - tol && b.x1 <= r.x1 + tol && b.y1 <= r.y1 + tol;
   const boxes: DetectedBarBox[] = [];
   for (const s of d.shapes) {
@@ -76,7 +77,9 @@ export function barsFromDrawing(
     if (!ink) continue;
     for (const sp of s.subs) {
       const b = rectangleOf(sp, tol);
-      if (!b || !inside(b, region)) continue;
+      // ⚑ In the region when its CENTRE is, as a line is in Find lines (V16): the region is the data area (v2.7), dragged
+      // by hand and never pixel-exact, and a bar standing on the baseline touches the frame (found by the e2e walk)
+      if (!b || !centreIn(b, region)) continue;
       if (area(b) >= 0.5 * area(region)) continue; // a background or a frame
       if (masks.some((m) => inside(b, m))) continue;
       // one painted twice (a fill, then an outline) is one bar

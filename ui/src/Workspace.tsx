@@ -176,7 +176,8 @@ import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalib
 import { calibrationFromLabels } from '../../engine/axisDetection.js';
 import { LegendCard } from './panels/LegendCard.js';
 import { legendFromDetections } from '../../engine/pictureAxes.js';
-import { regionCornerMarkers, regionCornerFromId } from '../../engine/regionHandles.js';
+import { regionCornerMarkers, regionCornerFromId, dataAreaCornerMarkers, dataAreaCornerFromId } from '../../engine/regionHandles.js';
+import { dataAreaApplies, drawnFrame } from '../../engine/dataArea.js';
 
 import { WarningLine } from './panels/WarningLine.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
@@ -214,7 +215,7 @@ import { figureSaveInput, sharedProjectSource, sourceDescriptor, figuresForOpene
 import { layeredNotice } from '../../engine/layeredSeries.js';
 import type { PrecisionMode } from '../../core/exportPrecision.js';
 import { runSegmentFill } from '../../engine/segmentFillRun.js';
-import { runColorTrace, calibrationBoxRegion, tracingADifferentColour, pickedColourAdopts } from '../../engine/colorTraceRun.js';
+import { runColorTrace, tracingADifferentColour, pickedColourAdopts } from '../../engine/colorTraceRun.js';
 import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
@@ -651,6 +652,8 @@ const MASK_SHADE = 'rgba(107, 107, 107, 0.35)';
 /** The legend's: the app's teal (v2.7). */
 const LEGEND_COLOR = '#167782';
 const LEGEND_SHADE = 'rgba(22, 119, 130, 0.22)';
+/** The data area's outline and grips (v2.7): a green of its own, unshaded, because nothing in it is left out. */
+const DATA_AREA_COLOR = '#2e7d32';
 
 export function Workspace() {
   // ⚑ Settings (v2.7, docs/v2.7-settings-cases.md): read ONCE, before every
@@ -1025,6 +1028,8 @@ export function Workspace() {
   const [cropIntent, setCropIntent] = useState<'crop' | 'mask' | 'legend'>('crop');
   /** Auto detect legend is running (v2.7). */
   const [legendDetecting, setLegendDetecting] = useState(false);
+  /** The data area's chip was picked: the next drag on the figure marks it again (v2.7). */
+  const [dataAreaChosen, setDataAreaChosen] = useState(false);
   /** A drag on the figure is armed by the Legend card: other drags and clicks step aside. */
   const legendMarking = cropMode && mode === 'legend';
   // Resizable right sidebar (checkpoint 60): the drag handle on its left edge
@@ -4394,7 +4399,7 @@ export function Workspace() {
   // (select the series in the dropdown first).
   const handleMarkerClick = useCallback((id: string, shiftKey?: boolean) => {
     // a corner grip is moved by dragging; a click on it does nothing else
-    if (regionCornerFromId(id)) return;
+    if (regionCornerFromId(id) || dataAreaCornerFromId(id)) return;
     // A grid handle is not a calibration point and not a datum: clicking one
     // picks the BOUNDARY, which is what the Heatmap card then offers to remove.
     if (isDividerHandle(id)) {
@@ -4451,6 +4456,7 @@ export function Workspace() {
   /** A calibration chip pressed: the next click places that point (David, 2026-10-31). */
   const chooseCalibrationStep = useCallback((key: string) => {
     if (!session.chooseStep(key)) return;
+    setDataAreaChosen(false);
     setMode('calibrate');
     setActiveHandleKey(null);
     setDataValueInputs([]);
@@ -4790,6 +4796,8 @@ export function Workspace() {
     const kind = figureKindRef.current?.kind;
     const drawing = pageDrawingReadRef.current;
     let read: AxesFromLabels | null = null;
+    // the data area: a drawn figure's frame, read from its drawing; a picture's, found by the picture reader
+    let frame: { x: number; y: number; width: number; height: number } | null = null;
     setAxisDetecting(true);
     try {
       if ((kind === 'drawn' || kind === 'partly') && drawing) {
@@ -4800,7 +4808,10 @@ export function Workspace() {
           return cx >= 0 && cy >= 0 && cx <= img.width && cy <= img.height;
         });
         // a drawn figure whose labels are shapes has no text to read: the picture reader reads it instead
-        if (placed && text.some((t) => /\d/.test(t.str))) read = readAxesFromLabels(placed, text, { width: img.width, height: img.height });
+        if (placed && text.some((t) => /\d/.test(t.str))) {
+          read = readAxesFromLabels(placed, text, { width: img.width, height: img.height });
+          frame = drawnFrame(placed, read);
+        }
       }
       if (!read || (!read.x.ok && !read.y.ok)) {
         const fromPicture = await readPictureAxes(img);
@@ -4809,9 +4820,15 @@ export function Workspace() {
           return;
         }
         read = fromPicture;
+        frame = fromPicture.dataArea ?? null;
       }
     } finally {
       setAxisDetecting(false);
+    }
+    // ⚑ The data area is set whatever the labels gave: it is where the plot is, not the scale (David, 2026-11-01)
+    if (frame && dataAreaApplies(sessionRef.current.getConfig()) && sessionRef.current.setDataArea(frame)) {
+      setDataAreaChosen(false);
+      commit();
     }
     const found = calibrationFromLabels(read);
     if (!found) {
@@ -4877,6 +4894,12 @@ export function Workspace() {
       if (corner) {
         if (session.moveNotDataRegionCorner(corner.index, corner.corner, x, y)) commit();
         else bump(); // refused: the grip goes back to where the corner is
+        return;
+      }
+      const areaCorner = dataAreaCornerFromId(id);
+      if (areaCorner) {
+        if (session.moveDataAreaCorner(areaCorner, x, y)) commit();
+        else bump();
         return;
       }
       const tickIndex = categoryTickIndexFromId(id);
@@ -5573,6 +5596,8 @@ export function Workspace() {
       heatmapLayer?: SerializedHeatmapLayer | null;
       /** Regions marked as not data (v2.6). */
       notDataRegions?: NotDataRegion[];
+      /** The data area (v2.7). */
+      dataArea?: { x: number; y: number; width: number; height: number } | null;
       imageDataURL: string;
       imageFileName?: string;
       measurements?: RecordedMeasurement[];
@@ -5587,7 +5612,7 @@ export function Workspace() {
       clearFiguresToSingle(); // a single-figure project / foreign import is one figure
       const newSession = new CalibrationSession(nextConfig);
       newSession.setImageHeight(imageHeightRef.current);
-      newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis, fig.heatmapLayer, fig.notDataRegions);
+      newSession.loadCalibrated(fig.axes, fig.datasets, fig.categoryAxis, fig.heatmapLayer, fig.notDataRegions, fig.dataArea);
       sessionRef.current = newSession;
       // ⚑ The same reset a figure switch does, from the same list. A saved
       // heatmap reopens with the grid it was saved with, the category fold-out
@@ -5872,7 +5897,7 @@ export function Workspace() {
       const config = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === f.configId) ?? XY_AXES_CONFIG;
       const s = new CalibrationSession(config);
       s.setImageHeight(imageHeightRef.current); // best-effort; corrected when the active figure's image loads
-      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis, f.heatmapLayer, f.notDataRegions);
+      s.loadCalibrated(f.axes as CalibratedAxes, f.datasets, f.categoryAxis, f.heatmapLayer, f.notDataRegions, f.dataArea);
       return {
         id: ++figureIdRef.current,
         name: f.name,
@@ -6086,6 +6111,7 @@ export function Workspace() {
       heatmapLayer: result.heatmapLayer,
       // ⚑ The same door the heatmap layer was once missing from - see above.
       notDataRegions: result.notDataRegions,
+      dataArea: result.dataArea,
       imageDataURL: result.imageDataURL,
       imageFileName: result.imageFileName,
       // Our own file carries measurements (checkpoint 56); no value/note --
@@ -6506,11 +6532,10 @@ export function Workspace() {
     setGridRemovalError(null);
   }, [gridRemovalColor, gridRemovalTolerance, commit]);
 
-  // Default the By-colour trace region to the calibration box (2026-07-22
-  // walkthrough: a whole-image trace grabbed the title, axis lines and tick
-  // labels - same colour as the curve - so the traced curve "crept" outside the
-  // plot). XY only: for polar/ternary the calibration-point bbox is not the plot
-  // area, so leave those unrestricted.
+  // Default the By-colour trace region to the data area (v2.7, David 2026-11-01): it was the calibration box
+  // (2026-07-22 walkthrough: a whole-image trace grabbed the title, axis lines and tick labels - same colour as the
+  // curve - so the traced curve "crept" outside the plot), and since the calibration points sit on labelled ticks
+  // that box no longer covers the data. No data area marked: the whole image, as in WPD.
   const defaultTraceRegion = useCallback((): FilterRegion | null => {
     // A spider's box is the web itself (centre + every spoke tip, plus the overshoot
     // the tracer looks through). Worth having for the same reason as the XY one:
@@ -6519,8 +6544,8 @@ export function Workspace() {
     if (session.getConfig().axesKind === 'spider') {
       return spiderBoxRegion(session.getAxes() as unknown as SpiderAxes | null);
     }
-    if (session.getConfig().axesKind !== 'xy') return null;
-    return calibrationBoxRegion(session.getPlacedPoints());
+    if (!dataAreaApplies(session.getConfig())) return null;
+    return session.getDataArea();
   }, [session]);
 
   useEffect(() => {
@@ -6877,9 +6902,11 @@ export function Workspace() {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = readingImage();
     const target = hexToRGB(colour);
-    const box = calibrationBoxRegion(session.getPlacedPoints());
+    // ⚑ The data area, where the automatic tools search (v2.7, David 2026-11-01); none marked, the whole image, as in
+    // WPD. Until v2.7 this was the box round the calibration points, which no longer covers the data.
+    const box = imageData ? (session.getDataArea() ?? { x: 0, y: 0, width: imageData.width, height: imageData.height }) : null;
     if (!kind || !imageData || !session.getAxes() || !box) {
-      const t = 'Calibrate the axes first - Find lines looks inside the plot box they mark.';
+      const t = 'Calibrate the axes first - Find lines gives the lines their values from the calibration.';
       setFindLinesSummary(t);
       return { text: t, error: true };
     }
@@ -6921,7 +6948,9 @@ export function Workspace() {
     }
     let res = found;
     if (!res.lines.length) {
-      const t = 'No line of that colour was found inside the plot box. Repick the colour from a line.';
+      const t = session.getDataArea()
+        ? 'No line of that colour was found inside the data area. Repick the colour from a line.'
+        : 'No line of that colour was found on the figure. Repick the colour from a line.';
       setFindLinesBusy(null);
       setFindLinesSummary(t);
       return { text: t, error: true };
@@ -7462,6 +7491,17 @@ export function Workspace() {
   );
   const canSortNN = useMemo(() => session.canSortByNearestNeighbour(), [session, version]);
   const placedPoints = useMemo(() => session.getPlacedPoints(), [session, version]);
+  const dataArea = useMemo(() => session.getDataArea(), [session, version]);
+  /**
+   * ⚑ The calibration card asks for the data area FIRST (David, 2026-11-01: "First you do a click drag for the data
+   * area. And then set the tick marks for value calibration."): a drag on the figure marks it. Asked while it is
+   * missing and the walk has not started, or again when its chip is picked; picking another chip moves on, since any
+   * step can be taken at any time.
+   */
+  const dataAreaStep =
+    // (an armed eyedropper's click is a colour sample, and wins)
+    dataAreaApplies(config) && mode === 'calibrate' && figureCaptured && calibExpanded && eyedropper === null &&
+    (dataAreaChosen || (dataArea === null && Object.keys(placedPoints).length === 0 && !session.isStepChosen()));
 
   /**
    * The key's cursor: where the picked cell sits on the colour key, and the
@@ -8015,6 +8055,19 @@ export function Workspace() {
         color: theme.color.primary.main,
       });
     }
+    // ⚑ The data area, outlined and unshaded (v2.7): where the automatic tools search, and nothing in it is left out.
+    if (dataArea && dataAreaApplies(session.getConfig())) {
+      const { x, y, width: w, height: h } = dataArea;
+      list.push({
+        id: 'data-area',
+        points: [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }],
+        closed: true,
+        label: 'Data area',
+        labelAt: { x, y: y - 4 },
+        color: DATA_AREA_COLOR,
+        inert: true,
+      });
+    }
     // ⚑ Each masked area, shaded: since v2.7 a mask is a rectangle over the figure rather than paint, so this is
     // the only sign of it on screen (David, 2026-11-01). Its own colour, apart from the legend's.
     // The legend is one of them, shaded in its own colour so the two can be told apart (David, 2026-10-31).
@@ -8029,11 +8082,12 @@ export function Workspace() {
         labelAt: { x, y: y - 4 },
         color: legend ? LEGEND_COLOR : MASK_COLOR,
         shade: legend ? LEGEND_SHADE : MASK_SHADE,
+        inert: true,
       });
     });
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is what changes when a mask is added or moved
-  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, steps, session, version]);
+  }, [measurements, measurementViews, pendingMeasure, mode, errorDrag, steps, session, version, dataArea]);
 
   // ⚑ THE CLOSING CLICK, SHOWN. Recognising a click on the first boundary is worth
   // nothing if only its author knows it is possible -- that is the "shortcut-only
@@ -8090,12 +8144,19 @@ export function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is what changes when a corner moves
     [mode, session, version]
   );
+  // ⚑ And the data area's, while the calibration card is open, like the calibration handles (v2.7). Drawn FIRST, so
+  // under every other marker: the origin is often the frame's corner, and a grip on top took the drag meant for the
+  // calibration handle there (found by the tests).
+  const dataAreaHandles = useMemo<CanvasMarker[]>(
+    () => (mode === 'calibrate' && figureCaptured && calibExpanded && dataArea ? dataAreaCornerMarkers(dataArea, DATA_AREA_COLOR, !dataAreaStep) : []),
+    [mode, figureCaptured, calibExpanded, dataArea, dataAreaStep]
+  );
   const allMarkers = useMemo<CanvasMarker[]>(
     () =>
-      categoryMarkers.length > 0 || heatmapHandles.length > 0 || regionHandles.length > 0
-        ? [...markers, ...categoryMarkers, ...heatmapHandles, ...regionHandles]
+      categoryMarkers.length > 0 || heatmapHandles.length > 0 || regionHandles.length > 0 || dataAreaHandles.length > 0
+        ? [...dataAreaHandles, ...markers, ...categoryMarkers, ...heatmapHandles, ...regionHandles]
         : markers,
-    [markers, categoryMarkers, heatmapHandles, regionHandles]
+    [markers, categoryMarkers, heatmapHandles, regionHandles, dataAreaHandles]
   );
   /** A histogram's bin glyphs, which is all this layer carries now.
    *
@@ -9226,6 +9287,46 @@ export function Workspace() {
               {figureKindText}
             </span>
           )}
+          {/* ⚑ The data area, the walk's first step on every graph type that is XY in some form (David, 2026-11-01):
+              a chip like the points' own, picked to mark it again. */}
+          {figureCaptured && calibExpanded && dataAreaApplies(config) && (
+            <div data-testid="calib-chip-data-area" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+              <span
+                role="button"
+                tabIndex={0}
+                data-testid="calib-chip-pick-data-area"
+                title="Mark the data area: then drag a box round the plot on the figure"
+                onClick={() => {
+                  setDataAreaChosen(true);
+                  setMode('calibrate');
+                  bump();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setDataAreaChosen(true);
+                    setMode('calibrate');
+                    bump();
+                  }
+                }}
+                style={{
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  padding: '1px 7px',
+                  borderRadius: 9,
+                  border: `1.5px solid ${DATA_AREA_COLOR}`,
+                  background: dataArea ? DATA_AREA_COLOR : 'transparent',
+                  color: dataArea ? '#fff' : theme.color.text.secondary,
+                  fontWeight: dataAreaStep ? 700 : 600,
+                  boxShadow: dataAreaStep ? `0 0 0 2px ${theme.color.primary.main}` : 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Data area
+              </span>
+              <span style={{ color: theme.color.text.legend }}>{dataAreaStep ? 'drag on image' : dataArea ? 'marked' : '-'}</span>
+            </div>
+          )}
           {figureCaptured && calibExpanded && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>
               {steps.map((step, i) => {
@@ -9234,7 +9335,7 @@ export function Workspace() {
                 // nobody placed (a foreign import, a pre-v2.3 project), and the chip
                 // it is asking for has to light up like any other. A finished
                 // walk has no such step, so nothing changes for it.
-                const active = i === session.getStepIndex() && currentStep !== null;
+                const active = i === session.getStepIndex() && currentStep !== null && !dataAreaStep;
                 const editing = active && !!pendingPixel && step.valueFields.length > 0;
                 return (
                   <div key={step.key} data-testid={`calib-chip-${step.key}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
@@ -10378,13 +10479,22 @@ export function Workspace() {
           onLinkDragMove={handleLinkDragMove}
           onLinkDrag={handleLinkDrag}
           onLinkDragCancel={handleLinkDragCancel}
-          cropMode={mode === 'image-edit' || mode === 'legend' ? cropMode : false}
+          // ⚑ The data area is marked with the same drag as the legend and a crop: one marquee, its own ending
+          cropMode={mode === 'image-edit' || mode === 'legend' ? cropMode : dataAreaStep}
           // v2.0 pre-launch audit: a stray click used to set a 0x0 pending
           // rect here (no guard at all, unlike onRegionRect/onSelectRect's
           // own, inconsistent ones) -- applyCrop then silently no-op'd with
           // no message explaining why Apply did nothing. ImageCanvas.tsx's
           // endDrag now applies one click-vs-drag guard for all three.
           onCropRect={(r) => {
+            // the calibration card's first step: recorded on release, its corners movable afterwards
+            if (dataAreaStep) {
+              if (session.setDataArea(r)) {
+                setDataAreaChosen(false);
+                commit();
+              }
+              return;
+            }
             // ⚑ The Legend card's drags are recorded on release, with no Apply (v2.7): the rectangle keeps corners
             // that can be moved afterwards, so there is nothing to confirm. A crop still waits for Apply, because a
             // crop cuts the picture.
@@ -11521,7 +11631,9 @@ export function Workspace() {
                 drag and where. A refusal replaces it in the same place, because
                 a refusal is about the gesture just made. */}
             {ocrError ??
-              (legendMarking && cropIntent === 'legend'
+              (dataAreaStep
+                ? 'Mark the data area: drag a box from one corner of the plot to the opposite corner. The automatic tools search inside it.'
+                : legendMarking && cropIntent === 'legend'
                 ? 'Mark the legend: drag a box from one corner of it to the opposite corner.'
                 : legendMarking && cropIntent === 'mask'
                   ? 'Mask an area: drag a box from one corner of it to the opposite corner. Every tool leaves it out.'
@@ -11653,6 +11765,7 @@ export function Workspace() {
             scale: {canvasView.scale.toFixed(3)}, offset: ({canvasView.offsetX.toFixed(1)}, {canvasView.offsetY.toFixed(1)})
           </span>
           {/* e2e readout: the masked areas are Konva shapes, which the DOM cannot see */}
+          <span data-testid="data-area" data-rect={JSON.stringify(dataArea)} style={{ display: 'none' }} />
           <span data-testid="masked-areas" data-rects={JSON.stringify(session.getNotDataRegions())} style={{ display: 'none' }}>
             {session.getNotDataRegions().length}
           </span>

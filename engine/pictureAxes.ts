@@ -226,12 +226,13 @@ export function pictureAxes(
   const plots = dets.filter((d) => d.cls === 'plot_area');
   if (plots.length === 0) return read;
   const pa = plots.reduce((a, b) => (b.score > a.score ? b : a)).box;
-  if (!src) return withSecondAxes(read, dets, pa);
+  const area = (b: { x0: number; y0: number; x1: number; y1: number }) => ({ x: b.x0, y: b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0 });
+  if (!src) return { ...withSecondAxes(read, dets, pa), dataArea: area(pa) };
   // A) the corners of the data area: the detector's plot area, on the lines the figure draws; B) each
   // axis's range at them, from its labels (`atCorners`)
   const lines = axisLinesNear(src, dets);
   const corners = { x0: lines.y ?? pa.x0, y0: lines.top ?? pa.y0, x1: lines.right ?? pa.x1, y1: lines.x ?? pa.y1 };
-  return withSecondAxes(atCorners(onAxisLines(read, lines), corners), dets, pa);
+  return { ...withSecondAxes(atCorners(onAxisLines(read, lines), corners), dets, pa), dataArea: area(corners) };
 }
 
 /** On a picture each label's own centre is its tick (labels lead), so an axis with no pairs read no

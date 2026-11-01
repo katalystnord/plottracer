@@ -207,6 +207,7 @@ import { BarAxes } from '../core/axes/bar.js';
 import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes, type NotDataRegion } from '../core/plotData.js';
+import { type DataArea, type Corner, isDataArea, withCornerMoved, mappedRect } from './dataArea.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
 import { tickCountFor } from '../core/bandedAxis.js';
 import { findAxisTicks } from '../algorithms/axisTicks.js';
@@ -778,6 +779,8 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Regions the user marked as not data (v2.6) - a layer on the figure, saved,
    * loaded and undone beside the heatmap's record, through the same doors. */
   private notDataRegions: NotDataRegion[] = [];
+  /** Where the automatic tools search (v2.7, engine/dataArea.ts); null until marked or detected. */
+  private dataArea: DataArea | null = null;
 
   /** How many times `config.repeatingStep` is currently unrolled - the spoke count
    * of the spider being calibrated. Meaningless (and left at 0) for every
@@ -3048,13 +3051,32 @@ export class CalibrationSession<A extends CalibratedAxes> {
    */
   moveNotDataRegionCorner(index: number, corner: 'tl' | 'tr' | 'br' | 'bl', x: number, y: number): boolean {
     const r = this.notDataRegions[index];
-    if (!r || !Number.isFinite(x) || !Number.isFinite(y)) return false;
-    const fixedX = corner === 'tl' || corner === 'bl' ? r.x + r.width : r.x;
-    const fixedY = corner === 'tl' || corner === 'tr' ? r.y + r.height : r.y;
-    const width = Math.abs(x - fixedX);
-    const height = Math.abs(y - fixedY);
-    if (width === 0 || height === 0) return false;
-    this.notDataRegions[index] = { ...r, x: Math.min(x, fixedX), y: Math.min(y, fixedY), width, height };
+    const moved = r && withCornerMoved(r, corner, x, y);
+    if (!moved) return false;
+    this.notDataRegions[index] = moved;
+    return true;
+  }
+
+  /** The data area (v2.7, engine/dataArea.ts), or null when none is marked or detected. */
+  getDataArea(): DataArea | null {
+    return this.dataArea ? { ...this.dataArea } : null;
+  }
+
+  /** Marks the data area: a figure has one, so this replaces any before it. Refused, with nothing changed, for a
+   * rectangle with no area. ⚑ Not a change to the calibration, so the figure stays calibrated: the data area is
+   * where the tools search, not the scale. */
+  setDataArea(rect: DataArea): boolean {
+    if (!isDataArea(rect)) return false;
+    this.dataArea = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    return true;
+  }
+
+  /** Moves one corner of the data area; the opposite corner stays. Refused when no area would be left. */
+  moveDataAreaCorner(corner: Corner, x: number, y: number): boolean {
+    if (!this.dataArea) return false;
+    const moved = withCornerMoved(this.dataArea, corner, x, y);
+    if (!moved) return false;
+    this.dataArea = moved;
     return true;
   }
 
@@ -3286,10 +3308,12 @@ export class CalibrationSession<A extends CalibratedAxes> {
     datasets: Dataset[],
     categoryAxis?: CategoryAxis,
     heatmapLayer?: SerializedHeatmapLayer | null,
-    notDataRegions?: readonly NotDataRegion[]
+    notDataRegions?: readonly NotDataRegion[],
+    dataArea?: DataArea | null
   ): void {
     this.categoryAxis = categoryAxis ?? new CategoryAxis();
     this.notDataRegions = (notDataRegions ?? []).map((r) => ({ ...r }));
+    this.dataArea = dataArea && isDataArea(dataArea) ? { ...dataArea } : null;
     // ⚑ Explicit, not defaulted-to-keep: this is a LOAD, so a layer the caller
     // did not supply means the file had none - and leaving the previous
     // figure's grid in place is exactly the stale-state defect the clears
@@ -3561,6 +3585,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
    * when `key` is a step of this graph type. A placed step is placed again; on a calibrated figure nothing changes
    * until it is (then `afterPlacing` loses the calibration).
    */
+  /** A step was chosen by its chip and not yet placed. */
+  isStepChosen(): boolean {
+    return this.chosenStep;
+  }
+
   chooseStep(key: string): boolean {
     const at = this.getSteps().findIndex((st) => st.key === key);
     if (at < 0) return false;
@@ -7937,12 +7966,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
     }
     // v2.6 (audit B3): a masked area is pixels too - it moves with the image,
     // or Find lines would bridge across a part of the figure nobody masked
-    this.notDataRegions = this.notDataRegions.map((r) => {
-      const cs = [map(r.x, r.y), map(r.x + r.width, r.y), map(r.x, r.y + r.height), map(r.x + r.width, r.y + r.height)];
-      const xs = cs.map((c) => c.x), ys = cs.map((c) => c.y);
-      const x0 = Math.min(...xs), y0 = Math.min(...ys);
-      return { x: x0, y: y0, width: Math.max(...xs) - x0, height: Math.max(...ys) - y0 };
-    });
+    // (the legend keeps its kind: it was dropped here until v2.7's data area test turned the picture with one)
+    this.notDataRegions = this.notDataRegions.map((r) => mappedRect(r, map));
+    if (this.dataArea) this.dataArea = mappedRect(this.dataArea, map);
     for (const entry of this.datasetEntries) {
       entry.dataset.getAllPixels().forEach((pt, i) => {
         const m = map(pt.x, pt.y);
@@ -8031,6 +8057,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // "Discard every series and point" does not promise to keep them.
     this.heatmapLayer = null;
     this.notDataRegions = [];
+    this.dataArea = null;
   }
 
   /** Capture the whole mutable state for the undo stack (checkpoint 38, see
@@ -8056,6 +8083,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // next, and it rides the same door so SAVE, LOAD and UNDO are one mechanism.
     plotData.setHeatmapLayer(this.heatmapLayer);
     plotData.setNotDataRegions(this.notDataRegions);
+    plotData.setDataArea(this.dataArea);
     for (const entry of this.datasetEntries) {
       plotData.addDataset(entry.dataset);
       if (axes) plotData.setAxesForDataset(entry.dataset, axes);
@@ -8096,6 +8124,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.categoryAxis = plotData.getCategoryAxisColl()[0] ?? new CategoryAxis();
     this.heatmapLayer = plotData.getHeatmapLayer();
     this.notDataRegions = plotData.getNotDataRegions();
+    this.dataArea = plotData.getDataArea();
     // ⚑ THE SPOKE COUNT IS DOCUMENT STATE (v1.4's variable-length calibration).
     // Restored BEFORE `placed` and `stepIndex` below, since both are read against
     // the step list this count decides. The other two entrances already handle it -

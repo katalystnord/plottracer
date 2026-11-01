@@ -212,6 +212,8 @@ export interface DeserializedProject {
   heatmapLayer: SerializedHeatmapLayer | null;
   /** Regions marked as not data (v2.6); empty when none. Pass to `loadCalibrated`. */
   notDataRegions: NotDataRegion[];
+  /** The data area (v2.7), or null when the file has none. Pass to `loadCalibrated`. */
+  dataArea: { x: number; y: number; width: number; height: number } | null;
   imageDataURL: string;
   imageFileName?: string;
   /** Measure results + scale (checkpoint 56); empty/null when the file predates
@@ -312,6 +314,7 @@ export function serializeProject<A extends CalibratedAxes>(
   // that is not a heatmap, so no other project's file changes at all.
   plotData.setHeatmapLayer(session.getHeatmapLayer());
   plotData.setNotDataRegions(session.getNotDataRegions());
+  plotData.setDataArea(session.getDataArea());
   for (const dataset of session.getDatasets()) {
     plotData.addDataset(dataset);
     plotData.setAxesForDataset(dataset, anyAxes);
@@ -642,6 +645,7 @@ export function deserializeProject(raw: unknown): ProjectResult<DeserializedProj
     // heatmap, and every heatmap whose grid was never read.
     heatmapLayer: plotData.getHeatmapLayer(),
     notDataRegions: plotData.getNotDataRegions(),
+    dataArea: plotData.getDataArea(),
     imageDataURL: data.image.dataURL,
     // Absent rather than explicitly undefined, matching readStamp below and
     // the writer at `image:` above -- a file with no remembered name has no

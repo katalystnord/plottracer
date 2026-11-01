@@ -202,6 +202,9 @@ export interface MeasureOverlay {
   color?: string;
   /** Fills a closed shape: a masked area is shaded so it reads as covered (v2.7). */
   shade?: string;
+  /** Drawn only: its corners take no click. The data area, the masked areas and the legend (v2.7) are rectangles,
+   * not measurements, and a measuring click on one of their corners was swallowed (found by the data area's tests). */
+  inert?: boolean;
 }
 
 /** The Select tool's four sub-modes (v1.1 #6, mirroring Ketcher's select
@@ -2240,7 +2243,17 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         y={screenY}
                         draggable={interactive}
                         {...(aidBound ? { dragBoundFunc: aidBound } : {})}
-                        onClick={(e) => onMarkerClick?.(point.id, e.evt.shiftKey)}
+                        onClick={(e) => {
+                          if (point.clickThrough) {
+                            const at = e.target.getStage()?.getPointerPosition();
+                            if (at) {
+                              const p = screenToImage(view, at.x, at.y);
+                              onImageClick?.(p.x, p.y);
+                            }
+                            return;
+                          }
+                          onMarkerClick?.(point.id, e.evt.shiftKey);
+                        }}
                         onDragStart={cancelDragIfPanning}
                         onDragMove={(e) => {
                           setHover({ x: e.target.x(), y: e.target.y() });
@@ -2838,7 +2851,7 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         // mode (checkpoint 128) so the arrow keys can nudge them;
                         // the in-progress 'measure-pending' / 'error-link-pending'
                         // overlays stay inert so a placing click is never swallowed.
-                        const interactive = !!onMeasureVertexClick && o.id !== 'measure-pending' && o.id !== 'error-link-pending';
+                        const interactive = !!onMeasureVertexClick && !o.inert && o.id !== 'measure-pending' && o.id !== 'error-link-pending';
                         const isSel = interactive && selectedMeasureVertex?.id === o.id && selectedMeasureVertex.vertex === i;
                         return (
                           <Fragment key={`${o.id}-v${i}`}>

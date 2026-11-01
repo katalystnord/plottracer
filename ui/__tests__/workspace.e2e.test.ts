@@ -516,6 +516,28 @@ async function expectRow(expected: number[], rowIndex = 0, digits = 2): Promise<
   expected.forEach((v, i) => expect(actual[i]!).toBeCloseTo(v, digits));
 }
 
+/**
+ * The calibration card's first step on every graph type that is XY in some form (v2.7; David 2026-11-01: "First you
+ * do a click drag for the data area. And then set the tick marks for value calibration."): the tips bar asks for a
+ * drag from one corner of the plot to the other, and the test does exactly that, in canvas-local pixels.
+ */
+async function markDataArea(x0: number, y0: number, x1: number, y1: number) {
+  // a test that marked it already (to look at the walk after it) goes straight on
+  if ((await dataAreaRecorded()) !== null) return;
+  expect(await textOf('tips-bar')).toMatch(/Mark the data area: drag a box from one corner of the plot to the opposite corner/);
+  await dragMarker(x0, y0, x1, y1);
+  await expect.poll(() => dataAreaRecorded()).not.toBeNull();
+}
+/** The same, in image pixels. */
+async function markDataAreaImage(x0: number, y0: number, x1: number, y1: number) {
+  const a = await imagePoint(x0, y0), b = await imagePoint(x1, y1);
+  await markDataArea(a.lx, a.ly, b.lx, b.ly);
+}
+/** The data area as recorded, image pixels, or null. */
+async function dataAreaRecorded(): Promise<{ x: number; y: number; width: number; height: number } | null> {
+  return JSON.parse((await page.getByTestId('data-area').getAttribute('data-rect')) ?? 'null') as { x: number; y: number; width: number; height: number } | null;
+}
+
 // Shared XY calibration setup, verified exact throughout checkpoints 3-13:
 // X1=0 @ local (100,250), X2=10 @ (400,250), Y1=0 @ (100,250), Y2=10 @ (100,100).
 async function calibrateXYStandard() {
@@ -531,6 +553,8 @@ async function calibrateXYStandard() {
   // produce a test that makes it, and the test then passes whatever the reuse
   // does. Same correction the heatmap walk got in the v2.2 audit, for the same
   // reason, on a type nobody had re-read since.
+  // The data area first, as the card asks (v2.7): the plot box these four points span.
+  await markDataArea(100, 100, 400, 250);
   await clickAt(100, 250);
   await confirmValue('0');
   await clickAt(400, 250);
@@ -610,6 +634,7 @@ describe('Workspace: XY axes', () => {
     // exactly the case that exposed it.
     await resetWorkspace('xy');
 
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250); // X1
     await confirmValue('0');
     await clickAt(400, 250); // X2
@@ -633,6 +658,7 @@ describe('Workspace: XY axes', () => {
     // which is the very shortcut this test drives by hand.
     await declineCommonOrigin();
 
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250); // X1
     await confirmValue('0');
     await clickAt(400, 250); // X2
@@ -813,6 +839,7 @@ describe('Workspace: tool mode', () => {
   it('Calibrate picks no tool: the next step is the user\'s, and a click on the figure adds nothing', async () => {
     await resetWorkspace('xy');
     expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(true);
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(400, 250);
@@ -860,6 +887,7 @@ describe('Workspace: tool mode', () => {
     await resetWorkspace('boxplot');
     // the bar walk: the value axis (two values) and the category axis (its two ends, and the count)
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -966,6 +994,7 @@ describe('Workspace: tool mode', () => {
   it('numbered keyboard shortcuts (1/2/3) switch tool mode, ignored while a text input has focus', async () => {
     await resetWorkspace('xy');
 
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250); // X1
     await confirmValue('0');
 
@@ -1016,6 +1045,7 @@ describe('Workspace: Bar axes', () => {
     // the walk ARRIVES at `Cat 1`, which is the instant P2's value is confirmed -
     // so unticking later is too late, and the following clicks land one step out.
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400);
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1051,7 +1081,8 @@ describe('Workspace: Bar axes', () => {
     // ⚑ FOUR, not two: the value axis AND the category axis. The old title said
     // "a shorter 2-step calibration", which was true of the value axis and
     // silent about the other one - the reading that let the category axis be a
-    // fold-out seeded off P1 for three releases.
+    // fold-out seeded off P1 for three releases. (The data area comes first since v2.7; then the four.)
+    await markDataArea(100, 100, 500, 400);
     expect(await textOf('tips-bar')).toMatch(/1\/4 - P1/);
 
     await calibrateBarStandard();
@@ -1272,6 +1303,7 @@ describe('Workspace: Bar axes', () => {
   it('⚑⚑ the category axis is part of the WALK - the step asks for it by name', async () => {
     await resetWorkspace('bar');
     // Two value-axis clicks, and the walk is NOT over: a bar chart has two axes.
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1294,6 +1326,7 @@ describe('Workspace: Bar axes', () => {
    */
   it('⚑⚑⚑ THE WALK: two value clicks, two category clicks, and a count', async () => {
     await resetWorkspace('bar');
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1373,6 +1406,7 @@ describe('Workspace: Bar axes', () => {
    */
   it('⚑⚑ offers the value origin as Cat 1, so the ordinary walk is three clicks', async () => {
     await resetWorkspace('bar');
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1388,6 +1422,7 @@ describe('Workspace: Bar axes', () => {
   it('⚑ and declining it puts the first end back in the user\u2019s hands', async () => {
     await resetWorkspace('bar');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1432,6 +1467,7 @@ describe('Workspace: Bar axes', () => {
     // *"I ticked the box common origin, and it still wants the point."*
     await resetWorkspace('bar');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1486,6 +1522,7 @@ describe('Workspace: Bar axes', () => {
     // untick left Y1 sitting on X1's pixel with a prefilled value nobody placed
     // while the checkbox read unticked. `Reset calibration` was the only exit.
     await resetWorkspace('xy');
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(200, 400);
     await confirmValue('0');
     await clickAt(400, 400);
@@ -1507,6 +1544,7 @@ describe('Workspace: Bar axes', () => {
     // restore a pending pixel, because a pending pixel is never committed.
     await resetWorkspace('xy');
     await declineCommonOrigin();
+    await markDataArea(200, 200, 400, 400); // the card asks for the data area first (v2.7)
     await clickAt(200, 400);
     await confirmValue('0');
     await clickAt(400, 400);
@@ -1532,6 +1570,7 @@ describe('Workspace: Bar axes', () => {
     // changed, clearing the redo branch and marking the project dirty.
     await resetWorkspace('bar');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await page.locator('[data-testid="data-value-input"]').click({ timeout: 5000 });
     await page.keyboard.type('7');
@@ -1742,6 +1781,7 @@ describe('Workspace: Candlestick', () => {
    * the click rather than eight steps later.
    */
   async function calibrateCandlestick(categories = 4) {
+    await markDataArea(100, 100, 500, 400);
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -1907,6 +1947,7 @@ describe('Workspace: Box Plot / Point Groups', () => {
     // ⚑ DECLINED BEFORE THE FIRST CLICK, not after. The offer fires the moment
     // the walk ARRIVES at `Cat 1`, which is the instant P2's value is confirmed -
     // so unticking later is too late, and the following clicks land one step out.
+    await markDataArea(100, 100, 500, 400);
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -2709,6 +2750,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // scope, the same reason the histogram block keeps its own copies.
     await resetWorkspace('bar');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -3152,7 +3194,85 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // the outermost labelled ticks: X 0 to 100, Y 0 to 3500, and the corner is labelled 0 on both axes
     expect([await chip('x1'), await chip('x2'), await chip('y1'), await chip('y2')]).toEqual(['X10', 'X2100', 'Y10', 'Y23500']);
     expect(await page.getByTestId('common-origin').isChecked()).toBe(true);
+    // ⚑ and the data area is the frame, X 0 to 110, past the last label (100) the points sit on (v2.7): the figure's
+    // own frame corners, from its truth file
+    const area = (await dataAreaRecorded())!;
+    expect(area, 'a data area').not.toBeNull();
+    const want = [87.28, 39.33, 885.0, 636.72];
+    [area.x, area.y, area.x + area.width, area.y + area.height].forEach((v, i) => expect(Math.abs(v - want[i]!), `edge ${i}: ${v}`).toBeLessThanOrEqual(3));
+    expect(await textOf('calib-chip-data-area')).toMatch(/Data area\s*marked/);
   }, 90000);
+
+  // ⚑⚑ The data area (v2.7; David 2026-11-01, docs/v2.7-workflow-walk.md, "The data area, apart from the
+  // calibration"): a rectangle of its own, where the automatic tools search. The calibration card asks for it first.
+  it('the calibration card asks for the data area first: a drag round the plot marks it, and the walk moves on to X1', async () => {
+    await resetWorkspace('xy');
+    expect(await textOf('calib-chip-data-area')).toMatch(/Data area\s*drag on image/);
+    expect(await textOf('tips-bar')).toMatch(/Mark the data area: drag a box from one corner of the plot to the opposite corner/);
+    // a click is not the drag it asks for: nothing is placed
+    await clickAt(150, 150);
+    expect(await page.getByTestId('data-value-input').count()).toBe(0);
+    expect(await dataAreaRecorded()).toBeNull();
+    await markDataArea(90, 90, 410, 260);
+    const a = (await dataAreaRecorded())!;
+    const tl = await imagePoint(a.x, a.y), br = await imagePoint(a.x + a.width, a.y + a.height);
+    expect([Math.round(tl.lx), Math.round(tl.ly), Math.round(br.lx), Math.round(br.ly)]).toEqual([90, 90, 410, 260]);
+    expect(await textOf('calib-chip-data-area')).toMatch(/Data area\s*marked/);
+    // the walk moves on to the first point, and a click places it
+    expect(await textOf('tips-bar')).toMatch(/Calibration step 1\/4 - X1/);
+    await clickAt(100, 250);
+    expect(await page.getByTestId('data-value-input').count()).toBe(1);
+  });
+
+  it('the data area\'s corners move while the calibration card is open, and not once it is folded', async () => {
+    await resetWorkspace('xy');
+    await markDataArea(90, 90, 410, 260);
+    const before = (await dataAreaRecorded())!;
+    // the bottom-right grip, dragged out by 20 and 10
+    await dragMarker(410, 260, 430, 270);
+    const moved = (await dataAreaRecorded())!;
+    expect(moved.x).toBeCloseTo(before.x, 1);
+    expect(moved.y).toBeCloseTo(before.y, 1);
+    expect(moved.width).toBeGreaterThan(before.width + 5);
+    expect(moved.height).toBeGreaterThan(before.height + 3);
+    // the card folded: the grips are gone, so the same drag does not move the corner
+    await page.getByTestId('calib-fold').click();
+    const br = await imagePoint(moved.x + moved.width, moved.y + moved.height);
+    await dragMarker(br.lx, br.ly, br.lx + 30, br.ly + 20);
+    expect(await dataAreaRecorded()).toEqual(moved);
+  });
+
+  it('picking the Data area chip again asks for the drag again, and the new rectangle replaces the old', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('mode-calibrate').click();
+    await page.getByTestId('calib-chip-pick-data-area').click();
+    expect(await textOf('tips-bar')).toMatch(/Mark the data area: drag a box/);
+    await dragMarker(80, 80, 420, 270);
+    const a = (await dataAreaRecorded())!;
+    const tl = await imagePoint(a.x, a.y);
+    expect([Math.round(tl.lx), Math.round(tl.ly)]).toEqual([80, 80]);
+    // the data area is where the tools search, not the scale: the figure stays calibrated
+    expect(await textOf('calib-status')).toMatch(/^Calibrated/);
+  });
+
+  it('Automatic axis detection marks a drawn figure\'s frame as the data area, also where it runs past the last label', async () => {
+    // labels-log: X runs -0.5 to 10.5 and is labelled 0 to 10, so the frame is wider than the labelled ticks. Its
+    // shape tells the two apart: the frame is 223.2 x 166.3 pt (0.745), the box round the ticks 202.9 x 166.3 (0.820).
+    await resetWorkspace('xy');
+    await stubOpenProjectDialog(path.join(__dirname, '../../engine/__tests__/fixtures/vector/labels-log.pdf'));
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.getByTestId('figure-kind').waitFor({ timeout: 5000 }).catch(async () => {
+      await page.getByTestId('calib-fold').click();
+      await page.getByTestId('figure-kind').waitFor({ timeout: 5000 });
+    });
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => dataAreaRecorded()).not.toBeNull();
+    const a = (await dataAreaRecorded())!;
+    expect(a.height / a.width).toBeCloseTo(166.32 / 223.2, 2);
+  });
 
   it('Automatic axis detection that fixes no point says so in the bottom bar, with the warning triangle', async () => {
     await resetWorkspace('xy');
@@ -3164,7 +3284,8 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('auto-axis-detect').click();
     await expect.poll(() => textOf('tips-bar'), { timeout: 15000 }).toMatch(/No calibration points could be fixed on this figure/);
     expect(await page.getByTestId('tips-bar-warning').count()).toBe(1);
-    expect(await textOf('calib-chip-x1')).toMatch(/click image/);
+    // nothing found, nothing placed: the walk still asks for its first step, the data area (v2.7)
+    expect(await textOf('calib-chip-data-area')).toMatch(/drag on image/);
   }, 60000);
 
   it('bundles the source PDF into the saved project, and restores it (checkpoint 104)', async () => {
@@ -3423,6 +3544,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
   it('exports a small-magnitude value at its true resolution, not a zero (v1.0 export blocker)', async () => {
     // A Y axis over 0..0.01 (150px): the case the old fixed 2-decimal round zeroed.
     await resetWorkspace('xy');
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(400, 250);
@@ -3729,6 +3851,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
 
   it('exports a Box Plot (Point Groups) dataset to CSV as one row per category', async () => {
     await resetWorkspace('boxplot');
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -3787,6 +3910,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // inherited `Label`, the one surface using a different word for what the
     // table, Box Plot and the categorical export all call a Category.
     await resetWorkspace('bar');
+    await markDataArea(300, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -3860,6 +3984,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // bounding box IS its two ends -- see engine/barDetectRun.ts -- so the
     // rail button now works instead of staying permanently grey.
     await resetWorkspace('bar');
+    await markDataArea(300, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -3891,6 +4016,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // bounding box could mean for its own five-value record, so it stays in
     // the refused bucket Bar itself has now left.
     await resetWorkspace('boxplot');
+    await markDataArea(300, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -3984,6 +4110,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // measures POSITIONS, not styles - it is the only form that cannot be
     // satisfied by a plausible-looking stylesheet.
     await resetWorkspace('bar');
+    await markDataArea(300, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -4026,6 +4153,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // is unchanged, just ported from points to tuples.
     await resetWorkspace('bar');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -4310,6 +4438,7 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     // that reason; categorical Line stays disabled too (an ordinal click has
     // nothing a colour trace could read as its own record).
     await resetWorkspace('boxplot');
+    await markDataArea(300, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -4351,6 +4480,8 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     const bl = await imagePoint(2, 698);
     const br = await imagePoint(898, 698);
     const tl = await imagePoint(2, 2);
+    // the data area over the whole image too, so Colour trace searches all of it (v2.7: it starts from the data area)
+    await markDataArea(tl.lx, tl.ly, br.lx, br.ly);
     await clickAt(bl.lx, bl.ly);
     await confirmValue('0');
     await clickAt(br.lx, br.ly);
@@ -4764,6 +4895,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
 
   it('the Curve Fit and Geometry panels only appear for XY axes', async () => {
     await resetWorkspace('bar');
+    await markDataArea(300, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -5136,7 +5268,8 @@ describe('Workspace: Grid Line Removal (checkpoint 28)', () => {
 
   it('is usable before calibrating -- the panel is not axes-type or calibration gated', async () => {
     await resetWorkspace('xy'); // resetWorkspace itself leaves the session uncalibrated
-    expect(await textOf('tips-bar')).toMatch(/1\/4/);
+    // the walk's first step, the data area (v2.7): nothing calibrated yet
+    expect(await textOf('tips-bar')).toMatch(/Mark the data area/);
 
     await page.getByTestId('grid-removal-trigger').click();
     await page.getByTestId('grid-removal-run').click();
@@ -6317,6 +6450,7 @@ describe('Workspace: Editable datapoints (checkpoint 39)', () => {
     // text with no click-to-edit spans (data-value-*).
     await resetWorkspace('bar');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -6385,6 +6519,7 @@ describe('Workspace: Enter / Esc / Del global keys', () => {
     await resetWorkspace('xy');
     // Place the four calibration points by hand (not calibrateXYStandard, which
     // clicks the button) so Enter is the thing that actually calibrates.
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(400, 250);
@@ -6703,6 +6838,7 @@ describe('Workspace: categorical line (checkpoint 101)', () => {
     // still the whole point: "X is not numeric", so there is no X coordinate to
     // enter. What the walk DOES ask for since v2.3 is where the category axis
     // RUNS, which is geometry rather than a number: two clicks and a count.
+    await markDataArea(100, 100, 500, 300); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(100, 100);
@@ -6923,6 +7059,7 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
   it('reusing a placed pixel pre-fills the new value with the reused point\'s value', async () => {
     await resetWorkspace('xy');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('7'); // X1 = 7
     await clickAt(400, 250);
@@ -7005,7 +7142,8 @@ describe('Workspace: calibration & safety UX (checkpoint 37)', () => {
     await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
     await page.getByTestId('grid-removal-panel').waitFor({ state: 'detached' });
 
-    // Clicking the image samples that pixel's color and dismisses the hint.
+    // Clicking the image samples that pixel's color and dismisses the hint. ⚑ The eyedropper's click wins over the
+    // calibration card's data-area drag (v2.7): it was swallowed by it, found by this test.
     await clickAt(300, 150);
     expect(await page.getByTestId('eyedropper-hint').count()).toBe(0);
     // The sampled color is now shown in the (reopened) panel's hex field.
@@ -7761,6 +7899,7 @@ describe('Workspace: image editing (checkpoint 62)', () => {
     await resetWorkspace('xy');
     // A deliberately TILTED x-axis: X1 at (100,250), X2 lower at (400,280) --
     // ~5.7° down-to-the-right, so Auto-straighten has real work to do.
+    await markDataArea(100, 100, 400, 280); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(400, 280);
@@ -8098,6 +8237,7 @@ describe('Workspace: per-axes calibration options (checkpoint 68)', () => {
     await resetWorkspace('xy');
     await page.getByTestId('calib-option-isLogY').check();
     await declineCommonOrigin();
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250); // X1 = 0
     await confirmValue('0');
     await clickAt(400, 250); // X2 = 10
@@ -8259,6 +8399,7 @@ describe('Workspace: calibration geometry preview (checkpoint 84)', () => {
     const mid = { x: 230, y: 242, w: 40, h: 16 };
     expect(await overlayInkIn(mid)).toBe(0);
 
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(400, 250);
@@ -8272,6 +8413,8 @@ describe('Workspace: calibration geometry preview (checkpoint 84)', () => {
 
   it('follows a dragged handle - live, not baked at click time', async () => {
     await resetWorkspace('xy');
+    // the data area a little outside the points, so its own green outline is not the ink measured below
+    await markDataArea(90, 90, 410, 262);
     await calibrateXYStandard();
     await page.getByTestId('mode-calibrate').click();
     await page.waitForTimeout(150);
@@ -8383,6 +8526,7 @@ describe('Workspace: calibration options survive calibration (checkpoint 86)', (
   it('lets you switch Log Y after calibrating, WITHOUT losing your points', async () => {
     await resetWorkspace('xy');
     // Y over 1..1000: a log scale cannot hold the standard walk's Y1 = 0, and Calibrate rightly refuses it
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(400, 250);
@@ -8433,6 +8577,7 @@ describe('Workspace: calibration options survive calibration (checkpoint 86)', (
     // calibration and Calibrate does the re-reading.
     await resetWorkspace('xy');
     // Calibrate Y over 1..1000 so linear vs log give clearly different readings.
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250);
     await confirmValue('0');
     await clickAt(400, 250);
@@ -8924,6 +9069,7 @@ describe('Workspace: Reset calibration is honest and undoable (checkpoint 71)', 
 
   it('does NOT nag when there is nothing to lose', async () => {
     await resetWorkspace('xy');
+    await markDataArea(100, 100, 400, 250); // the card asks for the data area first (v2.7)
     await clickAt(100, 250); // a lone calibration handle, no data
     await confirmValue('0');
     dialogMessages.length = 0;
@@ -10467,6 +10613,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(150);
     expectCornersAgreeWithTheirNames();
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     for (const step of ['x1', 'x2'] as const) {
       await expectPromptNames(step === 'x1' ? 'FIRST' : 'LAST', 'FIRST');
       const p = truth.frame[step];
@@ -10503,6 +10650,7 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('calib-choice-xIsCategory-true').check();
     await page.getByTestId('calib-choice-yIsCategory-true').check();
     await page.waitForTimeout(150);
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y);
     await clickImagePixel(truth.frame.x2.x, truth.frame.x2.y);
     await confirmValue(String(truth.grid.x.length - 1));
@@ -10522,6 +10670,7 @@ describe('heatmap capture (v2.2)', () => {
   /** The walk, declaring the given band counts rather than the figure's own. */
   async function calibrateHeatmapDeclaring(columns: string, rows: string) {
     const bands: Record<string, string> = { x2: columns, y2: rows };
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
@@ -10552,6 +10701,7 @@ describe('heatmap capture (v2.2)', () => {
     // relies on and what every rectangular heatmap has: the two axes span one
     // rectangle, so three of its corners carry the whole transform.
     expectCornersAgreeWithTheirNames();
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     for (const step of ['x1', 'x2'] as const) {
       await expectPromptNames(step === 'x1' ? 'FIRST' : 'LAST', 'FIRST');
       const p = truth.frame[step];
@@ -11736,6 +11886,7 @@ describe('heatmap capture (v2.2)', () => {
     // is made - the gate that a walkthrough test may only click what the screen
     // tells it to. It must NOT say "where the axes meet": on `heatmap.2` they
     // do not meet where a reader expects.
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     const first = await textOf('tips-bar');
     expect(first).toMatch(/FIRST column/);
     expect(first).toMatch(/FIRST row/);
@@ -11897,6 +12048,7 @@ describe('heatmap capture (v2.2)', () => {
     // clicks is not testing the user's walk, and it would keep passing on a
     // figure where the two corners were NOT the same pixel - right up until it
     // silently stopped meaning anything.
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     for (const step of ['x1', 'x2'] as const) {
       const p = truth.frame[step];
       await clickImagePixel(p.x, p.y);
@@ -11984,6 +12136,7 @@ describe('heatmap capture (v2.2)', () => {
     // refuses while a required field is blank, so the key did nothing and the
     // only way on was Tab or the mouse.
     await resetWorkspace('heatmap');
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y);
     await page.keyboard.type(String(truth.frame.x1.value));
     await page.keyboard.press('Enter'); // one field: Enter CONFIRMS
@@ -12007,6 +12160,7 @@ describe('heatmap capture (v2.2)', () => {
   it('still walks the same step with TAB, which was never the problem', async () => {
     // ⚑ The companion assertion: Enter gained a job, Tab did not lose one.
     await resetWorkspace('heatmap');
+    await markDataAreaImage(truth.frame.x1.x, truth.frame.y2.y, truth.frame.x2.x, truth.frame.x1.y); // the card asks for the data area first (v2.7)
     await clickImagePixel(truth.frame.x1.x, truth.frame.x1.y);
     await page.keyboard.type(String(truth.frame.x1.value));
     await page.getByTestId('confirm-data-value').click();
@@ -12206,6 +12360,7 @@ describe('Workspace: Span chart capture (v2.5)', () => {
   async function calibrateSpan() {
     await resetWorkspace('span');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400);
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -12309,6 +12464,7 @@ describe('Workspace: a stacked bar chart', () => {
   it('⚑⚑ typing a height records that height, and the segment above keeps its value', async () => {
     await resetWorkspace('stacked');
     await declineCommonOrigin();
+    await markDataArea(100, 100, 500, 400); // the card asks for the data area first (v2.7)
     await clickAt(300, 400);
     await confirmValue('0');
     await clickAt(300, 100);
@@ -12461,6 +12617,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const p1 = px([t.box[0]!, t.value[0]![1]]), p2 = px([t.box[0]!, t.value[1]![1]]);
+    const tl = px([t.box[0]!, t.box[3]!]), br = px([t.box[2]!, t.box[1]!]);
+    await markDataAreaImage(tl[0], tl[1], br[0], br[1]); // the plot box, which the card asks for first (v2.7)
     await clickImagePixel(p1[0], p1[1]);
     await confirmValue('0');
     await clickImagePixel(p2[0], p2[1]);
@@ -12501,6 +12659,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.waitForTimeout(150);
     const [bx0, by0, bx1, by1] = vTruth(boxFrom).box as [number, number, number, number];
     const o = vImg([bx0, by0]), xr = vImg([bx1, by0]), yt = vImg([bx0, by1]);
+    await markDataAreaImage(yt[0], yt[1], xr[0], xr[1]); // the plot box, which the card asks for first (v2.7)
     await clickImagePixel(o[0], o[1]);
     await confirmValue('0');
     await clickImagePixel(xr[0], xr[1]);
@@ -12622,6 +12781,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // the walk as its prompts ask: P1 a known bar value (0, where the bars stand), P2 another
     const bx0 = t.box[0]!;
     const p1 = vImg([bx0, t.value[0]![1]]), p2 = vImg([bx0, t.value[1]![1]]);
+    const boxTl = vImg([t.box[0]!, t.box[3]!]), boxBr = vImg([t.box[2]!, t.box[1]!]);
+    await markDataAreaImage(boxTl[0], boxTl[1], boxBr[0], boxBr[1]); // the plot box, which the card asks for first (v2.7)
     await clickImagePixel(p1[0], p1[1]);
     await confirmValue('0');
     await clickImagePixel(p2[0], p2[1]);
@@ -12797,6 +12958,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('calib-option-hasColourKey').check();
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
+
     await clickImagePixel(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await clickImagePixel(a.x2.px, a.x2.py);
@@ -12838,6 +13001,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const a = truth.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
+
     await clickImagePixel(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await clickImagePixel(a.x2.px, a.x2.py);
@@ -12874,6 +13039,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
+
     await clickImagePixel(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await clickImagePixel(a.x2.px, a.x2.py);
@@ -12981,6 +13148,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
+
     await clickImagePixel(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await clickImagePixel(a.x2.px, a.x2.py);
@@ -13035,6 +13204,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
+
     await clickImagePixel(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await clickImagePixel(a.x2.px, a.x2.py);
@@ -13144,6 +13315,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const a = truth.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
+
     await clickImagePixel(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await clickImagePixel(a.x2.px, a.x2.py);
@@ -13192,6 +13365,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // Calibrate where the prompts say: two known X values, then the shared
     // origin's Y (already placed), then a known Y value.
     const a = truth.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
+
     await clickImagePixel(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await clickImagePixel(a.x2.px, a.x2.py);
@@ -13472,6 +13647,7 @@ describe('Workspace: Settings (v2.7)', () => {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const a = truth.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py); // the plot box, which the card asks for first (v2.7)
     await toLocal(a.x1.px, a.x1.py);
     await confirmValue(String(a.x1.value));
     await toLocal(a.x2.px, a.x2.py);

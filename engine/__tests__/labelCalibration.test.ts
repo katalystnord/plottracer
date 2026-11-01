@@ -14,6 +14,7 @@ import { readDrawing, readTextItems, type PdfTextItem } from '../pdfDrawing.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../drawingPlacement.js';
 import type { Provenance } from '../projectFile.js';
 import { readAxesFromLabels, type AxesFromLabels, type AxisFromLabels } from '../labelCalibration.js';
+import { drawnFrame } from '../dataArea.js';
 import { thinFoundLine } from '../lineEdits.js';
 import { findLinesFromDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import { XYAxes } from '../../core/axes/xy.js';
@@ -298,5 +299,44 @@ describe('V5-V8 on the forms real figures take', () => {
     expect(values(r.x)).toEqual([10, 20, 30]);
     expect(x.side).toBe('top');
     expect(x.second).toBeNull();
+  });
+});
+
+/**
+ * The data area of a drawn figure is its frame (v2.7; David 2026-11-01, docs/v2.7-workflow-walk.md, "The data area,
+ * apart from the calibration"): [Automatic axis detection] sets it from what the figure draws, a rectangle round the
+ * plot or its four axis lines. Checked against each generator's own plot area (the truth files' `box`), including
+ * the figures whose frame runs past the last labelled tick: matplotlib's X -0.5 .. 10.5 labelled 0 .. 10, R's 4%
+ * either side, ggplot2's panel.
+ */
+describe('the data area of a drawn figure is its frame', () => {
+  const FRAMED = ['labels-linear', 'labels-negative', 'labels-log', 'labels-unpaired', 'labels-offset', 'labels-refused',
+    'reverse-mpl-lines', 'reverse-rbase-line', 'reverse-rcairo-line', 'reverse-rgg-line', 'reverse-lo-lines'];
+  for (const name of FRAMED) {
+    it(`${name}: the frame the generator drew, to the pixel`, () => {
+      const f = figs[name]!;
+      const area = drawnFrame(f.drawing!, f.read);
+      expect(area, `${name}: a frame was found`).not.toBeNull();
+      const [x0, y0, x1, y1] = f.truth.box as number[];
+      const tl = f.at(x0!, y1!), br = f.at(x1!, y0!);
+      const got = [area!.x, area!.y, area!.x + area!.width, area!.y + area!.height];
+      const want = [tl[0], tl[1], br[0], br[1]];
+      got.forEach((v, i) => expect(Math.abs(v - want[i]!), `${name}: edge ${i} at ${v.toFixed(1)}, frame at ${want[i]!.toFixed(1)}`).toBeLessThanOrEqual(1.5));
+    });
+  }
+
+  it('the frame runs past the last labelled tick where the figure draws it so (labels-log: X -0.5 .. 10.5, labels 0 .. 10)', () => {
+    const f = figs['labels-log']!;
+    const area = drawnFrame(f.drawing!, f.read)!;
+    const x = ok(f.read.x);
+    const ticks = x.pairs.map((p) => p.tick[0]);
+    expect(area.x).toBeLessThan(Math.min(...ticks) - 20);
+    expect(area.x + area.width).toBeGreaterThan(Math.max(...ticks) + 20);
+  });
+
+  it('nothing read on either axis: no frame is offered, since nothing says which rectangle is the plot', () => {
+    const f = figs['labels-linear']!;
+    const none: AxesFromLabels = { x: { axis: 'x', ok: false, reason: 'x', pairs: [], unused: [] }, y: { axis: 'y', ok: false, reason: 'y', pairs: [], unused: [] }, points: null };
+    expect(drawnFrame(f.drawing!, none)).toBeNull();
   });
 });

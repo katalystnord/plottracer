@@ -71,7 +71,7 @@ function session(name: string, stacked = false): CalibrationSession<CalibratedAx
 
 /** The series' bars as the app files them: read, swatches held back, filed.
  * `maskLegend` marks the legend as not-data, as a user does (V17). */
-function file(name: string, k: number, maskLegend = false, stacked = false) {
+function file(name: string, k: number, maskLegend = false, stacked = false, region?: { x0: number; y0: number; x1: number; y1: number }) {
   const f = figs[name]!;
   const s = session(name, stacked);
   const baseline = s.baselinePixelForDetect() ?? undefined;
@@ -79,7 +79,7 @@ function file(name: string, k: number, maskLegend = false, stacked = false) {
     const a = f.at([b[0]! - 2, b[1]! - 2]), c = f.at([b[2]! + 2, b[3]! + 2]);
     return { x0: Math.min(a[0], c[0]), y0: Math.min(a[1], c[1]), x1: Math.max(a[0], c[0]), y1: Math.max(a[1], c[1]) };
   }) : [];
-  const result = barsFromDrawing(f.drawing, f.truth.series[k]!.colour, { x0: 0, y0: 0, x1: f.size.w, y1: f.size.h }, { categoryAxis: f.truth.horizontal ? 'y' : 'x', masks, ...(baseline ? { baseline } : {}) });
+  const result = barsFromDrawing(f.drawing, f.truth.series[k]!.colour, region ?? { x0: 0, y0: 0, x1: f.size.w, y1: f.size.h }, { categoryAxis: f.truth.horizontal ? 'y' : 'x', masks, ...(baseline ? { baseline } : {}) });
   const { file: filed, holdBack } = partitionSwatchSuspects(result);
   const added = s.addBarDetectBoxes(filed);
   // each bar's height, by its category's place along the axis
@@ -124,6 +124,16 @@ describe('V18: bars read from the drawing are the data the figure was made from'
       expect(heights).toHaveLength(want.length);
       want.forEach((w, i) => expect(Math.abs(heights[i]! - w), `layer ${k} segment ${i}`).toBeLessThan(0.005));
     }
+  });
+
+  it('V18: searched within a data area dragged by hand, a pixel inside the frame, bars standing on the frame are read too', () => {
+    // ⚑ The data area (v2.7) is where By colour searches, and a hand-dragged one is never pixel-exact: a bar standing on
+    // the baseline touches the frame. A bar counts as in the area when its centre is, as a line does in Find lines.
+    const f = figs['bars-floating']!;
+    const [bx0, by0, bx1, by1] = f.truth.box as [number, number, number, number];
+    const a = f.at([bx0, by1]), c = f.at([bx1, by0]);
+    const inside = { x0: a[0] + 1, y0: a[1] + 1, x1: c[0] - 1, y1: c[1] - 1 };
+    expect(file('bars-floating', 0, false, false, inside).added).toBe(3);
   });
 
   it('V18: a bar that does not stand on the baseline is filed, and the bar table\'s own off-baseline note says so', () => {

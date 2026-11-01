@@ -122,6 +122,12 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       await page.waitForTimeout(150);
 
       // Same standard XY fixture used throughout workspace.e2e.test.ts.
+      // the data area first, as the calibration card asks (v2.7): a drag round the plot box
+      await page.mouse.move(box!.x + 100, box!.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box!.x + 400, box!.y + 250, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(150);
       await clickAt(100, 250);
       await confirmValue('0');
       await clickAt(400, 250);
@@ -308,6 +314,12 @@ describe('ui/electron-main.cjs (production entry point)', () => {
       // Capture the figure first (checkpoint 103): mandatory before calibration.
       page.on('dialog', (d) => void d.accept());
       await page.getByTestId('capture-figure').click();
+      await page.waitForTimeout(150);
+      // the data area first, as the calibration card asks (v2.7): a drag round the plot box
+      await page.mouse.move(box!.x + 100, box!.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box!.x + 400, box!.y + 250, { steps: 5 });
+      await page.mouse.up();
       await page.waitForTimeout(150);
       await clickAt(100, 250); await confirmValue('0');
       await clickAt(400, 250); await confirmValue('10');

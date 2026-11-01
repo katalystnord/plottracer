@@ -84,6 +84,16 @@ describe('OCR: reading category names off the figure', () => {
 
     await page.waitForTimeout(250);
     await page.getByTestId('common-origin').uncheck();
+    // the data area first, as the calibration card asks (v2.7): a drag round the plot
+    {
+      const [x0, y0] = at(77.53, 39.33), [x1, y1] = at(874.05, 660.28);
+      await refresh();
+      await page.mouse.move(box.x + x0, box.y + y0);
+      await page.mouse.down();
+      await page.mouse.move(box.x + x1, box.y + y1, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+    }
     await clickAt(...at(77.53, 660.28));
     await confirm('0');
     await clickAt(...at(77.53, 39.33));

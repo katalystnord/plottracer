@@ -66,6 +66,12 @@ export interface CanvasMarker {
    */
   kind?: 'calibration' | 'data' | 'aid' | 'cap';
   /**
+   * A plain click on it is a click on the figure under it, at the pixel clicked; only a drag moves it. The data
+   * area's grips (v2.7): a corner of the frame is often where the walk's next point goes (X1 at the origin), and a
+   * grip that swallowed the click there left the walk stuck with nothing on screen saying why.
+   */
+  clickThrough?: boolean;
+  /**
    * A point in IMAGE coordinates to push this marker's label AWAY from.
    *
    * ⚑ Every label is otherwise drawn up-and-to-the-right at a fixed offset, which is

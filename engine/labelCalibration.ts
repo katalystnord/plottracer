@@ -67,6 +67,9 @@ export interface AxesFromLabels {
   y: AxisFromLabels;
   /** The calibration's four points (x1, x2, y1, y2) when both axes were read, else null. */
   points: { px: number; py: number; x: number; y: number }[] | null;
+  /** Where the plot is, for the data area (v2.7, engine/dataArea.ts): set by the picture reader from the frame it
+   * found. A drawn figure's frame is read apart from the labels, by `drawnFrame`. */
+  dataArea?: { x: number; y: number; width: number; height: number };
 }
 
 /** A label candidate: a number as printed, or 10 to a printed power. */

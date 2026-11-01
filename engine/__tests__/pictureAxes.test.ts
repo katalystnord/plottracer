@@ -223,6 +223,39 @@ describe('the axis points sit on the drawn axis line, found near the detector\'s
   });
 });
 
+describe('the data area of a picture is its frame (v2.7, David 2026-11-01)', () => {
+  // [Automatic axis detection] sets the data area: the frame the figure draws, found near the detector's rough
+  // plot area by the same rule finder as the axis lines; where no line is found, the detector's edge.
+  const T = path.resolve(import.meta.dirname, '../../algorithms/__tests__/fixtures/ticks');
+  for (const name of ['ticks-out', 'ticks-in', 'histogram-ticks-out']) {
+    it(`${name}: a plot box 5 px off every edge gives the drawn frame`, () => {
+      const img = readPng(path.join(T, `${name}.png`));
+      const truth = JSON.parse(readFileSync(path.join(T, `${name}.truth.json`), 'utf8')) as { axes: Record<'x' | 'y', { from: [number, number]; to: [number, number] }> };
+      const xLine = truth.axes.x.from[1], yLine = truth.axes.y.from[0];
+      const right = truth.axes.x.to[0], top = truth.axes.y.from[1];
+      const rough: Detection = { cls: 'plot_area', box: box(yLine + 5, top + 5, right - 5, xLine - 5), score: 0.99 };
+      const r = pictureAxes([rough], [], [], { width: img.width, height: img.height }, img);
+      const a = r.dataArea!;
+      expect(a, 'a data area').toBeDefined();
+      expect(Math.abs(a.x - yLine), 'left').toBeLessThanOrEqual(1.5);
+      expect(Math.abs(a.y - top), 'top').toBeLessThanOrEqual(1.5);
+      expect(Math.abs(a.x + a.width - right), 'right').toBeLessThanOrEqual(1.5);
+      expect(Math.abs(a.y + a.height - xLine), 'bottom').toBeLessThanOrEqual(1.5);
+    });
+  }
+
+  it('without the picture\'s pixels, the detector\'s plot area is the data area', () => {
+    const { dets, text } = figure(['0', '2', '4'], ['0', '10', '20']);
+    const r = pictureAxes(dets, readAll(dets, text), noBand(dets), size);
+    expect(r.dataArea).toEqual({ x: 100, y: 50, width: 350, height: 250 });
+  });
+
+  it('no plot area detected, no data area', () => {
+    const r = pictureAxes([], [], [], size);
+    expect(r.dataArea).toBeUndefined();
+  });
+});
+
 describe('A) the corners of the data area, B) each axis\'s value range at them', () => {
   // ⚑ David, 2026-10-19: "A) Marking the corners of the data area, 3 points is all that is normally required.
   // Then B) ascribing each axis a value range or category range ... ascribing an axis values is not physically

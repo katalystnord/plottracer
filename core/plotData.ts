@@ -370,6 +370,13 @@ function notDataRegionsFrom(raw: unknown): NotDataRegion[] {
   return out;
 }
 
+/** The data area off a file: kept only if it is a real rectangle. */
+function dataAreaFrom(raw: unknown): { x: number; y: number; width: number; height: number } | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const ns = ['x', 'y', 'width', 'height'].map((k) => Number((raw as Record<string, unknown>)[k]));
+  return ns.every((n) => Number.isFinite(n)) && ns[2]! > 0 && ns[3]! > 0 ? { x: ns[0]!, y: ns[1]!, width: ns[2]!, height: ns[3]! } : null;
+}
+
 function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const src = raw as SerializedHeatmapLayer;
@@ -429,6 +436,8 @@ export interface SerializedPlotData {
   /** Regions the user marked as NOT DATA (v2.6) - a legend, say - in image
    * pixels. Find lines leaves them out and may bridge a line across one. */
   notDataRegions?: NotDataRegion[];
+  /** The data area (v2.7, engine/dataArea.ts): where the automatic tools search, image pixels. */
+  dataArea?: { x: number; y: number; width: number; height: number };
   misc?: unknown;
 }
 
@@ -453,6 +462,7 @@ export class PlotData {
   private _datasetCategoryAxisMap = new Map<Dataset, CategoryAxis | null>();
   private _heatmapLayer: SerializedHeatmapLayer | null = null;
   private _notDataRegions: NotDataRegion[] = [];
+  private _dataArea: { x: number; y: number; width: number; height: number } | null = null;
 
   reset(): void {
     this._axesColl = [];
@@ -465,6 +475,16 @@ export class PlotData {
     this._datasetCategoryAxisMap = new Map();
     this._heatmapLayer = null;
     this._notDataRegions = [];
+    this._dataArea = null;
+  }
+
+  /** The data area (v2.7), or null. */
+  setDataArea(area: { x: number; y: number; width: number; height: number } | null): void {
+    this._dataArea = area ? { ...area } : null;
+  }
+
+  getDataArea(): { x: number; y: number; width: number; height: number } | null {
+    return this._dataArea ? { ...this._dataArea } : null;
   }
 
   /** Regions marked as not data (v2.6), a layer on the figure like the heatmap's record. */
@@ -858,6 +878,7 @@ export class PlotData {
     // half-read grid would place boundaries the user never put anywhere.
     this._heatmapLayer = heatmapLayerFrom(data.heatmapLayer);
     this._notDataRegions = notDataRegionsFrom(data.notDataRegions);
+    this._dataArea = dataAreaFrom(data.dataArea);
 
     // v2.0 groundwork, additive -- see SerializedCategoryAxisData. Read BEFORE
     // the dataset loop below, which looks these up by name to rebind.
@@ -1221,6 +1242,8 @@ export class PlotData {
     }
     // v2.6, additive - written only when the user marked a region.
     if (this._notDataRegions.length) data.notDataRegions = this.getNotDataRegions();
+    // v2.7, additive - written only when there is one.
+    if (this._dataArea) data.dataArea = this.getDataArea()!;
 
     // v2.0 groundwork, additive (see SerializedCategoryAxisData) -- only
     // written when at least one exists, so a project with none round-trips
