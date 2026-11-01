@@ -2398,14 +2398,29 @@ describe('Workspace: Circular Chart Recorder axes', () => {
   // core/__tests__/crossCheck.test.ts's job (see calibrationSession.ts's
   // header comment) -- these tests exercise the click-walk/global-field/
   // live-recalibration plumbing only.
+  // ⚑ The calibration card covers the top of this fixture's walk, and the user pans the figure out from under it
+  // (David, 2026-11-01: "a user can always pan or move the graph"). The middle button pans in any tool; every click
+  // below is shifted by what the pan moved.
+  let dy = 0;
+  async function panClearOfCard() {
+    await refreshCanvasBox();
+    const before = await viewOffset();
+    await page.mouse.move(canvasBox.x + 300, canvasBox.y + 450);
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(canvasBox.x + 300, canvasBox.y + 650, { steps: 6 });
+    await page.mouse.up({ button: 'middle' });
+    await page.waitForTimeout(150);
+    dy = (await viewOffset())[1] - before[1];
+  }
+
   async function calibrateCCRStandard() {
-    await clickAt(200, 200); // (T0,R0)
+    await clickAt(200, 200 + dy); // (T0,R0)
     await confirmValues(['2024/01/01 00:00', '1']);
-    await clickAt(400, 200); // (T0,R1) -- click-only
-    await clickAt(300, 100); // (T0,R2)
+    await clickAt(400, 200 + dy); // (T0,R1) -- click-only
+    await clickAt(300, 100 + dy); // (T0,R2)
     await confirmValue('10');
-    await clickAt(200, 400); // (T1,R2) -- click-only
-    await clickAt(400, 400); // (T2,R2) -- click-only
+    await clickAt(200, 400 + dy); // (T1,R2) -- click-only
+    await clickAt(400, 400 + dy); // (T2,R2) -- click-only
     await page.locator('[data-testid="global-field-startTime"]').click({ timeout: 5000 });
     await page.keyboard.type('2024/01/01 00:00');
     await page.getByTestId('run-calibration').click();
@@ -2417,23 +2432,24 @@ describe('Workspace: Circular Chart Recorder axes', () => {
 
   it('walks a 5-step calibration mixing value-less and 1-2 value steps, gating Calibrate on the global field', async () => {
     await resetWorkspace('ccr');
+    await panClearOfCard();
     expect(await textOf('tips-bar')).toMatch(/1\/5 - \(T0,R0\)/);
 
-    await clickAt(200, 200); // (T0,R0): 2 values
+    await clickAt(200, 200 + dy); // (T0,R0): 2 values
     await confirmValues(['2024/01/01 00:00', '1']);
     expect(await textOf('tips-bar')).toMatch(/2\/5 - \(T0,R1\)/);
 
-    await clickAt(400, 200); // (T0,R1): click-only, advances immediately
+    await clickAt(400, 200 + dy); // (T0,R1): click-only, advances immediately
     expect(await textOf('tips-bar')).toMatch(/3\/5 - \(T0,R2\)/);
 
-    await clickAt(300, 100); // (T0,R2): 1 value
+    await clickAt(300, 100 + dy); // (T0,R2): 1 value
     await confirmValue('10');
     expect(await textOf('tips-bar')).toMatch(/4\/5 - \(T1,R2\)/);
 
-    await clickAt(200, 400); // (T1,R2): click-only
+    await clickAt(200, 400 + dy); // (T1,R2): click-only
     expect(await textOf('tips-bar')).toMatch(/5\/5 - \(T2,R2\)/);
 
-    await clickAt(400, 400); // (T2,R2): click-only, walk complete
+    await clickAt(400, 400 + dy); // (T2,R2): click-only, walk complete
     expect(await page.locator('[data-testid="global-field-startTime"]').isVisible()).toBe(true);
 
     // Calibrate is clickable but must fail cleanly while the global field
@@ -2454,7 +2470,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     // shared-handle clicks in the XY describe block above) and chosen to
     // keep the pen/chart law-of-cosines term inside acos's valid domain.
     await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
-    await clickAt(300, 320);
+    await clickAt(300, 320 + dy);
     const cells = await rowCells();
     expect(cells).toHaveLength(2);
     // Time is date-calibrated (T0 was typed as a real date), so the table
@@ -2467,9 +2483,10 @@ describe('Workspace: Circular Chart Recorder axes', () => {
 
   it('dragging the (T0,R1) handle changes the time reading but not the radius (r never depends on it)', async () => {
     await resetWorkspace('ccr');
+    await panClearOfCard();
     await calibrateCCRStandard();
 
-    await clickAt(300, 320);
+    await clickAt(300, 320 + dy);
     const before = await rowCells();
 
     // (T0,R1) only feeds the pen circle (time/angle), never the chart
@@ -2493,7 +2510,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
     await page.waitForTimeout(150);
     const [ox1, oy1] = await viewOffset();
     const hx = 400 + (ox1 - ox0);
-    const hy = 200 + (oy1 - oy0);
+    const hy = 200 + dy + (oy1 - oy0);
     // ⚑ the canvas's hit test is rebuilt only when Konva next draws: a person always sees the drawn frame first
     await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     await dragMarker(hx, hy, hx + 20, hy + 20);
@@ -3069,7 +3086,12 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     fs.unlinkSync(savePath);
   }, 60000);
 
-  it('V5-V9: a drawn figure\'s axes are read from its own labels, offered, and Apply fills the calibration as clicks would', async () => {
+  // ⚑⚑ [Automatic axis detection] (David, 2026-10-31 and 2026-11-01; docs/v2.7-workflow-walk.md step 3). One button
+  // under the calibration card's header, on every kind of figure. It PLACES every point it can read, each with the
+  // number printed at its tick, and leaves them to be checked before Calibrate; the origin is shared only where both
+  // axes label the corner (option C). It replaced the drawn-PDF-only "Read the axes from the figure's labels" and its
+  // offer (V5-V9), so these are those cases on the same figures, as the button now answers them.
+  it('Automatic axis detection places the calibration points with their printed numbers, and leaves them for Calibrate', async () => {
     const fixture = (n: string) => path.join(__dirname, '../../engine/__tests__/fixtures/vector', n + '.pdf');
     const openAndCapture = async (file: string) => {
       await resetWorkspace('xy');
@@ -3077,66 +3099,72 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
       await page.getByTestId('open-image-button').click();
       await waitForImageFitted();
       await page.getByTestId('capture-figure').click();
-      // the line comes once the page's drawing is read; a card folded by the
-      // last calibration opens again with its fold arrow
       const line = page.getByTestId('figure-kind');
       await line.waitFor({ timeout: 3000 }).catch(async () => {
         await page.getByTestId('calib-fold').click();
         await line.waitFor({ timeout: 5000 });
       });
     };
+    const chip = async (k: string) => (await textOf(`calib-chip-${k}`)).replace(/\s/g, '');
 
-    // V5: the card offers the read beside the line that says the figure is drawn
+    // the four points, each with the number printed at its tick; nothing calibrated until Calibrate
     await openAndCapture(fixture('labels-linear'));
-    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
-    expect(await textOf('label-axes-x')).toBe('X: 0, 20, 40, 60, 80, 100');
-    expect(await textOf('label-axes-y')).toBe('Y: 0, 500, 1000, 1500, 2000, 2500, 3000, 3500');
-    // V11 dropped (David, 2026-10-16): the ticks give the axis exactly, and the
-    // data's precision is the source's, not ours to state
-    expect(await page.getByTestId('label-axes-precision').count()).toBe(0);
-    // nothing applied until Apply
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => chip('x2')).toBe('X2100');
+    expect(await chip('x1')).toBe('X10');
+    expect(await chip('y1')).toBe('Y10');
+    expect(await chip('y2')).toBe('Y23500');
     expect(await textOf('calib-status')).toContain('Not calibrated');
-    expect(await textOf('calib-chip-x1')).toBe('X1click image');
+    // the axes meet at 0 and 0, labelled on both: one shared corner (option C)
+    expect(await page.getByTestId('common-origin').isChecked()).toBe(true);
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calib-status')).toMatch(/^Calibrated/);
 
-    // V6: Apply fills X1, X2, Y1, Y2 with the outermost ticks and their values;
-    // the walk then ends the way a hand-filled one does, with Calibrate
-    await page.getByRole('button', { name: 'Apply', exact: true }).click();
-    expect((await textOf('calib-chip-x1')).replace(/\s/g, '')).toBe('X10');
-    expect((await textOf('calib-chip-x2')).replace(/\s/g, '')).toBe('X2100');
-    expect((await textOf('calib-chip-y1')).replace(/\s/g, '')).toBe('Y10');
-    expect((await textOf('calib-chip-y2')).replace(/\s/g, '')).toBe('Y23500');
-    // X1 and Y1 sit at their own ticks, so the box no longer says they are one point
-    expect(await page.getByTestId('common-origin').isChecked()).toBe(false);
-    await page.getByRole('button', { name: 'Calibrate', exact: true }).click();
-    expect(await textOf('calib-status')).toContain('Calibrated');
-
-    // V9: exponent labels: the axis is offered as log, and Apply ticks Log Y where it can be seen
+    // exponent labels: the axis is read as log, and Log Y is ticked
     await openAndCapture(fixture('labels-log'));
-    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
-    expect(await textOf('label-axes-y')).toBe('Y: 10^1, 10^2, 10^3, 10^4, log');
-    await page.getByRole('button', { name: 'Apply', exact: true }).click();
-    expect(await page.getByTestId('calib-option-isLogY').isChecked()).toBe(true);
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => page.getByTestId('calib-option-isLogY').isChecked()).toBe(true);
     expect(await page.getByTestId('calib-option-isLogX').isChecked()).toBe(false);
 
-    // a second Y axis along the right is not read, and the card says so
+    // a second Y axis along the right is not read: the left one is
     await openAndCapture(fixture('labels-twin'));
-    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
-    expect(await textOf('label-axes-y')).toBe('Y: 0, 5, 10, 15, 20, 25, 30');
-    expect(await textOf('label-axes-second-y')).toBe('A second Y axis along the right is not read; data plotted against it needs calibrating by hand.');
-    expect(await page.getByTestId('label-axes-second-x').count()).toBe(0);
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => chip('y2')).toBe('Y230');
 
-    // V8: an axis that cannot be read says why, and nothing can be applied. ⚑ CHANGED (David,
-    // 2026-10-17): its X labels 0, 2, 4, 9, 8, 10 are vetted, the misprinted 9 corrected from its
-    // neighbours and shown as read; its Y still has a single label, so nothing can be applied.
+    // an axis that cannot be read is left for the user, and the other is placed: its misprinted 9 corrected
+    // from its neighbours (David, 2026-10-17), so X2 is 10
     await openAndCapture(fixture('labels-refused'));
-    await page.getByRole('button', { name: "Read the axes from the figure's labels" }).click();
-    expect(await textOf('label-axes-x')).toBe('X: 0, 2, 4, 6 (read as "9"), 8, 10');
-    expect(await textOf('label-axes-y')).toBe('Y could not be read: only one label sits at a tick mark; two are needed.');
-    expect(await page.getByTestId('label-axes-y').locator('svg').count()).toBe(1); // the warning triangle, as everywhere
-    expect(await page.getByRole('button', { name: 'Apply', exact: true }).isDisabled()).toBe(true);
-    // Cancel takes the offer away; calibrating by hand is unchanged
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    expect(await page.getByTestId('label-axes-offer').count()).toBe(0);
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => chip('x2')).toBe('X210');
+    expect(await chip('x1')).toBe('X10');
+    expect(await textOf('calib-chip-y2')).toMatch(/click image|-/);
+  }, 90000);
+
+  it('Automatic axis detection reads a picture too: the same button, ChartDete and PaddleOCR underneath', async () => {
+    await resetWorkspace('xy');
+    await stubOpenProjectDialog(path.join(__dirname, '../../samples/xy-multiseries-modulus.png'));
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.getByTestId('auto-axis-detect').click();
+    const chip = async (k: string) => (await textOf(`calib-chip-${k}`)).replace(/\s/g, '');
+    await expect.poll(async () => `${await chip('x1')} | ${await textOf('tips-bar')}`, { timeout: 60000 }).toMatch(/^X10 /);
+    // the outermost labelled ticks: X 0 to 100, Y 0 to 3500, and the corner is labelled 0 on both axes
+    expect([await chip('x1'), await chip('x2'), await chip('y1'), await chip('y2')]).toEqual(['X10', 'X2100', 'Y10', 'Y23500']);
+    expect(await page.getByTestId('common-origin').isChecked()).toBe(true);
+  }, 90000);
+
+  it('Automatic axis detection that fixes no point says so in the bottom bar, with the warning triangle', async () => {
+    await resetWorkspace('xy');
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('figdet:detect');
+      ipcMain.handle('figdet:detect', async () => ({ detections: [] }));
+    });
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => textOf('tips-bar'), { timeout: 15000 }).toMatch(/No calibration points could be fixed on this figure/);
+    expect(await page.getByTestId('tips-bar-warning').count()).toBe(1);
+    expect(await textOf('calib-chip-x1')).toMatch(/click image/);
   }, 60000);
 
   it('bundles the source PDF into the saved project, and restores it (checkpoint 104)', async () => {
