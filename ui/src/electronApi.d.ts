@@ -46,6 +46,11 @@ declare global {
        * intercepts a close once the renderer is actually handling it. */
       notifyCloseGuardReady: () => void;
       /**
+       * The graph type suggestion (v2.7): the graph-type models' raw logits for a captured
+       * figure, or a refusal sentence. engine/figureType.ts turns them into the suggestion.
+       */
+      classifyFigure: (pngBase64: string) => Promise<{ own?: number[]; docling?: number[]; error?: string }>;
+      /**
        * Read the text in an already-cropped, already-turned region (v2.4).
        *
        * ⚑ The renderer takes the crop, because it holds the figure's pixels and
