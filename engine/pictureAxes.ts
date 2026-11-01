@@ -235,11 +235,16 @@ export function pictureAxes(
 }
 
 /** On a picture each label's own centre is its tick (labels lead), so an axis with no pairs read no
- * numbers at all; "no label sits at a tick mark", the PDF reader's words, would send the user looking
- * for tick marks that play no part (a real figure whose labels were all "95%"-style, 2026-10-19). */
+ * numbers at all, and one with a single pair read one; the PDF reader's words ("no label sits at a tick
+ * mark") would send the user looking for tick marks that play no part (a real figure whose labels were all
+ * "95%"-style, 2026-10-19; the one-label case, David, 2026-10-20). */
+const ON_A_PICTURE: Record<string, string> = {
+  'no label sits at a tick mark': 'no numbers were read along it',
+  'only one label sits at a tick mark; two are needed': 'only one number was read along it; two are needed',
+};
 function picturesOwnWords(read: AxesFromLabels): AxesFromLabels {
   const say = (a: AxesFromLabels['x']): AxesFromLabels['x'] =>
-    !a.ok && a.reason === 'no label sits at a tick mark' ? { ...a, reason: 'no numbers were read along it' } : a;
+    !a.ok && ON_A_PICTURE[a.reason] ? { ...a, reason: ON_A_PICTURE[a.reason]! } : a;
   return { ...read, x: say(read.x), y: say(read.y) };
 }
 

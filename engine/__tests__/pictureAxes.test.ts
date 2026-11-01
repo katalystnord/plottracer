@@ -274,6 +274,15 @@ describe('a label used by one axis is not reported unused on the other', () => {
   });
 });
 
+describe('a corner label is the Y axis\'s, on a real picture', () => {
+  it('the strip plot David loaded (PMC6008649___2): "-80" at the corner is not "not used on X" (the real detections and reads)', () => {
+    const f = JSON.parse(readFileSync(path.join(import.meta.dirname, 'fixtures/strip-plot-corner.json'), 'utf8'));
+    const r = pictureAxes(f.dets, f.cropReads, f.bandWords, f.size);
+    expect(r.y.ok && r.y.pairs.some((p) => p.value === -80), 'the Y axis uses its "-80"').toBe(true);
+    expect(r.x.unused.filter((u) => u.label !== null).map((u) => u.label)).toEqual([]);
+  });
+});
+
 describe('labels printed with a unit sign', () => {
   it('a percent axis ("70%" ... "90%") reads as 70 ... 90, the numbers the figure prints (a real figure, 2026-10-19)', () => {
     const { dets, text } = figure(['10', '20', '30', '40', '50'], ['70%', '75%', '80%', '85%', '90%']);
@@ -285,6 +294,12 @@ describe('labels printed with a unit sign', () => {
     const { dets, text } = figure(['10', '20', '30', '40', '50'], ['a', 'b', 'c', 'd', 'e']);
     const r = pictureAxes(dets, readAll(dets, text), noBand(dets), size);
     expect(!r.y.ok && r.y.reason).toBe('no numbers were read along it');
+  });
+
+  it('an axis with one number read says so, not "only one label sits at a tick mark"', () => {
+    const { dets, text } = figure(['10', '20', '30', '40', '50'], ['a', 'b', '70', 'd', 'e']);
+    const r = pictureAxes(dets, readAll(dets, text), noBand(dets), size);
+    expect(!r.y.ok && r.y.reason).toBe('only one number was read along it; two are needed');
   });
 });
 
