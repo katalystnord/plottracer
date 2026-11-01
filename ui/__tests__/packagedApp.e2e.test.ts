@@ -176,15 +176,19 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     expect(suggestGraphType(answer.own!, answer.docling!).type).toBe('bar');
   }, 120000);
 
-  it('finds a chart\'s plot area and tick labels, with the detector model in the package (v2.7)', async () => {
+  it('finds a chart\'s plot area and tick labels with ChartDete, its pack in the package (v2.7)', async () => {
     const app = path.join(path.dirname(BINARY), 'resources/app');
-    expect(fs.existsSync(path.join(app, 'ui/figdet-model/detector.onnx')), 'ui/figdet-model/detector.onnx is missing from the package').toBe(true);
+    for (const p of ['backbone', 'rpn', 'roialign0', 'roialign3', 'global2', 'encoderfast2', 'head2']) {
+      expect(fs.existsSync(path.join(app, `ui/figdet-model/chartdete/${p}.onnx`)), `ui/figdet-model/chartdete/${p}.onnx is missing from the package`).toBe(true);
+    }
     const png = fs.readFileSync(path.join(REPO_ROOT, 'samples/xy-stress-strain.png')).toString('base64');
     const answer = await page.evaluate(
-      (b64) => (window as unknown as { electronAPI: { detectChartElements: (s: string) => Promise<{ detections?: { cls: string; score: number }[]; error?: string }> } }).electronAPI.detectChartElements(b64),
+      (b64) => (window as unknown as { electronAPI: { detectChartElements: (s: string) => Promise<{ detections?: { cls: string; score: number }[]; detector?: string; error?: string }> } }).electronAPI.detectChartElements(b64),
       png
     );
     expect(answer.error, 'the packaged app could not run the detector').toBeUndefined();
+    // ⚑ WHICH detector answered: RF-DETR would find a plot area too, so the case says ChartDete
+    expect(answer.detector, 'the answer came from another detector').toBe('chartdete');
     const sure = (answer.detections ?? []).filter((d) => d.score >= 0.5);
     expect(sure.some((d) => d.cls === 'plot_area')).toBe(true);
     expect(sure.filter((d) => d.cls === 'x_tick_label').length).toBeGreaterThanOrEqual(5);

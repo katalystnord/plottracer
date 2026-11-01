@@ -53,6 +53,8 @@ declare global {
       /** The chart-element detector's boxes for one figure (v2.7, ui/electron-figdet.cjs). */
       detectChartElements: (pngBase64: string) => Promise<{
         detections?: { cls: string; box: { x0: number; y0: number; x1: number; y1: number }; score: number }[];
+        /** Which detector answered: ChartDete when its pack is installed, else RF-DETR (v2.7). */
+        detector?: 'chartdete' | 'rfdetr';
         error?: string;
       }>;
       /**

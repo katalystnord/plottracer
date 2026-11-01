@@ -52,7 +52,8 @@ parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
     if (kind === 'figdet') {
       const det = DETECTOR === 'chartdete' ? chartdete : figdet
       if (!detector) detector = DETECTOR === 'chartdete' ? chartdete.startChartDete(require('onnxruntime-web')) : figdet.startDetector(require('onnxruntime-web'))
-      parentPort.postMessage({ id, answer: await det.detect(await detector, image) })
+      // the answer says which detector gave it, for the comparison switch and for the packaged-app test
+      parentPort.postMessage({ id, answer: { ...(await det.detect(await detector, image)), detector: DETECTOR } })
       return
     }
     if (!engine) engine = startEngine()
