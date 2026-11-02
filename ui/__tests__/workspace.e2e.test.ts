@@ -12998,9 +12998,11 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
 
   it('Auto-extract all series on a line chart in two colours: each legend line names its series, Find lines reads each into it, one Undo takes it all back', async () => {
     const said = await autoExtractDrawn('lines-legend-colour');
-    expect(said).toHaveLength(2);
-    expect(said[0]).toMatch(/^Control: Read from the figure’s drawing: 1 line found/);
-    expect(said[1]).toMatch(/^Treated: Read from the figure’s drawing: 1 line found/);
+    // one short line per series, then the places and the undo said once (David, 2026-11-02)
+    expect(said).toHaveLength(3);
+    expect(said[0]).toMatch(/^Control: 1 line, 80 points(, \d+ places? to check)?$/);
+    expect(said[1]).toMatch(/^Treated: 1 line, 80 points(, \d+ places? to check)?$/);
+    expect(said[2]).toMatch(/^(Places to check are listed on the right\. )?Undo takes the whole read back\.$/);
     const series = await page.getByTestId('series-select').locator('option').allTextContents();
     expect(series).toEqual(['Control (80)', 'Treated (80)']);
     // ⚑ one run, one undo step
@@ -13014,7 +13016,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
 
   it('Auto-extract all series, two series in ONE ink: the colour is read once, and the second says colour cannot tell them apart', async () => {
     const said = await autoExtractDrawn('lines-legend');
-    expect(said[0]).toMatch(/^series 1: Read from the figure’s drawing: 2 lines found/);
+    expect(said[0]).toMatch(/^series 1: 2 lines, 160 points(, \d+ places? to check)?$/);
     expect(said[1]).toBe('series 2: Same colour as series 1, so colour cannot tell them apart: its data was all read into series 1. Move each to its own series in the series list.');
     const series = await page.getByTestId('series-select').locator('option').allTextContents();
     // the two drawn lines, once each

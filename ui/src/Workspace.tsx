@@ -37,7 +37,7 @@ import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
 import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, readPictureAxes, readRegionWords } from './ocrClient.js';
 import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
-import { planAutoExtract, autoExtractTools } from '../../engine/autoExtract.js';
+import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter } from '../../engine/autoExtract.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -6936,7 +6936,7 @@ export function Workspace() {
 
   // `addPlaces`: the places to check are added to those listed (Auto-extract all series reads one colour after another).
   // `otherInks`: the other series' colours, when the legend names them, so their ink is not read as this one's.
-  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number]; addPlaces?: boolean; otherInks?: readonly (readonly [number, number, number])[] } = {}): Promise<{ text: string; error?: boolean; summary?: string }> => {
+  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number]; addPlaces?: boolean; otherInks?: readonly (readonly [number, number, number])[] } = {}): Promise<{ text: string; error?: boolean; summary?: string; found?: { lines: number; gaps: number; places: number } }> => {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = readingImage();
     const target = hexToRGB(colour);
@@ -7121,7 +7121,7 @@ export function Workspace() {
     setFindLinesBusy(null);
     commit();
     const placesText = places.length ? `\nPlaces to check:\n${places.map((pl) => `  - ${pl.kind} at (${Math.round(pl.at[0])}, ${Math.round(pl.at[1])}): ${pl.text}`).join('\n')}` : '';
-    return { text: `The Find lines card says: "${summary}"${placesText}`, summary };
+    return { text: `The Find lines card says: "${summary}"${placesText}`, summary, found: { lines: res.lines.length, gaps, places: places.length } };
   }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices, readingImage]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
 
@@ -7167,6 +7167,9 @@ export function Workspace() {
       if (!plan.length) return say('No series could be read from the legend - check the legend is marked round its entries, or use the tools below one series at a time.');
       const said: string[] = [];
       let readAny = false;
+      let anyPlaces = false;
+      // the points now in a series and in the further lines of its colour
+      const pointsIn = (indices: number[]) => indices.reduce((n, i) => n + (s.getDatasetInfos()[i]?.pointCount ?? 0), 0);
       holdCommitsRef.current = true;
       try {
         for (const step of plan) {
@@ -7187,19 +7190,23 @@ export function Workspace() {
             const otherInks = plan.flatMap((o) => ('colour' in o && o !== step ? [o.colour] : []));
             const res = await findLinesWith(hex, { addPlaces: readAny, otherInks });
             // further lines of the same colour are named after it, and all keep the legend's colour
-            s.getDatasetInfos().slice(before).forEach((d, n) => {
-              s.renameDataset(d.index, `${step.name} ${n + 2}`);
-              s.setDatasetColor(d.index, step.colour);
+            const extras = s.getDatasetInfos().slice(before).map((d) => d.index);
+            extras.forEach((i, n) => {
+              s.renameDataset(i, `${step.name} ${n + 2}`);
+              s.setDatasetColor(i, step.colour);
             });
             s.renameDataset(into, step.name);
             s.setDatasetColor(into, step.colour);
-            said.push(`${step.name}: ${res.summary ?? res.text}`);
+            // one short line per series (David, 2026-11-02); the tool's own sentence when it read nothing, to say why
+            said.push(res.found && !res.error ? autoExtractLine(step.name, { ...res.found, points: pointsIn([into, ...extras]) }) : `${step.name}: ${res.summary ?? res.text}`);
+            if (res.found?.places) anyPlaces = true;
             if (!res.error) readAny = true;
           } else {
             colorTraceSaidRef.current = '';
             colorTraceWith(hex, step.tool === 'points' ? 'scatter' : 'curve');
-            said.push(`${step.name}: ${colorTraceSaidRef.current}`);
-            if ((s.getDatasetInfos()[into]?.pointCount ?? 0) > 0) readAny = true;
+            const points = pointsIn([into]);
+            said.push(points > 0 ? autoExtractLine(step.name, { points }) : `${step.name}: ${colorTraceSaidRef.current}`);
+            if (points > 0) readAny = true;
           }
         }
       } finally {
@@ -7207,7 +7214,7 @@ export function Workspace() {
       }
       if (sessionRef.current !== s) return;
       commit();
-      setAutoExtractReport({ on: s, lines: said });
+      setAutoExtractReport({ on: s, lines: [...said, autoExtractFooter(anyPlaces)] });
       if (!readAny) setOcrError('No series could be read: none of the legend’s colours was found inside the data area.');
     } finally {
       setAutoExtractBusy(false);

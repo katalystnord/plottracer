@@ -314,7 +314,6 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
           {autoExtract.said.map((t, i) => (
             <span key={i} data-testid={`auto-extract-said-${i}`}>{t}</span>
           ))}
-          <span>Undo takes the whole read back.</span>
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoExtractTools, planAutoExtract } from '../autoExtract.js';
+import { autoExtractTools, planAutoExtract, autoExtractLine, autoExtractFooter } from '../autoExtract.js';
 import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 
 const getAxesTypeConfig = (id: string) => ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id)!;
@@ -69,5 +69,28 @@ describe('Auto-extract all series: one step per series the legend names', () => 
     expect(autoExtractTools(getAxesTypeConfig('heatmap'))).toEqual([]);
     expect(autoExtractTools(getAxesTypeConfig('boxplot'))).toEqual([]);
     expect(planAutoExtract(getAxesTypeConfig('heatmap'), [entry('A', BLUE)], one)).toEqual([]);
+  });
+});
+
+describe('the Auto-extract report: one short line per series, the shared sentence once (David, 2026-11-02)', () => {
+  it('given four blends each read as one line of 195 points with 2 places to check, each line says just that', () => {
+    expect(autoExtractLine('Blend A', { lines: 1, points: 195, gaps: 0, places: 2 })).toBe('Blend A: 1 line, 195 points, 2 places to check');
+  });
+
+  it('a count of nothing is left out: no gaps bridged, no places to check', () => {
+    expect(autoExtractLine('Blend A', { lines: 1, points: 195, gaps: 0, places: 0 })).toBe('Blend A: 1 line, 195 points');
+  });
+
+  it('gaps bridged and more than one line are counted when there are some', () => {
+    expect(autoExtractLine('Blend A', { lines: 2, points: 240, gaps: 1, places: 1 })).toBe('Blend A: 2 lines, 240 points, 1 gap bridged, 1 place to check');
+  });
+
+  it('a series read as points says how many', () => {
+    expect(autoExtractLine('Measured', { points: 12 })).toBe('Measured: 12 points');
+  });
+
+  it('the places and the undo are said once, under all the series; the places only when there are some', () => {
+    expect(autoExtractFooter(true)).toBe('Places to check are listed on the right. Undo takes the whole read back.');
+    expect(autoExtractFooter(false)).toBe('Undo takes the whole read back.');
   });
 });

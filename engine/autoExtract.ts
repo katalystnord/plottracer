@@ -78,3 +78,22 @@ export function planAutoExtract(
     return { entry: i, name, colour: c, tool: toolFor(tools, e.sample), into };
   });
 }
+
+const counted = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** One series' line in the Auto-extract report (David, 2026-11-02): its name and what was read, a count of nothing
+ * left out. The tool's own sentence is for a series that read nothing, where it says why. */
+export function autoExtractLine(name: string, read: { points: number; lines?: number; gaps?: number; places?: number }): string {
+  const parts = [
+    ...(read.lines !== undefined ? [counted(read.lines, 'line', 'lines')] : []),
+    counted(read.points, 'point', 'points'),
+    ...(read.gaps ? [`${counted(read.gaps, 'gap', 'gaps')} bridged`] : []),
+    ...(read.places ? [`${counted(read.places, 'place', 'places')} to check`] : []),
+  ];
+  return `${name}: ${parts.join(', ')}`;
+}
+
+/** Said once under every series' line: where the places to check are, when there are some, and the undo. */
+export function autoExtractFooter(anyPlaces: boolean): string {
+  return `${anyPlaces ? 'Places to check are listed on the right. ' : ''}Undo takes the whole read back.`;
+}
