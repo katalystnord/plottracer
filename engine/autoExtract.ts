@@ -13,7 +13,8 @@ import { findLinesKind, autoExtractModesFor } from './toolMode.js';
 
 type RGB = [number, number, number];
 
-/** Find lines; Colour trace's Scattered points; Colour trace as the type reads its shapes (bars, a spider's polygon). */
+/** Find lines; Colour trace's Scattered points; Colour trace as the type reads its shapes (bars, a spider's polygon,
+ * a curve where Find lines does not read). */
 export type AutoExtractTool = 'lines' | 'points' | 'shapes';
 
 export type AutoExtractStep =
@@ -33,7 +34,8 @@ export function autoExtractTools(config: Pick<AxesTypeConfig<CalibratedAxes>, 'a
   const kind = config.autoExtractKind ?? 'curve';
   if (kind === 'none') return [];
   if (kind !== 'curve') return autoExtractModesFor(kind, config.id).includes('color-trace') ? ['shapes'] : [];
-  return findLinesKind(config.id) ? ['lines', 'points'] : ['points'];
+  // where Find lines does not read (polar, ternary, map, CCR), a line is Colour trace's curve reading
+  return findLinesKind(config.id) ? ['lines', 'points'] : ['shapes', 'points'];
 }
 
 /** The tool for one series: a line in the legend is read as a line, a marker as points; with no sample known (a

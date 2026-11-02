@@ -312,15 +312,26 @@ export function runBarDetect(
   // ⚑ `region` is the data area, and a bar counts when its CENTRE is inside it (David, 2026-11-02; the drawn reader's
   // rule, engine/barsFromDrawing.ts): the colour is matched over the whole figure, so a bar running past a
   // hand-dragged edge is read to its true end rather than cut off there.
-  const { mask, count } = colorFilter(data, width, height, target, tolerance, mode);
+  // ⚑ What lies wholly outside it (a legend swatch beside the plot) is dropped before the axis is measured and the
+  // pieces joined, and the matched ink is counted inside it, clamped as colorFilter clamps it, as the live preview shows it.
+  const { mask, count: all } = colorFilter(data, width, height, target, tolerance, mode);
+  let count = all;
+  if (region) {
+    count = 0;
+    const x0 = Math.max(0, Math.floor(region.x)), x1 = Math.min(width, Math.floor(region.x + region.width));
+    const y0 = Math.max(0, Math.floor(region.y)), y1 = Math.min(height, Math.floor(region.y + region.height));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) count += mask[y * width + x] ? 1 : 0;
+  }
   if (count < MIN_MATCHED_PIXELS) {
     return { error: 'No pixels matched that colour. Repick the bar colour, or raise the tolerance.' };
   }
   // Membership is only worth its memory when a run might actually be cut.
+  const touches = (b: { bbox: { minX: number; minY: number; maxX: number; maxY: number } }) =>
+    !region || (b.bbox.maxX > region.x && b.bbox.minX < region.x + region.width && b.bbox.maxY > region.y && b.bbox.minY < region.y + region.height);
   const blobs = detectBlobs(mask, width, height, {
     ...opts,
     ...(categories && categories.dividers.length >= 2 ? { trackMembership: true } : {}),
-  });
+  }).filter(touches);
   if (blobs.length === 0) {
     return { error: 'No bars of that size were found. Lower the minimum blob size, or adjust the colour / tolerance.' };
   }

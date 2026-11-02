@@ -2006,9 +2006,10 @@ export function Workspace() {
   }, []);
 
   /** While Auto-extract all series runs, each tool's own commit is held, so the whole run is one undo step. */
-  const holdCommitsRef = useRef(false);
+  // ⚑ Held for one figure's session: a commit on another figure (switched to while Auto-extract runs) is recorded.
+  const holdCommitsRef = useRef<CalibrationSession<CalibratedAxes> | null>(null);
   const commit = useCallback(() => {
-    if (holdCommitsRef.current) {
+    if (holdCommitsRef.current && holdCommitsRef.current === sessionRef.current) {
       bump();
       return;
     }
@@ -6936,7 +6937,7 @@ export function Workspace() {
 
   // `addPlaces`: the places to check are added to those listed (Auto-extract all series reads one colour after another).
   // `otherInks`: the other series' colours, when the legend names them, so their ink is not read as this one's.
-  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number]; addPlaces?: boolean; otherInks?: readonly (readonly [number, number, number])[] } = {}): Promise<{ text: string; error?: boolean; summary?: string; found?: { lines: number; gaps: number; places: number } }> => {
+  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number]; addPlaces?: boolean; otherInks?: readonly (readonly [number, number, number])[] } = {}): Promise<{ text: string; error?: boolean; summary?: string; found?: { lines: number; gaps: number; places: number; created: number[] } }> => {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = readingImage();
     const target = hexToRGB(colour);
@@ -7121,7 +7122,7 @@ export function Workspace() {
     setFindLinesBusy(null);
     commit();
     const placesText = places.length ? `\nPlaces to check:\n${places.map((pl) => `  - ${pl.kind} at (${Math.round(pl.at[0])}, ${Math.round(pl.at[1])}): ${pl.text}`).join('\n')}` : '';
-    return { text: `The Find lines card says: "${summary}"${placesText}`, summary, found: { lines: res.lines.length, gaps, places: places.length } };
+    return { text: `The Find lines card says: "${summary}"${placesText}`, summary, found: { lines: res.lines.length, gaps, places: places.length, created } };
   }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices, readingImage]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
 
@@ -7167,30 +7168,56 @@ export function Workspace() {
       if (!plan.length) return say('No series could be read from the legend - check the legend is marked round its entries, or use the tools below one series at a time.');
       const said: string[] = [];
       let readAny = false;
+      let linesRead = false;
       let anyPlaces = false;
+      // ⚑ Each series is followed by its dataset, not its index: a Find lines step removes the lines a press before
+      // found, and every index after them moves.
+      const datasets = s.getDatasets();
+      const intoOf = plan.map((step) => ('into' in step && step.into !== 'new' ? datasets[step.into]! : null));
+      const indexOf = (ds: Dataset) => s.getDatasets().indexOf(ds);
       // the points now in a series and in the further lines of its colour
       const pointsIn = (indices: number[]) => indices.reduce((n, i) => n + (s.getDatasetInfos()[i]?.pointCount ?? 0), 0);
-      holdCommitsRef.current = true;
+      holdCommitsRef.current = s;
       try {
-        for (const step of plan) {
-          if (sessionRef.current !== s) return;
+        for (const [n, step] of plan.entries()) {
+          if (sessionRef.current !== s) {
+            // the steps already run changed that figure: it is not saved as it was
+            dirtyRef.current = true;
+            return;
+          }
           if ('skip' in step) {
             said.push(`${step.name}: ${step.skip}`);
             continue;
           }
-          let into = step.into;
-          if (into === 'new') into = s.addDataset();
+          // read again, a colour's further lines from the press before go with it, as its series is emptied
+          if (step.tool === 'lines') {
+            const mine = (name: string) => name.startsWith(`${step.name} `) && /^\d+$/.test(name.slice(step.name.length + 1));
+            for (let i = s.getDatasetInfos().length - 1; i >= 0; i--) {
+              if (mine(s.getDatasetInfos()[i]!.name) && s.foundLineId(i) !== null) s.removeDataset(i);
+            }
+          }
+          const planned = intoOf[n];
+          let intoDs = planned && indexOf(planned) >= 0 ? planned : null;
+          if (!intoDs) {
+            const added = s.addDataset();
+            intoDs = s.getDatasets()[added]!;
+          }
+          let into = indexOf(intoDs);
           s.setActiveDataset(into);
-          if ((s.getDatasetInfos()[into]?.pointCount ?? 0) > 0) s.clearPoints();
+          if ((s.getDatasetInfos()[into]?.pointCount ?? 0) > 0) {
+            s.clearPoints();
+            intoDs = s.getDatasets()[into]!; // emptied, it is a fresh dataset
+          }
           s.renameDataset(into, step.name);
           s.setDatasetColor(into, step.colour);
           const hex = `#${step.colour.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
           if (step.tool === 'lines') {
-            const before = s.getDatasetInfos().length;
             const otherInks = plan.flatMap((o) => ('colour' in o && o !== step ? [o.colour] : []));
-            const res = await findLinesWith(hex, { addPlaces: readAny, otherInks });
+            // the places of the first lines read replace those listed; each after adds to them
+            const res = await findLinesWith(hex, { addPlaces: linesRead, otherInks });
+            into = indexOf(intoDs);
             // further lines of the same colour are named after it, and all keep the legend's colour
-            const extras = s.getDatasetInfos().slice(before).map((d) => d.index);
+            const extras = (res.found?.created ?? []).filter((i) => i !== into);
             extras.forEach((i, n) => {
               s.renameDataset(i, `${step.name} ${n + 2}`);
               s.setDatasetColor(i, step.colour);
@@ -7200,7 +7227,7 @@ export function Workspace() {
             // one short line per series (David, 2026-11-02); the tool's own sentence when it read nothing, to say why
             said.push(res.found && !res.error ? autoExtractLine(step.name, { ...res.found, points: pointsIn([into, ...extras]) }) : `${step.name}: ${res.summary ?? res.text}`);
             if (res.found?.places) anyPlaces = true;
-            if (!res.error) readAny = true;
+            if (!res.error) readAny = linesRead = true;
           } else {
             colorTraceSaidRef.current = '';
             colorTraceWith(hex, step.tool === 'points' ? 'scatter' : 'curve');
@@ -7210,9 +7237,12 @@ export function Workspace() {
           }
         }
       } finally {
-        holdCommitsRef.current = false;
+        holdCommitsRef.current = null;
       }
-      if (sessionRef.current !== s) return;
+      if (sessionRef.current !== s) {
+        dirtyRef.current = true;
+        return;
+      }
       commit();
       setAutoExtractReport({ on: s, lines: [...said, autoExtractFooter(anyPlaces)] });
       if (!readAny) setOcrError('No series could be read: none of the legend’s colours was found inside the data area.');
@@ -10456,6 +10486,7 @@ export function Workspace() {
                 canAdd: !!axes,
                 onRenameDraft: handleRenameDraft,
                 onCommitRename: handleCommitRename,
+                nameNotice,
               }}
               colourCrop={colourCrop}
               tupleNoun={tupleNoun}

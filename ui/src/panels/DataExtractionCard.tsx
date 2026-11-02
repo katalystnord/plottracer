@@ -33,6 +33,8 @@ export interface DataExtractionCardProps {
     canAdd: boolean;
     onRenameDraft: (index: number, name: string) => void;
     onCommitRename: (index: number, name: string) => void;
+    /** A refused rename, said here where it was typed, as the series panel says it under its own field. */
+    nameNotice: string | null;
   };
   /** What one captured shape is called on this type - "bar", "bin", "box". */
   tupleNoun: string;
@@ -376,6 +378,7 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
           </MenuItem>
         ))}
       </Menu>
+      {series.nameNotice && <WarningLine id="extract-series-name-error" text={series.nameNotice} />}
       {grid(
         <>
           {toolButton('find-lines')}

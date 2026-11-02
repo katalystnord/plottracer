@@ -25,6 +25,11 @@ describe('Auto-extract all series: one step per series the legend names', () => 
     expect(plan.map((s) => ('tool' in s ? s.tool : s.skip))).toEqual(['lines', 'points']);
   });
 
+  it('on a polar figure, which Find lines does not read, a line entry is read by Colour trace as a curve and a marker entry as points', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('polar'), [entry('Fit', BLUE, 'line'), entry('Measured', RED, 'marker')], one);
+    expect(plan.map((s) => ('tool' in s ? s.tool : s.skip))).toEqual(['shapes', 'points']);
+  });
+
   it('on a bar chart every series is read as the type reads its shapes', () => {
     const plan = planAutoExtract(getAxesTypeConfig('bar'), [entry('2019', BLUE, 'swatch'), entry('2020', RED, 'swatch')], one);
     expect(plan.map((s) => ('tool' in s ? s.tool : s.skip))).toEqual(['shapes', 'shapes']);

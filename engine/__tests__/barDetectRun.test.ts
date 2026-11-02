@@ -86,4 +86,14 @@ describe('the bar reader searches the data area (v2.7, David 2026-11-02)', () =>
     const crossing = result.boxes.find((b) => Math.min(b.start.x, b.end.x) === 20)!;
     expect(Math.min(crossing.start.y, crossing.end.y)).toBe(5);
   });
+
+  it('a same-colour swatch wholly outside the data area is not counted as matched ink', () => {
+    const w = 60, h = 60;
+    const img = whiteImage(w, h);
+    fillBlock(img, w, 4, 20, 6, 30, BLUE); // the bar, 180 px
+    fillBlock(img, w, 50, 2, 8, 8, BLUE); // a legend swatch beside the plot, 64 px
+    const result = runBarDetect(img, w, h, BLUE, 40, 'foreground', { x: 0, y: 15, width: 45, height: 45 });
+    if ('error' in result) throw new Error(result.error);
+    expect(result.matched).toBe(180);
+  });
 });

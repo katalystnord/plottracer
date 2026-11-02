@@ -895,6 +895,8 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
     let k = P.length - 1;
     while (k > 0 && norm(sub(p, P[k]!)) < 4 * lw + 6) k--;
     const t = unit(sub(p, P[k]!));
+    // a piece with no direction to go on (it doubles back to where it began) stays a place, as before
+    if (!t[0] && !t[1]) return true;
     return out.some((M, mi) => mi !== li && M.points.some((q) => {
       const d = sub(q, p), along = d[0] * t[0] + d[1] * t[1], across = Math.abs(d[0] * t[1] - d[1] * t[0]);
       return along > 0 && across <= along * Math.tan(O.aheadAngle) + 2 * lw;

@@ -12982,8 +12982,9 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
 
   /** A drawn line chart, calibrated as the prompts ask, its legend marked with the Legend card from its truth box,
    * then [Auto-extract all series] on the Data extraction card. Returns what the card says, one line per series. */
-  async function autoExtractDrawn(name: string): Promise<string[]> {
+  async function autoExtractDrawn(name: string, first?: () => Promise<void>): Promise<string[]> {
     await openDrawnFigure(name);
+    if (first) await first();
     const [lx0, ly0, lx1, ly1] = (vTruth(name) as unknown as { legend_box: [number, number, number, number] }).legend_box;
     await page.getByTestId('mode-legend').click();
     await page.getByTestId('legend-mark').click();
@@ -13022,6 +13023,39 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // the two drawn lines, once each
     expect(series.filter((t) => /\(80\)/.test(t))).toHaveLength(2);
   }, 180000);
+
+  it('Auto-extract all series pressed twice: a colour read as two lines comes back as the same two series, never a third', async () => {
+    await autoExtractDrawn('lines-legend');
+    const once = await page.getByTestId('series-select').locator('option').allTextContents();
+    expect(once.filter((t) => /\(80\)/.test(t))).toEqual(['series 1 (80)', 'series 1 2 (80)']);
+    await page.getByTestId('auto-extract-all').click();
+    await page.getByTestId('auto-extract-said').waitFor({ timeout: 60000 });
+    await expect.poll(async () => (await page.getByTestId('series-select').locator('option').allTextContents()).join(' | '), { timeout: 60000 }).toBe(once.join(' | '));
+  }, 180000);
+
+  it('Auto-extract all series after a Find lines press: the lines found before are replaced, and every line found now is named after its legend entry', async () => {
+    await autoExtractDrawn('lines-legend', async () => {
+      // the lines found by hand first, as the card's Find lines finds them
+      const L0 = vTruth('lines-legend').lines[0]!.points;
+      const p = vImg(L0[Math.floor(L0.length * 0.5)]!);
+      await page.getByTestId('color-trace-eyedropper').click();
+      await clickImagePixel(p[0], p[1]);
+      await page.getByTestId('find-lines-run').click();
+      // the legend is not marked yet, so its two sample lines are found too
+      await expect.poll(() => textOf('find-lines-summary').catch(() => ''), { timeout: 30000 }).toMatch(/4 lines found/);
+    });
+    const series = await page.getByTestId('series-select').locator('option').allTextContents();
+    expect(series.filter((t) => /\(80\)/.test(t))).toEqual(['series 1 (80)', 'series 1 2 (80)']);
+  }, 180000);
+
+  it('a series name refused on the Data extraction card is said on the card, where it was typed', async () => {
+    await openDrawnFigure('lines-legend');
+    await page.getByTestId('add-series').click();
+    const field = page.getByTestId('extract-series-name');
+    await field.fill('Series 1');
+    await field.press('Enter');
+    await expect.poll(() => textOf('extract-series-name-error').catch(() => ''), { timeout: 5000 }).toMatch(/Kept the previous name\.$/);
+  }, 120000);
 
   it('Auto-extract all series with no legend marked says so in the bottom bar, with the warning triangle', async () => {
     await openDrawnFigure('lines-legend-colour');
