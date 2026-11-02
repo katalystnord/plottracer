@@ -29,15 +29,12 @@ export interface SeriesPanelProps {
   nameNotice: string | null;
   colorAnchor: HTMLElement | null;
   onColorAnchorChange: (anchor: HTMLElement | null) => void;
-  onAdd: () => void;
   onSelect: (index: number) => void;
   onRemove: (index: number) => void;
   onRenameDraft: (index: number, name: string) => void;
   onCommitRename: (index: number, name: string) => void;
   /** Takes a "#rrggbb" string - the swatches and the hex field both speak hex. */
   onSetColor: (index: number, hex: string) => void;
-  /** Adding a series needs axes to place points against. */
-  canAddSeries: boolean;
   /** The eyedropper needs something to sample. */
   canvasHasImage: boolean;
   onCommitPendingEdit: () => void;
@@ -92,13 +89,11 @@ export function SeriesPanel(props: SeriesPanelProps) {
     nameNotice,
     colorAnchor,
     onColorAnchorChange,
-    onAdd,
     onSelect,
     onRemove,
     onRenameDraft,
     onCommitRename,
     onSetColor,
-    canAddSeries,
     join,
     canvasHasImage,
     onCommitPendingEdit,
@@ -111,7 +106,10 @@ export function SeriesPanel(props: SeriesPanelProps) {
       {/* A dropdown to pick the active series (scales to many series, unlike
           the old chip row), with the active series' own controls beside it:
           recolor, rename, delete. New points/actions apply to the active
-          series; the spreadsheet below shows every series at once. */}
+          series; the spreadsheet below shows every series at once.
+          ⚑ No [+ Add] here since v2.7 (David, 2026-11-02): adding a series is
+          making something to extract into, so it is on the Data extraction
+          card; picking, showing and removing stay with the record. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <select
           data-testid="series-select"
@@ -136,9 +134,6 @@ export function SeriesPanel(props: SeriesPanelProps) {
             </option>
           ))}
         </select>
-        <button type="button" data-testid="add-series" onClick={onAdd} disabled={!canAddSeries} title="Add a new series">
-          + Add
-        </button>
       </div>
       {activeInfo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

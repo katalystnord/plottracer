@@ -77,7 +77,6 @@ const PER_FIGURE_RESETS = [
   'setSelectedDividerId',
   'setActivePointIndex',
   'setSelectedPointIndices',
-  'setColorTraceRegion',
   'setHeldBackBars', // shapes the outgoing figure's trace refused to file
   'setDataValueInputs',
   'setSegmentFillError',

@@ -1434,6 +1434,8 @@ export function Workspace() {
   // Fill's connectivity structurally cannot. Default black: technical figures are
   // often B&W. `colorTraceInfo` carries the match count (or an error) as feedback.
   const [colorTraceColor, setColorTraceColor] = useState('#000000');
+  /** Where on which figure the colour was last picked, for the crop beside it (David, 2026-11-02); null when typed. */
+  const [colourPickAt, setColourPickAt] = useState<{ x: number; y: number; on: CalibrationSession<CalibratedAxes> } | null>(null);
   const [colorTraceTolerance, setColorTraceTolerance] = useState(settings.colourTolerance);
   const [colorTraceInfo, setColorTraceInfo] = useState<string | null>(null);
   const setColorTraceInfoState = setColorTraceInfo;
@@ -1477,7 +1479,6 @@ export function Workspace() {
   // Drawn by a DIRECT marquee drag on the image (v1.2): no arm-first toggle -- the
   // drag is live whenever By-colour is active (bar the eyedropper), unifying it
   // with the Select tool's box gesture. Cleared via the ✕ button.
-  const [colorTraceRegion, setColorTraceRegion] = useState<FilterRegion | null>(null);
   // Find lines (v2.6) - declared here, beside the trace region, because the
   // figure-switch reset (resetPerFigureUI) and the undo sync (syncAfterRestore)
   // below clear the places and the notices.
@@ -2063,10 +2064,6 @@ export function Workspace() {
         }))
       );
       setActivePointIndex(null);
-      // A crop/rotate/flip/deskew changes the pixel space, so the By-colour trace
-      // region (in the OLD pixels, and not even axis-aligned after a rotate) is
-      // stale -- clear it so the next trace re-derives it (2026-07-22 audit C).
-      setColorTraceRegion(null);
       // Places to check are image pixels too (v2.6)
       setLinePlaces([]);
       // captureDoc reads the just-baked src via getImageDataURL's synchronous
@@ -3398,7 +3395,6 @@ export function Workspace() {
       // Selections index into a point set that the incoming figure does not have.
       setActivePointIndex(null);
       setSelectedPointIndices([]); setLineSelection([]);
-      setColorTraceRegion(null); // a different figure -> old trace region is stale (audit A1)
       setLinePlaces([]);
       setFindLinesSummary(null);
       setFillLevelsNotice(null);
@@ -3530,20 +3526,11 @@ export function Workspace() {
       const currentSrc = imageCanvasRef.current?.getImageDataURL() ?? null;
       if (snapshot.imageSrc && snapshot.imageSrc !== currentSrc) {
         imageCanvasRef.current?.loadImageFromSrc(snapshot.imageSrc, imageCanvasRef.current?.getImageFileName() ?? undefined);
-        // v2.0 pre-launch audit: every FORWARD image-changing path (crop/
-        // rotate/flip/deskew) already clears the By-colour trace region here
-        // (audit C, 2026-07-22) because it's stored in raw pixel coordinates
-        // that are meaningless against a different image -- restoreDoc, the
-        // one function ALL undo/redo goes through across an image edit, was
-        // the one entrance that didn't. Undo/redo back across an edit left a
-        // stale region that silently searched the wrong pixel space on the
-        // next By-colour trace.
-        setColorTraceRegion(null);
       }
       syncAfterRestore();
       bump();
     },
-    [applyMeasurements, applyMeasureScale, applyProvenance, restoreHeatmapGrid, setPending, setColorTraceRegion, syncAfterRestore, bump]
+    [applyMeasurements, applyMeasureScale, applyProvenance, restoreHeatmapGrid, setPending, syncAfterRestore, bump]
   );
   // ⚑ Undo/redo wait while Find lines is reading labels (audit B2): its result
   // is applied in one step when the reads are in, and an undo underneath it
@@ -3815,12 +3802,7 @@ export function Workspace() {
       sessionRef.current.setImageHeight(imageHeightRef.current);
       setActivePointIndex(null);
       setAxesTypeId(id);
-      // A replaced session means a new figure/calibration, so the By-colour trace
-      // region (the old calibration box, in the old pixel space) is stale - clear
-      // it here so every session-swap path is covered, not just resetDocument
-      // (2026-07-22 audit A1).
-      setColorTraceRegion(null);
-      // ...and so is Find lines' memory of what it found, and where to check (v2.6)
+      // A replaced session means a new figure: Find lines' memory of what it found, and where to check, is stale (v2.6)
       setLinePlaces([]);
       // ⚑ The import notice describes the project that was OPENED. A new session
       // means that figure is gone, and a true sentence about the wrong subject is
@@ -4215,6 +4197,7 @@ export function Workspace() {
             // Find lines needs the line's INK, and the pixel under a pipette on a
             // thin line is usually a pale edge - see sampleInkRgb.
             const rgb = (route.target === 'trace' && mode === 'find-lines') || route.target === 'find-one' ? sampleInkRgb(imageData, px, py) : samplePixelRgb(imageData, px, py);
+            if (route.target === 'trace' || route.target === 'find-one') setColourPickAt({ x: px, y: py, on: sessionRef.current });
             if (route.target === 'find-one') {
               // Find this line (role-play 2026-10-12): the click gives the colour
               // AND says which line - only that one is kept.
@@ -6586,14 +6569,6 @@ export function Workspace() {
     return session.getDataArea();
   }, [session]);
 
-  useEffect(() => {
-    if (mode !== 'color-trace') return;
-    // On ENTERING By-colour mode, pre-fill the region with the data area - only when nothing is set yet, so a
-    // user-drawn or deliberately cleared region wins. It renders as the existing, adjustable "Restrict to a box".
-    // ⚠️ Copied on entry, so a data area changed afterwards is not followed until the region is cleared.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setColorTraceRegion((cur) => cur ?? defaultTraceRegion());
-  }, [mode, defaultTraceRegion]);
 
   // Auto-trace the active series by colour (checkpoint 118; scatter mode 122).
   // Needs a calibrated axes (the points are only meaningful once pixels map to
@@ -6661,7 +6636,7 @@ export function Workspace() {
         target,
         colorTraceTolerance,
         'foreground',
-        colorTraceRegion ?? undefined
+        defaultTraceRegion() ?? undefined
       );
       if ('error' in result) {
         setColorTraceInfo(result.error);
@@ -6721,7 +6696,7 @@ export function Workspace() {
       const readNow = pageDrawingReadRef.current;
       if (kindNow && (kindNow.kind === 'drawn' || kindNow.kind === 'partly') && readNow) {
         const placed = placeDrawing(provenanceRef.current, readNow.drawing, readNow.text);
-        const r = colorTraceRegion;
+        const r = defaultTraceRegion();
         const region = r ? { x0: r.x, y0: r.y, x1: r.x + r.width, y1: r.y + r.height } : { x0: 0, y0: 0, x1: width, y1: height };
         const masks = session.getNotDataRegions().map((m) => ({ x0: m.x, y0: m.y, x1: m.x + m.width, y1: m.y + m.height }));
         const drawn = placed ? barsFromDrawing(placed, target, region, { categoryAxis: declared?.categoryAxis ?? 'x', masks, ...(baseline ? { baseline } : {}) }) : null;
@@ -6735,7 +6710,7 @@ export function Workspace() {
           return;
         }
       }
-      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined);
+      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined);
       if ('error' in result) {
         setColorTraceInfo(result.error);
         return;
@@ -6776,7 +6751,7 @@ export function Workspace() {
       const read = pageDrawingReadRef.current;
       if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
         const placed = placeDrawing(provenanceRef.current, read.drawing, read.text);
-        const r = colorTraceRegion;
+        const r = defaultTraceRegion();
         const region = r ? { x0: r.x, y0: r.y, x1: r.x + r.width, y1: r.y + r.height } : { x0: 0, y0: 0, x1: width, y1: height };
         const masks = session.getNotDataRegions().map((m) => ({ x0: m.x, y0: m.y, x1: m.x + m.width, y1: m.y + m.height }));
         const markers = placed ? markersFromDrawing(placed, target, region, masks) : [];
@@ -6791,7 +6766,7 @@ export function Workspace() {
           return;
         }
       }
-      const result = runBlobDetect(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, { minDiameter: colorTraceMinBlob });
+      const result = runBlobDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob });
       if ('error' in result) {
         setColorTraceInfo(result.error);
         return;
@@ -6802,7 +6777,7 @@ export function Workspace() {
       commit();
       return;
     }
-    const result = runColorTrace(data, width, height, target, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined, settingsRef.current.pointsPerTrace);
+    const result = runColorTrace(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, settingsRef.current.pointsPerTrace);
     if ('error' in result) {
       setColorTraceInfo(result.error);
       return;
@@ -6811,8 +6786,12 @@ export function Workspace() {
     adoptTracedColour();
     setColorTraceInfo(curveTraceReport(result.points.length, result.matched, width, height));
     commit();
-  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, colorTraceRegion, commit, setColorTraceInfoState, readingImage]);
-  const handleColorTrace = useCallback(() => colorTraceWith(colorTraceColor, colorTraceShape), [colorTraceWith, colorTraceColor, colorTraceShape]);
+  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, defaultTraceRegion, commit, setColorTraceInfoState, readingImage]);
+  // ⚑ Where Find lines reads the lines, Colour trace reads markers (David, 2026-11-02).
+  const handleColorTrace = useCallback(
+    () => colorTraceWith(colorTraceColor, findLinesKind(config.id) ? 'scatter' : colorTraceShape),
+    [colorTraceWith, colorTraceColor, colorTraceShape, config.id]
+  );
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
   // open, filter the native-resolution pixels by the current colour + tolerance
@@ -6836,13 +6815,39 @@ export function Workspace() {
     // the axes lit up and read as "this is what your trace will find" (F38).
     const previewTarget = hexToRGB(colorTraceColor);
     if (!previewTarget) return null;
-    const { mask, count } = colorFilter(data, width, height, previewTarget, colorTraceTolerance, 'foreground', colorTraceRegion ?? undefined);
+    const { mask, count } = colorFilter(data, width, height, previewTarget, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined);
     const img = context.createImageData(width, height);
     img.data.set(maskToRGBA(mask, width, height, COLOR_TRACE_PREVIEW_RGBA));
     context.putImageData(img, 0, 0);
     return { canvas, count, pct: (count / (width * height)) * 100 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, colorTraceColor, colorTraceTolerance, colorTraceRegion, canvasHasImage, version]);
+  }, [mode, colorTraceColor, colorTraceTolerance, defaultTraceRegion, canvasHasImage, version]);
+
+  /** The figure where the colour was picked, 15 pixels square, shown beside the colour (David, 2026-11-02): what is
+   * there - hatching, a dash, a marker - as drawn. It claims nothing; the tools read the colour only. */
+  const colourCrop = useMemo(() => {
+    const at = colourPickAt;
+    if (!at || at.on !== session) return null;
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return null;
+    const r = 7, size = 2 * r + 1;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    const out = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const sx = Math.min(img.width - 1, Math.max(0, Math.round(at.x) - r + x));
+        const sy = Math.min(img.height - 1, Math.max(0, Math.round(at.y) - r + y));
+        out.data.set(img.data.subarray((sy * img.width + sx) * 4, (sy * img.width + sx) * 4 + 4), (y * size + x) * 4);
+      }
+    }
+    ctx.putImageData(out, 0, 0);
+    return c.toDataURL();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colourPickAt, session, version]);
 
   /**
    * Do the readings already in this series come from a DIFFERENT colour?
@@ -10442,22 +10447,34 @@ export function Workspace() {
               mode={mode}
               config={config}
               applies={dataExtractionToolsFor(config)}
-              into={{ name: activeInfo?.name ?? '', color: activeInfo ? rgbToHex(activeInfo.color) : theme.color.border.regular }}
+              series={{
+                infos: datasetInfos,
+                activeIndex: activeDatasetIndex,
+                nameDraft,
+                onSelect: handleSelectDataset,
+                onAdd: handleAddDataset,
+                canAdd: !!axes,
+                onRenameDraft: handleRenameDraft,
+                onCommitRename: handleCommitRename,
+              }}
+              colourCrop={colourCrop}
               tupleNoun={tupleNoun}
               onPickTool={pickExtractionTool}
               segmentFillThreshold={segmentFillThreshold}
               onSegmentFillThresholdChange={setSegmentFillThreshold}
               segmentFillError={segmentFillError}
               colorTraceColor={colorTraceColor}
-              onColorTraceColorChange={setColorTraceColor}
+              onColorTraceColorChange={(hex) => {
+                setColorTraceColor(hex);
+                // a typed colour was picked nowhere: no crop to show
+                setColourPickAt(null);
+              }}
               colorTraceTolerance={colorTraceTolerance}
               onColorTraceToleranceChange={setColorTraceTolerance}
               colorTraceShape={colorTraceShape}
               onColorTraceShapeChange={setColorTraceShape}
               colorTraceMinBlob={colorTraceMinBlob}
               onColorTraceMinBlobChange={setColorTraceMinBlob}
-              colorTraceRegion={colorTraceRegion}
-              onClearRegion={() => setColorTraceRegion(null)}
               colorTraceInfo={colorTraceInfo}
               colorTraceMask={colorTraceMask}
               onTrace={handleColorTrace}
@@ -10644,22 +10661,16 @@ export function Workspace() {
             setCropRect(r);
           }}
           cropRect={mode === 'image-edit' ? cropRect : null}
-          // Direct marquee (v1.2): the region drag is live whenever By-colour is
-          // active, EXCEPT while the eyedropper is armed (that click samples a
-          // colour). A bare click in this mode is already a no-op (see
-          // handleImageClick), so an always-live drag clobbers nothing.
-          regionMode={!legendMarking && (mode === 'color-trace' || (mode === 'eraser' && !!findLinesKind(config.id))) && eyedropper === null}
+          // The Eraser's box over wrong bits of found lines. (Colour trace's own box went in v2.7: the data area is the
+          // only search box, David 2026-11-02.)
+          regionMode={!legendMarking && mode === 'eraser' && !!findLinesKind(config.id) && eyedropper === null}
           // v2.0 pre-launch audit: the click-vs-drag guard (a zero-area region
           // would match nothing) is now ImageCanvas.tsx's own job, consolidated
           // with crop/select's identical guard -- see its endDrag comment.
           onRegionRect={(r) => {
-            if (mode === 'eraser') {
-              // a box over wrong bits: every line's points inside it go, in one undo
-              if (session.eraseLinesInRect(r) > 0) commit();
-              else bump();
-              return;
-            }
-            setColorTraceRegion(r);
+            // a box over wrong bits: every line's points inside it go, in one undo
+            if (session.eraseLinesInRect(r) > 0) commit();
+            else bump();
           }}
           // a selection across lines: the points selected on lines other than the
           // active one, ringed exactly as a selected point of the active line is
@@ -10671,7 +10682,6 @@ export function Workspace() {
                   .filter((p): p is NonNullable<typeof p> => !!p)
               : null
           }
-          regionRect={mode === 'color-trace' ? colorTraceRegion : null}
           // ⚑ Only while the tool that produced them is open. The offer lives in
           // the Auto-extract card, so outlines drawn with that card shut would
           // point at something with nothing on screen to act on them.
@@ -11159,13 +11169,11 @@ export function Workspace() {
         nameNotice={nameNotice}
         colorAnchor={colorAnchor}
         onColorAnchorChange={setColorAnchor}
-        onAdd={handleAddDataset}
         onSelect={handleSelectDataset}
         onRemove={handleRemoveDataset}
         onRenameDraft={handleRenameDraft}
         onCommitRename={handleCommitRename}
         onSetColor={handleSetDatasetColor}
-        canAddSeries={!!axes}
         canvasHasImage={canvasHasImage}
         onCommitPendingEdit={commitPendingEdit}
         onArmEyedropper={setEyedropper}

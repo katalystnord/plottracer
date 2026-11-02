@@ -581,6 +581,17 @@ async function pickTool(tool: 'find-lines' | 'color-trace' | 'segment-fill' | 'i
   await page.locator(`[data-testid="extract-tool-${tool}"][aria-pressed="true"]`).waitFor({ state: 'visible' });
 }
 
+/** [+ Add] is on the Data extraction card since v2.7 (David, 2026-11-02): open the card if it is not, as a user
+ * would, and return the button. */
+async function addSeriesButton() {
+  if ((await page.getByTestId('data-extraction-card').count()) === 0) await page.getByTestId('mode-data-extraction').click();
+  return page.getByTestId('add-series');
+}
+async function addSeries() {
+  await (await addSeriesButton()).click();
+}
+
+
 // The automatic tools by their old short names, which the tests below were written against.
 async function selectAutoExtract(mech: 'flood' | 'colour' | 'guide' | 'find') {
   await pickTool(({ flood: 'segment-fill', colour: 'color-trace', guide: 'interpolate', find: 'find-lines' } as const)[mech]);
@@ -869,7 +880,7 @@ describe('Workspace: tool mode', () => {
       expect(await page.getByTestId(`extract-tool-${tool}`).isDisabled(), tool).toBe(false); // XY: every tool applies
     }
     expect(await textOf('tips-bar')).toMatch(/pick a tool in the card/i);
-    expect(await textOf('data-extraction-into')).toContain('Series 1');
+    expect(await page.getByTestId('extract-series-name').inputValue()).toBe('Series 1');
     await clickAt(250, 175);
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(0);
 
@@ -1495,7 +1506,7 @@ describe('Workspace: Bar axes', () => {
     await clickAt(150, 150);
     await clickAt(180, 180);
     // Series 2: two points.
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await clickAt(220, 220);
     await clickAt(250, 250);
     // Work on Series 1 again, so the ACTIVE series is not the one we click.
@@ -3735,7 +3746,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('series-name').fill('Control');
     await page.getByTestId('series-name').blur();
     await clickAt(250, 175); // Control (5, 5)
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     await page.getByTestId('series-name').fill('Treated');
     await page.getByTestId('series-name').blur();
@@ -4095,7 +4106,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await calibrateXYStandard();
     await clickAt(200, 200);
     await clickAt(300, 180);
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(150);
     await clickAt(220, 150);
     await clickAt(320, 130);
@@ -4212,7 +4223,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // matched to whichever named bar sits nearest along the category axis --
     // proven by the table staying at 2 rows (not growing to 4) with series
     // 2's own values landing in those same two rows.
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     await dragMarker(270, 400, 270, 300);
     await dragMarker(420, 400, 420, 260);
@@ -4542,9 +4553,10 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
     await clickAt(at.lx, at.ly);
     const ink = await page.getByTestId('color-trace-color').inputValue();
     expect(ink).not.toMatch(/^#f{6}$/i);
-    // without a mask the trace finds the curve, so what follows is the mask's doing
+    // without a mask the trace finds the curve, so what follows is the mask's doing (on XY Colour trace reads
+    // markers, v2.7: an unbroken curve is one)
     await page.getByTestId('color-trace-run').click();
-    await expect.poll(() => page.getByTestId('points-table').locator('tbody tr').count()).toBeGreaterThan(5);
+    await expect.poll(() => page.getByTestId('points-table').locator('tbody tr').count()).toBeGreaterThan(0);
     await page.keyboard.press('Control+z');
     await expect.poll(() => page.getByTestId('points-table').locator('tbody tr').count()).toBe(0);
 
@@ -5182,7 +5194,7 @@ describe('Workspace: Curve Fit & Geometry panels (checkpoint 27)', () => {
     await clickAt(600, 400); // dismiss the fly-out
 
     // A brand-new series has no geometry -> the toggle must be back to false.
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(120);
     await page.getByTestId('geometry-trigger').click();
     expect(await page.getByTestId('geometry-closed').isChecked()).toBe(false);
@@ -5378,8 +5390,10 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await page.waitForTimeout(200);
 
     const info = await textOf('color-trace-info');
-    expect(info).toMatch(/Traced [1-9]\d* points/); // a real trace, not "No pixels matched"
+    // on XY Colour trace reads markers (v2.7, David 2026-11-02: lines are Find lines)
+    expect(info).toMatch(/Placed [1-9]\d* points? \(one per marker\)/); // a real trace, not "No pixels matched"
     expect(info).not.toMatch(/that is a lot of the image/); // and not the whole image
+    expect(await page.getByTestId('series-select').locator('option:checked').textContent()).toMatch(/^Series 1 \([1-9]/);
   });
 
   it('shows a live colour-match preview while the card is open, updating with tolerance (checkpoint 121)', async () => {
@@ -5415,15 +5429,15 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     expect(await page.getByTestId('color-trace-preview').count()).toBe(0);
   });
 
-  it('scatter mode reduces the colour mask to one point per blob (checkpoint 122)', async () => {
+  it('on XY Colour trace reads points only, one per marker: no shape to choose, lines are Find lines (checkpoint 122; v2.7)', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
     await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
 
-    // The min-marker-size control is scatter-only: absent for a curve.
-    expect(await page.getByTestId('color-trace-min-blob').count()).toBe(0);
-    await page.getByTestId('color-trace-shape').selectOption('scatter');
+    // David, 2026-11-02: "points only on XY, lines are Find lines" - measured first on spectra, where reading a
+    // line one point per pixel column lost the steep sides and sharp tips (docs/v2.7-workflow-walk.md)
+    expect(await page.getByTestId('color-trace-shape').count()).toBe(0);
     expect(await page.getByTestId('color-trace-min-blob').count()).toBe(1);
 
     // Run the blob detector over the sample's navy curve: it reduces the matched
@@ -5443,120 +5457,32 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     return Number(t.replace(/,/g, '').match(/(\d+) px/)?.[1] ?? '0');
   }
 
-  it('defaults the trace region to the calibration box, and clearing traces the whole image (B1)', async () => {
-    // 2026-07-22 walkthrough: a whole-image trace grabbed the title, axis lines
-    // and tick labels (same colour as the curve), so the traced curve "crept"
-    // outside the plot. The By-colour panel now opens with the region pre-set to
-    // the calibration box - visible and clearable - so the first pass stays in.
+  it('Colour trace searches the data area and has no box of its own: a drag on the figure changes nothing', async () => {
+    // David, 2026-11-02: "the data area is the only search box". Until v2.7 Colour trace kept a second rectangle,
+    // seeded from the data area and redrawn by a drag on the figure.
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await selectAutoExtract('colour');
-    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
     await page.getByTestId('color-trace-color').fill('#1f4e79');
     await page.getByTestId('color-trace-tolerance').fill('160');
     await page.waitForTimeout(150);
-
-    // Region defaulted: the clear (✕) affordance is present (not the "Restrict to
-    // a box" prompt), and the highlighted count is the in-box count.
-    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1);
-    const boxCount = await previewCount();
-    expect(boxCount).toBeGreaterThan(0);
-
-    // Clearing removes the restriction -> whole image, which matches at least as
-    // many pixels (the calibration box is a subset of the image).
-    await page.getByTestId('color-trace-region-clear').click();
-    await page.waitForTimeout(150);
-    const wholeCount = await previewCount();
-    expect(wholeCount).toBeGreaterThanOrEqual(boxCount);
-
-    // With no region, the panel shows the direct-drag HINT, not an arm-first
-    // toggle button (v1.2 direct marquee -- the old "Restrict to a box" toggle is
-    // retired).
-    expect(await page.getByTestId('color-trace-region-hint').isVisible()).toBe(true);
-    expect(await page.getByTestId('color-trace-region').count()).toBe(0);
-
-    // Drawing a smaller box DIRECTLY on the image (no toggle first) restricts
-    // again, below the whole-image count.
-    await refreshCanvasBox();
-    await page.mouse.move(canvasBox.x + 480, canvasBox.y + 160);
-    await page.mouse.down();
-    await page.mouse.move(canvasBox.x + 620, canvasBox.y + 320, { steps: 6 });
-    await page.mouse.up();
-    await page.waitForTimeout(150);
-    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1);
-    expect(await previewCount()).toBeLessThan(wholeCount);
-  });
-
-  it('undo/redo across an image edit clears a By-colour region drawn AFTER the edit (v2.0 audit)', async () => {
-    // Every FORWARD image-changing path (rotate/flip/crop/deskew) already
-    // clears the trace region -- it's stored in raw pixel coordinates,
-    // meaningless against a different image. restoreDoc (the one function
-    // ALL undo/redo goes through) was the one entrance that didn't: rotate
-    // the image (region auto-clears, confirmed below) -> draw a NEW region
-    // in the POST-rotate pixel space -> undo the rotate back to the
-    // PRE-rotate image. Without the fix the stale region survives and would
-    // silently search the wrong pixel space on the next trace.
-    await resetWorkspace('xy');
-    await calibrateXYStandard();
-    await page.getByTestId('mode-image-edit').click();
-    await page.getByTestId('image-edit-rotate-cw').click();
-    await page.waitForTimeout(400);
-
-    await selectAutoExtract('colour');
-    await page.getByTestId('color-trace-region-clear').click(); // start from "no region"
-    await page.waitForTimeout(150);
+    const inArea = await previewCount();
+    expect(inArea).toBeGreaterThan(0);
+    expect(await page.getByTestId('color-trace-region-hint').count()).toBe(0);
     expect(await page.getByTestId('color-trace-region-clear').count()).toBe(0);
-
-    await refreshCanvasBox();
-    await page.mouse.move(canvasBox.x + 480, canvasBox.y + 160);
-    await page.mouse.down();
-    await page.mouse.move(canvasBox.x + 620, canvasBox.y + 320, { steps: 6 });
-    await page.mouse.up();
+    // a drag across part of the figure, which used to restrict the trace to it
+    await dragMarker(250, 160, 390, 240);
     await page.waitForTimeout(150);
-    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(1); // region set, post-rotate space
-
-    await page.keyboard.press('Control+z'); // undo the rotate -> pre-rotate image
-    await page.waitForTimeout(400);
-    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(0); // stale region must not survive
-    expect(await page.getByTestId('color-trace-region-hint').isVisible()).toBe(true);
+    expect(await previewCount()).toBe(inArea);
+    // and the search follows the data area itself: made smaller with the calibration card open (its free top-right
+    // corner; the others carry calibration points), fewer pixels match
+    await page.getByTestId('mode-calibrate').click();
+    await dragMarker(400, 100, 260, 180);
+    await selectAutoExtract('colour');
+    await page.waitForTimeout(150);
+    expect(await previewCount()).toBeLessThan(inArea);
   });
 
-  // v1.2: the trace eyedropper still samples despite the region marquee now being
-  // always-live in By-colour -- the gate excludes the armed eyedropper, so its
-  // click is consumed as a colour sample, not swallowed by a region drag. (Also
-  // the first e2e coverage of the trace eyedropper.)
-  /**
-   * ⚑⚑ THE ARMED-PIPETTE BANNER MUST NOT SIT UNDER THE CALIBRATION CARD.
-   *
-   * ⚠️ FOUND BY DAVID DRIVING THE APP, 2026-09-11, on the first figure he opened
-   * with it: both were anchored top-centre of the canvas (`top: 8` and `top: 10`,
-   * `left: 50%`), and the card has the higher z-index - so the banner's own words
-   * were hidden behind it and only its Cancel stuck out. Neither instrument in
-   * this repo could see that: the unit board does not lay anything out, and the
-   * e2e asserted the banner's TEXT, which is present and readable to a query
-   * whether or not a card is drawn on top of it.
-   *
-   * ⚑ The remedy is where David put it: the bottom, with his own ruling behind it
-   * (*"Hint should be in the hint bar, not in other places"*). This case asserts
-   * the GEOMETRY rather than the position, so it stays true if either element
-   * moves again.
-   */
-  /**
-   * ⚑⚑ THE BANNER MUST NOT SWALLOW A CLICK ON THE FIGURE.
-   *
-   * ⚠️ FOUND BY THE v2.5 PRE-TAG AUDIT, IN THE FIX MADE EARLIER THE SAME DAY.
-   * Moving the banner out from under the calibration card put it over the
-   * bottom-centre of the plot with no `pointerEvents: 'none'` - so while the
-   * pipette is armed, the one gesture the banner asks for is blocked by the
-   * banner itself over a strip of the figure.
-   *
-   * ⚑ THE CODEBASE ALREADY NAMED THIS TRAP THREE TIMES. `ExplodedSliceControl`
-   * says of its own fix: *"Opaque to pointer events it swallowed presses in the
-   * bottom-right of the canvas... Every rail fold-out card is click-through for
-   * precisely this reason. Same trap, third occurrence."* This was the fourth,
-   * and a FIX introduced it.
-   * ▶ An overlay added over the canvas is click-through until proven otherwise.
-   */
   it('⚑⚑ a click lands on the FIGURE through the armed-pipette banner', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
@@ -5617,21 +5543,17 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await selectAutoExtract('colour');
     await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
 
-    // Clear the default calibration-box region, then arm the trace eyedropper.
-    await page.getByTestId('color-trace-region-clear').click();
-    await page.waitForTimeout(80);
     await page.getByTestId('color-trace-eyedropper').click();
     await page.getByTestId('eyedropper-hint').waitFor({ state: 'visible' });
     // The hint is worded for the trace target, not the series eyedropper's copy.
     expect(await textOf('eyedropper-hint')).toMatch(/colour to trace/i);
 
     // Click exposed canvas (clear of the left-docked card and the top hint). The
-    // click is consumed as a sample (the hint detaches) and draws NO region.
+    // click is consumed as a sample (the hint detaches).
     await refreshCanvasBox();
     await clickAt(600, 320);
     await page.waitForTimeout(120);
     expect(await page.getByTestId('eyedropper-hint').count()).toBe(0);
-    expect(await page.getByTestId('color-trace-region-clear').count()).toBe(0);
   });
 
   it('the bundled scatter example traces one point per marker end to end (checkpoint 123)', async () => {
@@ -5644,18 +5566,15 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     await waitForImageFitted();
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(100);
+    // the data area round the example's own plot frame (its truth file's corners), as the card asks first
+    await markDataAreaImage(78, 40, 875, 636);
     await calibrateXYStandard();
 
     // Auto-extract ▸ Scattered points on the navy markers.
     await selectAutoExtract('colour');
     await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
-    // calibrateXYStandard's synthetic box does not bound this example's markers,
-    // so clear the default calibration-box region to detect over the whole image
-    // (the region default itself is exercised in the B1 test above).
-    await page.getByTestId('color-trace-region-clear').click();
     await page.getByTestId('color-trace-color').fill('#1f4e79');
     await page.getByTestId('color-trace-tolerance').fill('60');
-    await page.getByTestId('color-trace-shape').selectOption('scatter');
     await page.getByTestId('color-trace-run').click();
     await page.waitForTimeout(200);
 
@@ -5666,6 +5585,92 @@ describe('Workspace: Auto-trace by colour (checkpoint 118)', () => {
     const rows = await page.getByTestId('points-table').locator('tbody tr').count();
     expect(rows).toBeGreaterThanOrEqual(24);
     expect(rows).toBeLessThanOrEqual(28);
+  });
+});
+
+describe('Workspace: the Data extraction card, top to bottom (v2.7, David 2026-11-02)', () => {
+  const cardText = async () => (await page.getByTestId('data-extraction-card').innerText()).replace(/\s+/g, ' ');
+
+  it('given a calibrated figure, the card reads: Auto-extract, then Series with + Add over the tools, then Trace by hand, then Split a line, with lines between', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // leaves the Data extraction card open
+    const t = await cardText();
+    const order = ['Data extraction', 'Auto-extract all series', 'Reads every series the legend names', 'Find individual series', 'Series:', '+ Add', 'Find lines', 'Colour trace', 'Fill a region', 'Follow guide points', 'Trace by hand', 'Place points', 'Split a line'];
+    let at = -1;
+    for (const w of order) {
+      const i = t.indexOf(w, at + 1);
+      expect(i, `"${w}" after the one before it in: ${t}`).toBeGreaterThan(at);
+      at = i;
+    }
+    // no Into: Auto-extract reads into the series the legend names, and the tools' series is the Series row
+    expect(t).not.toMatch(/Into:/);
+    expect(await page.getByTestId('extract-divider').count()).toBe(3);
+  });
+
+  it('+ Add is on the card and not in the right panel, which keeps its dropdown to pick and show the active series', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // leaves the Data extraction card open
+    expect(await page.getByTestId('data-extraction-card').getByTestId('add-series').count()).toBe(1);
+    expect(await page.getByTestId('add-series').count()).toBe(1);
+    await page.getByTestId('add-series').click();
+    // the right panel shows the new series as active, and the card's Series row names it
+    expect(await page.getByTestId('series-select').locator('option:checked').textContent()).toMatch(/^Series 2/);
+    expect(await page.getByTestId('extract-series-name').inputValue()).toBe('Series 2');
+  });
+
+  it('the Series row is a dropdown renamed on the spot: a name typed there is the series name everywhere, and picking from it makes a series active', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // leaves the Data extraction card open
+    await page.getByTestId('add-series').click();
+    await page.getByTestId('extract-series-name').fill('Control');
+    await page.getByTestId('extract-series-name').press('Enter');
+    expect(await page.getByTestId('series-select').locator('option').allTextContents()).toEqual(['Series 1 (0)', 'Control (0)']);
+    await page.getByTestId('extract-series-open').click();
+    await page.getByTestId('extract-series-option-0').click();
+    expect(await page.getByTestId('extract-series-name').inputValue()).toBe('Series 1');
+    expect(await page.getByTestId('series-select').inputValue()).toBe('0');
+  });
+
+  it('one colour on the card: shown at the bottom while Find lines or Colour trace is picked, the same for both, and not for a tool that reads none', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await pickTool('find-lines');
+    await page.getByTestId('color-trace-color').fill('#1f4e79');
+    expect(await page.getByTestId('extract-colour').count()).toBe(1);
+    // below the tools: the card's last group is the picked tool's
+    const t = await cardText();
+    expect(t.indexOf('Colour:')).toBeGreaterThan(t.indexOf('Split a line'));
+    await pickTool('color-trace');
+    expect(await page.getByTestId('extract-colour').count()).toBe(1);
+    expect(await page.getByTestId('color-trace-color').inputValue()).toBe('#1f4e79');
+    await pickTool('place-point');
+    expect(await page.getByTestId('extract-colour').count()).toBe(0);
+  });
+
+  it('a colour picked from the figure shows the figure where it was picked beside it; a typed colour shows none', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await pickTool('color-trace');
+    expect(await page.getByTestId('color-crop').count()).toBe(0);
+    await page.getByTestId('color-trace-eyedropper').click();
+    await clickAt(600, 320);
+    await expect.poll(() => page.getByTestId('color-crop').count()).toBe(1);
+    expect(await page.getByTestId('color-crop').getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    await page.getByTestId('color-trace-color').fill('#ff0000');
+    expect(await page.getByTestId('color-crop').count()).toBe(0);
+  });
+
+  it('what the picked tool said is at the very bottom of the card', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await pickTool('color-trace');
+    await page.getByTestId('color-trace-color').fill('#1f4e79');
+    await page.getByTestId('color-trace-tolerance').fill('160');
+    await page.getByTestId('color-trace-run').click();
+    await page.getByTestId('color-trace-info').waitFor();
+    expect(await page.getByTestId('extract-said').getByTestId('color-trace-info').count()).toBe(1);
+    const t = await cardText();
+    expect(t.trimEnd().endsWith((await textOf('color-trace-info')).replace(/\s+/g, ' ').trim())).toBe(true);
   });
 });
 
@@ -5708,11 +5713,12 @@ describe('Workspace: analysis panels are floating Popovers (checkpoint 40)', () 
 });
 
 describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
-  it('"+ Add Series" is disabled until calibrated', async () => {
+  it('"+ Add Series" is out of reach until calibrated: it is on the Data extraction card, whose rail button waits for the calibration', async () => {
     await resetWorkspace('xy');
-    expect(await page.getByTestId('add-series').isDisabled()).toBe(true);
+    expect(await page.getByTestId('mode-data-extraction').isDisabled()).toBe(true);
+    expect(await page.getByTestId('add-series').count()).toBe(0);
     await calibrateXYStandard();
-    expect(await page.getByTestId('add-series').isDisabled()).toBe(false);
+    expect(await (await addSeriesButton()).isDisabled()).toBe(false);
   });
 
   it('adding a series switches the active one; each keeps its own points independently', async () => {
@@ -5721,7 +5727,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     await clickAt(250, 175); // Series 1: (5, 5)
     await expectRow([5, 5]);
 
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     // The new series is active and empty (dropdown shows its 0 count); the
     // spreadsheet shows every series at once now, so Series 1's row remains.
@@ -5735,7 +5741,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
   it('renaming and recoloring a series updates that series only', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
 
     // Rename each series via the dropdown + the active-series name field.
@@ -5786,7 +5792,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
   it('removing a series keeps at least one and falls back to a sensible active series', async () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     expect(await page.locator('[data-testid^="series-option-"]').count()).toBe(2);
     expect(await page.getByTestId('series-remove').isVisible()).toBe(true);
@@ -5815,7 +5821,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     await clickAt(250, 175); // Series 1: point 0, auto-selected
     expect(await page.getByTestId('points-table').locator('tbody tr').count()).toBe(1);
 
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     await clickAt(400, 100); // Series 2: point 0, auto-selected, Series 2 now active
 
@@ -5873,7 +5879,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     await page.getByTestId('series-name').blur();
     await clickAt(250, 175); // Control: (5, 5)
 
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     await page.getByTestId('series-name').fill('Treated'); // active series 1
     await page.getByTestId('series-name').blur();
@@ -5908,7 +5914,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(250, 175); // Series 1: (5, 5), local (250,175)
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
 
     // Series 1's point at local (250,175) is now rendered as a non-
@@ -5934,7 +5940,7 @@ describe('Workspace: multi-dataset/series support (checkpoint 30)', () => {
     await resetWorkspace('xy');
     await calibrateXYStandard();
     await clickAt(250, 175); // Series 1: (5, 5)
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     await clickAt(400, 100); // Series 2: (10, 10)
 
@@ -6295,7 +6301,7 @@ describe('Workspace: Undo/Redo (checkpoint 38)', () => {
     await calibrateXYStandard();
     expect(await seriesCount()).toBe(1);
 
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     expect(await seriesCount()).toBe(2);
 
@@ -7508,7 +7514,7 @@ describe('Workspace: Select tool (marquee range-select + bulk delete)', () => {
     // tips bar kept claiming "N selected" and Del acted on the wrong series. This
     // must FAIL without the clear in handleSelectDataset.
     await placeFourPoints(); // 4 points in Series 1
-    await page.getByTestId('add-series').click(); // Series 2 (empty), now active
+    await addSeries(); // Series 2 (empty), now active
     await page.getByTestId('series-select').selectOption('0'); // back to Series 1
 
     await page.getByTestId('mode-select').click();
@@ -8818,9 +8824,10 @@ describe('Workspace: error capture (checkpoint 79)', () => {
 
     // The empty-ACTIVE-series case is still reachable, because the rail gate asks
     // whether ANY series has points while the tip speaks for the active one.
-    // ⚑ "+ Add" keeps the current tool since v2.7 (no tool is picked for the user, David 2026-11-01), so Error
-    // bars is still the tool after it; pressing its rail button again would fold it.
-    await page.getByTestId('add-series').click();
+    // ⚑ "+ Add" is on the Data extraction card since v2.7 (David, 2026-11-02): the user opens it, adds, and goes
+    // back to Error bars.
+    await addSeries();
+    await page.getByTestId('mode-error-bars').click();
     await page.waitForTimeout(100);
     expect(await page.getByTestId('mode-error-bars').getAttribute('aria-pressed')).toBe('true');
     tip = (await textOf('tips-bar')) ?? '';
@@ -9229,7 +9236,7 @@ describe('series names are unique (checkpoint 75)', () => {
     await calibrateXYStandard();
     await page.getByTestId('series-name').fill('Series 2');
     await page.getByTestId('series-name').blur();
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     expect(await page.getByTestId('series-name').inputValue()).toBe('Series 3');
   });
@@ -9239,7 +9246,7 @@ describe('series names are unique (checkpoint 75)', () => {
     await calibrateXYStandard();
     await page.getByTestId('series-name').fill('Control');
     await page.getByTestId('series-name').blur();
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     await page.getByTestId('series-name').fill('Control');
     await page.getByTestId('series-name').blur();
@@ -9256,7 +9263,7 @@ describe('series names are unique (checkpoint 75)', () => {
     await calibrateXYStandard();
     await page.getByTestId('series-name').fill('Control');
     await page.getByTestId('series-name').blur();
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(100);
     await page.getByTestId('series-name').fill('Control'); // no blur
     await page.waitForTimeout(100);
@@ -9805,7 +9812,7 @@ describe('spider charts', () => {
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
     for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
 
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(150);
     await clickAt(...spoke(0, 3, R / 3));
     // Series 2 is active and its cursor has rolled on to Weight, so THAT is the live
@@ -10071,7 +10078,7 @@ describe('spider charts', () => {
     await resetWorkspace('spider');
     await calibrateSpider(['Strength', 'Weight', 'Cost'], ['100', '100', '100']);
     for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 2));
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(150);
     for (let i = 0; i < 3; i++) await clickAt(...spoke(i, 3, R / 4));
 
@@ -12509,13 +12516,14 @@ describe('Workspace: a stacked bar chart', () => {
     const yFor = (v: number) => 400 - v * 30;
     // Series 1, standing on the baseline, two tall.
     await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
-    await clickAt(150, yFor(0));
-    await clickAt(150, yFor(2));
+    // x 230, inside the first category: at x 150 the clicks land on the Data extraction card's Auto-extract button
+    await clickAt(230, yFor(0));
+    await clickAt(230, yFor(2));
     // Series 2, on top of it, three tall.
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(120);
-    await clickAt(150, yFor(2));
-    await clickAt(150, yFor(5));
+    await clickAt(230, yFor(2));
+    await clickAt(230, yFor(5));
 
     // ⚑ Two value columns, so the ids are `...-C` for Base and `...-C-max` for
     // Value - the same pair a Span's two ends use.
@@ -12568,7 +12576,7 @@ describe('Workspace: a contour line carries a level (v2.6)', () => {
     expect(await levelText()).toBe('0.4');
 
     // A second line starts with no level; the first keeps its own.
-    await page.getByTestId('add-series').click();
+    await addSeries();
     await page.waitForTimeout(150);
     expect(await levelText(), 'a new line has no level until one is typed').toBe('');
     await page.getByTestId('series-select').selectOption('0');
@@ -12756,11 +12764,10 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // card on the left (v2.7), which covers the leftmost one at this window size
     const byX = [...red].sort((a, b) => a[0] - b[0]);
     const p = vImg(byX[Math.floor(byX.length / 2)]!);
-    // the card's own By colour mechanism, its eyedropper, its Shape choice, then Trace
+    // the card's own Colour trace, its eyedropper, then Trace (points on XY)
     await page.getByTestId('extract-tool-color-trace').click();
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(p[0], p[1]);
-    await page.getByTestId('color-trace-shape').selectOption('scatter');
     await page.getByTestId('color-trace-run').click();
     // 25 red markers drawn, plus the legend's one sample (no mask set): 26
     await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 26 points (one per marker).');
@@ -12786,7 +12793,6 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.getByTestId('extract-tool-color-trace').click();
     await page.getByTestId('color-trace-eyedropper').click();
     await clickImagePixel(m[0], m[1]);
-    await page.getByTestId('color-trace-shape').selectOption('scatter');
     await page.getByTestId('color-trace-run').click();
     await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 6 points (one per marker). 6 error bars in this colour are not read: they are not data. To capture them, use Error bars (add to a traced series).');
   }, 120000);
@@ -13207,7 +13213,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await pickTool('find-lines');
 
     // a second press says it replaces the first press's lines - and does
-    expect(await textOf('find-lines-run')).toBe('Find lines again');
+    expect(await textOf('find-lines-run')).toBe('Find lines');
+    expect(await page.getByTestId('find-lines-run').getAttribute('title')).toMatch(/^Find the lines again - replaces the \d+ found last time/);
     await page.getByTestId('find-lines-run').click();
     await page.waitForTimeout(300);
     await expect.poll(found, { timeout: 60000 }).toBeGreaterThan(0);
@@ -13505,7 +13512,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await tabs.first().textContent()).toBe('Find lines');
     await page.getByTestId('extract-tool-find-lines').click();
     expect(await textOf('tips-bar')).toMatch(/pick the lines’ colour/);
-    expect(await textOf('find-lines-first-version')).toBe('first version');
+    // no "first version" tag since v2.7 (David, 2026-11-02: the leftovers at the bottom of the card go)
+    expect(await page.getByTestId('find-lines-first-version').count()).toBe(0);
     // Pick the colour the way the card says - with the pipette, on a line. The
     // click lands a pixel off the line's centre, where an anti-aliased line is
     // a pale grey edge (David picked #b3b3b3 that way on the built app); the
@@ -13694,10 +13702,19 @@ describe('Workspace: Settings (v2.7)', () => {
   }, 60000);
 
   it('S7 Points per traced curve caps a By colour trace', async () => {
-    await resetWorkspace('xy');
-    await calibrateXYStandard();
+    // ⚑ on a polar figure: on XY and Contour Colour trace reads markers since v2.7 (lines are Find lines), so its
+    // curve reading, which this caps, is on the types Find lines does not read
+    await resetWorkspace('polar');
+    await clickAt(100, 300);
+    await clickAt(400, 300);
+    await confirmValues(['10', '0']);
+    await clickAt(700, 300);
+    await confirmValues(['20']);
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
     const traced = async (): Promise<number> => {
       await selectAutoExtract('colour');
+      await page.getByTestId('color-trace-shape').selectOption('curve');
       await page.getByTestId('color-trace-color').fill('#1f4e79');
       await page.getByTestId('color-trace-tolerance').fill('160');
       await page.getByTestId('color-trace-run').click();
