@@ -47,12 +47,20 @@ export function runSegmentFill(
   seedX: number,
   seedY: number,
   threshold: number,
-  maxPoints: number = DEFAULT_MAX_POINTS
+  maxPoints: number = DEFAULT_MAX_POINTS,
+  /** The data area (v2.7, David 2026-11-02): the fill spreads only inside it. The whole image when absent. */
+  region?: { x: number; y: number; width: number; height: number }
 ): SegmentFillResult {
   const sx = Math.max(0, Math.min(width - 1, Math.round(seedX)));
   const sy = Math.max(0, Math.min(height - 1, Math.round(seedY)));
+  const bounds = region
+    ? { x0: Math.ceil(region.x), y0: Math.ceil(region.y), x1: Math.floor(region.x + region.width), y1: Math.floor(region.y + region.height) }
+    : undefined;
+  if (bounds && (sx < bounds.x0 || sx >= bounds.x1 || sy < bounds.y0 || sy >= bounds.y1)) {
+    return { error: 'That click is outside the data area. Fill a region reads only inside it: click the curve inside the box, or move the data area’s corners on the calibration card.' };
+  }
 
-  const result = floodFill(data, width, height, sx, sy, threshold);
+  const result = floodFill(data, width, height, sx, sy, threshold, bounds);
   if (result.filled < MIN_FILLED_PIXELS) {
     return { error: 'No curve found at the clicked point. Try clicking closer to the curve, or increase the threshold.' };
   }

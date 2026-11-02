@@ -309,7 +309,10 @@ export function runBarDetect(
    */
   severedBy?: SeveringRule
 ): BarDetectResult {
-  const { mask, count } = colorFilter(data, width, height, target, tolerance, mode, region);
+  // ⚑ `region` is the data area, and a bar counts when its CENTRE is inside it (David, 2026-11-02; the drawn reader's
+  // rule, engine/barsFromDrawing.ts): the colour is matched over the whole figure, so a bar running past a
+  // hand-dragged edge is read to its true end rather than cut off there.
+  const { mask, count } = colorFilter(data, width, height, target, tolerance, mode);
   if (count < MIN_MATCHED_PIXELS) {
     return { error: 'No pixels matched that colour. Repick the bar colour, or raise the tolerance.' };
   }
@@ -402,7 +405,16 @@ export function runBarDetect(
   // front of every consumer.
   const fillLuma = 0.299 * target[0] + 0.587 * target[1] + 0.114 * target[2];
   const axisForOutline = categories?.categoryAxis ?? 'x';
-  const whole = joined.map((b) => ({
+  const centreInside = (b: { bbox: { minX: number; minY: number; maxX: number; maxY: number } }) => {
+    if (!region) return true;
+    const cx = (b.bbox.minX + b.bbox.maxX) / 2, cy = (b.bbox.minY + b.bbox.maxY) / 2;
+    return cx >= region.x && cx <= region.x + region.width && cy >= region.y && cy <= region.y + region.height;
+  };
+  const inside = joined.filter(centreInside);
+  if (inside.length === 0) {
+    return { error: 'No bars of that colour were found inside the data area. Check the colour, or move the data area’s corners on the calibration card.' };
+  }
+  const whole = inside.map((b) => ({
     ...b,
     bbox: extendAcrossOutline(data, width, height, b.bbox, axisForOutline, fillLuma),
   }));

@@ -16,11 +16,13 @@ export interface DataArea {
   height: number;
 }
 
-/** Every graph type that is XY in some form (David: "for all types of graphs which are XY type graphs in some
- * form"): the XY axes (XY, Contour, Histogram, Heatmap) and the bar axes (Bar, Line, Box plot, Candlestick, Stacked
- * bar, Span chart). */
-export function dataAreaApplies(config: { axesKind: string }): boolean {
-  return config.axesKind === 'xy' || config.axesKind === 'bar';
+/**
+ * Where the automatic tools search, on every graph type (David, 2026-11-02: "yes, every graph type gets the data area
+ * first"): the data area. A spider with none (a project from before v2.7) searches the box round its web, as it did;
+ * anything else with none searches the whole figure, as before the data area existed.
+ */
+export function searchArea<R extends DataArea>(dataArea: DataArea | null, spiderWeb: R | null): DataArea | R | null {
+  return dataArea ?? spiderWeb;
 }
 
 /** A real rectangle: finite, with an area. The same rule the file reader applies. */

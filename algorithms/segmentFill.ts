@@ -47,8 +47,12 @@ export function floodFill(
   height: number,
   seedX: number,
   seedY: number,
-  threshold: number
+  threshold: number,
+  /** Pixels the fill may spread to, [x0, x1) × [y0, y1); the whole image when absent. */
+  bounds?: { x0: number; y0: number; x1: number; y1: number }
 ): FloodFillResult {
+  const bx0 = Math.max(0, bounds?.x0 ?? 0), by0 = Math.max(0, bounds?.y0 ?? 0);
+  const bx1 = Math.min(width, bounds?.x1 ?? width), by1 = Math.min(height, bounds?.y1 ?? height);
   const idx = (seedY * width + seedX) * 4;
   const sr = data[idx]!;
   const sg = data[idx + 1]!;
@@ -79,7 +83,7 @@ export function floodFill(
     ];
     for (let i = 0; i < neighbours.length; i++) {
       const [nx, ny] = neighbours[i]!;
-      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      if (nx < bx0 || nx >= bx1 || ny < by0 || ny >= by1) continue;
       const vi = ny * width + nx;
       if (seen[vi]) continue;
       seen[vi] = 1; // examined -- regardless of the verdict below

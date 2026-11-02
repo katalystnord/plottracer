@@ -4,7 +4,10 @@ import { serializeProject, deserializeProject } from '../projectFile.js';
 import type { XYAxes } from '../../core/axes/xy.js';
 import { dataAreaCornerMarkers, dataAreaCornerFromId, regionCornerFromId } from '../regionHandles.js';
 import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
-import { dataAreaApplies } from '../dataArea.js';
+import { searchArea } from '../dataArea.js';
+import { Calibration } from '../../core/calibration.js';
+import { Dataset } from '../../core/dataset.js';
+import { PolarAxes } from '../../core/axes/polar.js';
 
 /**
  * The data area (v2.7; David 2026-11-01, docs/v2.7-workflow-walk.md, "The data area, apart from the calibration"):
@@ -174,16 +177,28 @@ describe('the data area keeps corners that can be moved', () => {
   });
 });
 
-describe('which graph types have a data area', () => {
-  it('every type that is XY in some form', () => {
-    for (const id of ['xy', 'contour', 'histogram', 'heatmap', 'bar', 'categorical', 'boxplot', 'candlestick', 'stacked', 'span']) {
-      expect(dataAreaApplies(config(id)), id).toBe(true);
-    }
+describe('every graph type gets the data area first (David, 2026-11-02)', () => {
+  it('a spider searches its data area, not the box worked out from its web', () => {
+    const web = { x: 0, y: 0, width: 500, height: 500 };
+    expect(searchArea(AREA, web)).toEqual(AREA);
   });
 
-  it('not polar, ternary, pie, spider, map or the circular chart recorder', () => {
-    for (const id of ['polar', 'ternary', 'pie', 'spider', 'map', 'ccr']) {
-      expect(dataAreaApplies(config(id)), id).toBe(false);
-    }
+  it('a spider project from before v2.7, with no data area, still searches round its web', () => {
+    const web = { x: 0, y: 0, width: 500, height: 500 };
+    expect(searchArea(null, web)).toEqual(web);
+  });
+
+  it('no data area and no web: the whole figure, as before v2.7', () => {
+    expect(searchArea(null, null)).toBeNull();
+  });
+
+  it('a polar project saved before v2.7 opens with no data area: its points are no box round the data, and it searched the whole figure', () => {
+    const cal = new Calibration(2);
+    for (const [px, py, dx, dy] of [[200, 200, '', ''], [300, 200, '5', '0'], [200, 50, '10', '']] as const) cal.addPoint(px, py, dx, dy);
+    const axes = new PolarAxes();
+    expect(axes.calibrate(cal, true, false, false)).toBe(true);
+    const s = new CalibrationSession(config('polar'));
+    s.loadCalibrated(axes as never, [new Dataset(2)], undefined, undefined, [], null);
+    expect(s.getDataArea()).toBeNull();
   });
 });

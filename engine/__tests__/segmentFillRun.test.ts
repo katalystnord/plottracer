@@ -84,3 +84,27 @@ describe('runSegmentFill', () => {
     expect(result.filled).toBe(5); // stops at the black/red boundary
   });
 });
+
+describe('Fill a region searches the data area (v2.7, David 2026-11-02: "every graph type gets the data area first")', () => {
+  const width = 40, height = 3;
+  const line = () => {
+    const data = makeImage(width, height, [255, 255, 255]);
+    for (let x = 0; x < width; x++) setPixel(data, width, x, 1, [0, 0, 0]);
+    return data;
+  };
+  const area = { x: 10, y: 0, width: 20, height: 3 };
+
+  it('a curve running out of the data area is filled only inside it', () => {
+    const result = runSegmentFill(line(), width, height, 20, 1, 50, 500, area);
+    if ('error' in result) throw new Error(result.error);
+    const xs = result.points.map((p) => p.x);
+    expect(Math.min(...xs)).toBe(10);
+    expect(Math.max(...xs)).toBe(29);
+  });
+
+  it('a click outside the data area fills nothing, and says where the tools search', () => {
+    expect(runSegmentFill(line(), width, height, 35, 1, 50, 500, area)).toEqual({
+      error: 'That click is outside the data area. Fill a region reads only inside it: click the curve inside the box, or move the data area’s corners on the calibration card.',
+    });
+  });
+});

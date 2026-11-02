@@ -2177,6 +2177,7 @@ describe('Workspace: Polar axes', () => {
   // the origin (same fixture as engine/__tests__/calibrationSession.test.ts's
   // Polar describe block).
   async function calibratePolarStandard() {
+    await markDataArea(90, 120, 720, 480); // the data area first, as the card asks (v2.7, every graph type)
     await clickAt(100, 300); // origin -- no value prompt, placed immediately
     await clickAt(400, 300); // P1
     await confirmValues(['10', '0']);
@@ -2191,6 +2192,7 @@ describe('Workspace: Polar axes', () => {
 
   it('walks a 3-step calibration where the origin needs no typed value, then reads back r and θ', async () => {
     await resetWorkspace('polar');
+    await markDataArea(90, 120, 720, 480); // the data area first, as the card asks (v2.7, every graph type)
     expect(await textOf('tips-bar')).toMatch(/1\/3 - Origin/);
 
     await clickAt(100, 300); // origin: click alone advances the step
@@ -2227,6 +2229,7 @@ describe('Workspace: Polar axes', () => {
   it('⚑⚑ a TILTED polar figure is read from its own shape, once the card is told', async () => {
     await resetWorkspace('polar');
     await page.getByTestId('calib-choice-isCircular-false').check();
+    await markDataArea(90, 120, 720, 480); // the data area first, as the card asks (v2.7, every graph type)
 
     // The origin now asks for the radial value AT THE CENTRE - a click alone no
     // longer completes it, which is the walk changing with the declaration.
@@ -2288,6 +2291,7 @@ describe('Workspace: Ternary axes', () => {
     // ⚑ Each corner takes the figure's own NAME after the click (optional, left
     // blank here), the way a spider spoke does - so a corner awaits a value
     // rather than completing on the click alone.
+    await markDataArea(90, 90, 320, 320); // the data area first, as the card asks (v2.7, every graph type)
     await clickAt(100, 300);
     await confirmValue('');
     await clickAt(100, 100);
@@ -2307,6 +2311,7 @@ describe('Workspace: Ternary axes', () => {
     // Clay - because "A" identifies nothing on a real diagram. The name is
     // optional; the step still awaits a confirm.
     await resetWorkspace('ternary');
+    await markDataArea(90, 90, 320, 320); // the data area first, as the card asks (v2.7, every graph type)
     expect(await textOf('tips-bar')).toMatch(/1\/3 - 1/);
 
     await clickAt(100, 300);
@@ -2360,6 +2365,7 @@ describe('Workspace: Map axes', () => {
   // representing 30 real-world units, same fixture as
   // engine/__tests__/calibrationSession.test.ts's Map describe block.
   async function calibrateMapStandard() {
+    await markDataArea(90, 150, 420, 450); // the data area first, as the card asks (v2.7, every graph type)
     await clickAt(100, 300); // P1 -- no value prompt
     await clickAt(400, 300); // P2
     await confirmValue('30');
@@ -2377,6 +2383,7 @@ describe('Workspace: Map axes', () => {
     // bottom-left to match WPD (its own <select> lists Bottom Left first) --
     // that default has its own coverage in the checkpoint-68 block below.
     await page.getByTestId('calib-choice-origin-top-left').check();
+    await markDataArea(90, 150, 420, 450); // the data area first, as the card asks (v2.7, every graph type)
     expect(await textOf('tips-bar')).toMatch(/1\/2 - P1/);
 
     await clickAt(100, 300); // P1: click alone advances the step
@@ -2466,6 +2473,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
   }
 
   async function calibrateCCRStandard() {
+    await markDataArea(150, 80 + dy, 450, 450 + dy); // the data area first, as the card asks (v2.7, every graph type)
     await clickAt(200, 200 + dy); // (T0,R0)
     await confirmValues(['2024/01/01 00:00', '1']);
     await clickAt(400, 200 + dy); // (T0,R1) -- click-only
@@ -2485,6 +2493,7 @@ describe('Workspace: Circular Chart Recorder axes', () => {
   it('walks a 5-step calibration mixing value-less and 1-2 value steps, gating Calibrate on the global field', async () => {
     await resetWorkspace('ccr');
     await panClearOfCard();
+    await markDataArea(150, 80 + dy, 450, 450 + dy); // the data area first, as the card asks (v2.7, every graph type)
     expect(await textOf('tips-bar')).toMatch(/1\/5 - \(T0,R0\)/);
 
     await clickAt(200, 200 + dy); // (T0,R0): 2 values
@@ -3291,6 +3300,24 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.keyboard.press('Control+z');
     await expect.poll(() => dataAreaRecorded()).toBeNull();
     expect((await textOf('calib-chip-x2')).replace(/\s/g, '')).not.toBe('X210');
+  });
+
+  it('every graph type gets the data area first: on a polar, ternary, map, circular chart recorder, spider and pie figure the card asks for it before the first point (David, 2026-11-02)', async () => {
+    for (const id of ['polar', 'ternary', 'map', 'ccr', 'spider', 'pie'] as const) {
+      await resetWorkspace(id);
+      expect(await textOf('calib-chip-data-area'), id).toMatch(/Data area\s*drag on image/);
+      expect(await textOf('tips-bar'), id).toMatch(/Mark the data area: drag a box from one corner of the plot to the opposite corner/);
+    }
+  }, 90000);
+
+  it('a graph type change to a polar figure keeps the data area too: the same picture, the same rectangle', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    const before = (await dataAreaRecorded())!;
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-polar').click();
+    await expect.poll(() => textOf('axes-type-trigger')).toContain('Polar');
+    expect(await dataAreaRecorded()).toEqual(before);
   });
 
   it('a graph type change keeps the data area: the same picture, the same rectangle', async () => {
@@ -4579,6 +4606,9 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
 
   it('traces a real curve from a single seed click without erroring, adding a plausible number of points', async () => {
     await resetWorkspace('xy');
+    // the data area round the figure's own plot frame (xy-stress-strain.truth.json), as the card asks: Fill a region
+    // reads only inside it since v2.7, and the seed below is on the curve inside the frame
+    await markDataAreaImage(68, 39, 885, 637);
     await calibrateXYStandard();
 
     await selectAutoExtract('flood');
@@ -4642,6 +4672,9 @@ describe('Workspace: Segment Fill auto-trace (checkpoint 26)', () => {
   // than erroring or crashing.
   it('the threshold input is live: an edited value is used by the next trace', async () => {
     await resetWorkspace('xy');
+    // the data area round the figure's own plot frame (xy-stress-strain.truth.json), as the card asks: Fill a region
+    // reads only inside it since v2.7, and the seed below is on the curve inside the frame
+    await markDataAreaImage(68, 39, 885, 637);
     await calibrateXYStandard();
     await selectAutoExtract('flood');
     await page.waitForTimeout(100);
@@ -9519,8 +9552,25 @@ describe('spider charts', () => {
   // nothing (the long-standing trap that moved this suite's other seeds to
   // x > 350). At CX 520 / R 110 the leftmost ray reaches x = 410.
   const CX = 520;
-  const CY = 320;
+  // ⚑ `let`: a walk whose card covers the top spoke pans the figure out from under it, as a user does, and the
+  // centre moves with the figure (panClearOfCard)
+  let CY = 320;
   const R = 110;
+  afterEach(() => {
+    CY = 320;
+  });
+  /** Pan the figure down with the middle button, as a user does when the calibration card covers the top spoke (a
+   * five-axis card, with its Data area row, reaches below it); every later click follows the figure. */
+  async function panClearOfCard() {
+    await refreshCanvasBox();
+    const before = await viewOffset();
+    await page.mouse.move(canvasBox.x + 900, canvasBox.y + 450);
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(canvasBox.x + 900, canvasBox.y + 570, { steps: 6 });
+    await page.mouse.up({ button: 'middle' });
+    await page.waitForTimeout(150);
+    CY += (await viewOffset())[1] - before[1];
+  }
   const spoke = (i: number, n: number, radius = R): [number, number] => [
     CX + radius * Math.sin((2 * Math.PI * i) / n),
     CY - radius * Math.cos((2 * Math.PI * i) / n),
@@ -9578,6 +9628,7 @@ describe('spider charts', () => {
   async function calibrateSpider(names: string[], values: string[], centre = '0') {
     const n = names.length;
     for (let i = 3; i < n; i++) await page.getByTestId('add-repeat-step').click();
+    await markDataArea(CX - 1.4 * R, CY - 1.4 * R, CX + 1.4 * R, CY + 1.4 * R); // the data area first, as the card asks (v2.7, every graph type)
     // The centre's value is asked ON the centre click now, inline beside the chip
     // with the same confirm button as every other value (David, 2026-07-27) --
     // not in a global-field row that only appeared once every point was placed.
@@ -9603,6 +9654,7 @@ describe('spider charts', () => {
     // beside a required value, which reads as required - the same reason Polar's
     // unused theta says "(optional)" in its own label.
     await resetWorkspace('spider');
+    await markDataArea(CX - 1.4 * R, CY - 1.4 * R, CX + 1.4 * R, CY + 1.4 * R); // the data area first, as the card asks (v2.7, every graph type)
     await clickAt(CX, CY);
     expect(await page.locator('[data-testid="data-value-input"]').inputValue()).toBe('0');
     await page.locator('[data-testid="confirm-data-value"]').click();
@@ -10129,6 +10181,7 @@ describe('spider charts', () => {
     // progress line would say "1/1", and the canvas would draw a single handle
     // while the user placed six. A unit test cannot see any of that.
     await resetWorkspace('spider');
+    await panClearOfCard();
     await calibrateSpider(['A', 'B', 'C', 'D', 'E'], ['10', '20', '30', '40', '50']);
     expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
 
@@ -10283,7 +10336,11 @@ describe('pie charts (v1.6)', () => {
 
   describe('closing the ring', () => {
     async function calibratePieByHand() {
-      for (const [x, y] of [[200, 120], [320, 240], [200, 360]] as const) await clickAt(x, y);
+      // ⚑ Middle right of the figure since v2.7: the calibration card, a row taller with the Data area chip, reached
+      // over the second outline point at some window widths (the click landed on its Total row), and the Data
+      // extraction card, open after Calibrate, covers the lower left
+      await markDataArea(560, 360, 840, 640); // the data area first, as the card asks (v2.7, every graph type)
+      for (const [x, y] of [[700, 380], [820, 500], [700, 620]] as const) await clickAt(x, y);
       await page.getByTestId('global-field-total').fill('100');
       await page.getByTestId('run-calibration').click();
       await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
@@ -10300,12 +10357,12 @@ describe('pie charts (v1.6)', () => {
       await calibratePieByHand();
       const marker = () => page.getByTestId('marker-labels');
 
-      await clickAt(260, 140); // first boundary
-      await clickAt(340, 260);
+      await clickAt(760, 400); // first boundary
+      await clickAt(840, 520);
       expect(await marker().textContent()).not.toContain('close the ring');
 
       // Two sectors recorded and a third open: now it is real.
-      await clickAt(260, 380);
+      await clickAt(760, 640);
       await expect
         .poll(async () => marker().textContent(), { timeout: 5000 })
         .toContain('click to close the ring');
@@ -10313,13 +10370,13 @@ describe('pie charts (v1.6)', () => {
 
     it('completes the last sector without opening another', async () => {
       await calibratePieByHand();
-      for (const [x, y] of [[260, 140], [340, 260], [260, 380], [180, 260]] as const) await clickAt(x, y);
+      for (const [x, y] of [[760, 400], [840, 520], [760, 640], [680, 520]] as const) await clickAt(x, y);
       const rows = () => page.getByTestId('points-table').locator('tbody tr').count();
       // Four boundaries: three complete sectors plus the one chaining pre-opened.
       await expect.poll(rows, { timeout: 5000 }).toBe(4);
 
       // Click the first boundary again -- the far edge of the last sector.
-      await clickAt(260, 140);
+      await clickAt(760, 400);
       // ⚑ Still four. The ring is closed, so there is no next sector to open, and the
       // capture does not end on a permanently half-filled row.
       await expect.poll(rows, { timeout: 5000 }).toBe(4);
@@ -10348,7 +10405,11 @@ describe('pie charts (v1.6)', () => {
     /** Calibrate a pie by clicking three points on the canvas -- any three that are
      * not collinear describe a circle, which is all this needs. */
     async function calibratePieByHand() {
-      for (const [x, y] of [[200, 120], [320, 240], [200, 360]] as const) await clickAt(x, y);
+      // ⚑ Middle right of the figure since v2.7: the calibration card, a row taller with the Data area chip, reached
+      // over the second outline point at some window widths (the click landed on its Total row), and the Data
+      // extraction card, open after Calibrate, covers the lower left
+      await markDataArea(560, 360, 840, 640); // the data area first, as the card asks (v2.7, every graph type)
+      for (const [x, y] of [[700, 380], [820, 500], [700, 620]] as const) await clickAt(x, y);
       await page.getByTestId('global-field-total').fill('100');
       await page.getByTestId('run-calibration').click();
       await expect.poll(async () => textOf('calibrated-status'), { timeout: 10000 }).toBe('Calibrated ✓');
@@ -10405,7 +10466,7 @@ describe('pie charts (v1.6)', () => {
       // ⚑ This is the state the old chip could not express -- it read from
       // `isAwaitingExplodedApex()`, which goes false the instant the tip lands, so the
       // screen said "nothing armed" through both edge clicks.
-      await clickAt(260, 240);
+      await clickAt(760, 500);
       await expect
         .poll(async () => page.getByTestId('exploded-step-1').getAttribute('data-state'), { timeout: 5000 })
         .toBe('done');
@@ -10415,8 +10476,8 @@ describe('pie charts (v1.6)', () => {
     it('cancels mid-capture, and puts the discarded edge back on undo', async () => {
       await calibratePieByHand();
       await page.getByTestId('pie-exploded-slice').click();
-      await clickAt(260, 240); // the tip
-      await clickAt(300, 180); // one edge of two
+      await clickAt(760, 500); // the tip
+      await clickAt(800, 440); // one edge of two
       await expect
         .poll(() => page.getByTestId('points-table').locator('tbody tr').count(), { timeout: 5000 })
         .toBe(1);
@@ -13705,6 +13766,7 @@ describe('Workspace: Settings (v2.7)', () => {
     // ⚑ on a polar figure: on XY and Contour Colour trace reads markers since v2.7 (lines are Find lines), so its
     // curve reading, which this caps, is on the types Find lines does not read
     await resetWorkspace('polar');
+    await markDataArea(90, 120, 720, 480); // the data area first, as the card asks (v2.7, every graph type)
     await clickAt(100, 300);
     await clickAt(400, 300);
     await confirmValues(['10', '0']);

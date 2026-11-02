@@ -179,7 +179,7 @@ import { calibrationFromLabels } from '../../engine/axisDetection.js';
 import { LegendCard } from './panels/LegendCard.js';
 import { legendFromDetections } from '../../engine/pictureAxes.js';
 import { regionCornerMarkers, regionCornerFromId, dataAreaCornerMarkers, dataAreaCornerFromId } from '../../engine/regionHandles.js';
-import { dataAreaApplies, drawnFrame } from '../../engine/dataArea.js';
+import { drawnFrame, searchArea } from '../../engine/dataArea.js';
 
 import { WarningLine } from './panels/WarningLine.js';
 import { pageToImage, placeDrawing, placeTextItems } from '../../engine/drawingPlacement.js';
@@ -3859,11 +3859,11 @@ export function Workspace() {
       clearMeasurements(); // measurements belong to the old figure; clear before snapshotting
       const next = new CalibrationSession(nextConfig);
       if (inputs) next.adoptCalibration(inputs);
-      // ⚑ The same picture, so the rectangles on it stay: the data area (where it applies), the legend and the masked
+      // ⚑ The same picture, so the rectangles on it stay: the data area, the legend and the masked
       // areas (v2.7). They were dropped, and with the points kept the card never asked for the data area again.
       next.setNotDataRegions(oldSession.getNotDataRegions());
       const area = oldSession.getDataArea();
-      if (area && dataAreaApplies(nextConfig)) next.setDataArea(area);
+      if (area) next.setDataArea(area);
       swapSession(id, next);
       setMode(keep ? 'pan' : 'calibrate'); // no tool is picked for the user (v2.7)
       setCalibExpanded(!keep); // a kept calibration is done -> stay folded (ckpt 86)
@@ -4289,7 +4289,9 @@ export function Workspace() {
             setSegmentFillError('No image loaded.');
             return;
           }
-          const result = runSegmentFill(imageData.data, imageData.width, imageData.height, px, py, segmentFillThreshold, settingsRef.current.pointsPerTrace);
+          const result = runSegmentFill(imageData.data, imageData.width, imageData.height, px, py, segmentFillThreshold, settingsRef.current.pointsPerTrace,
+            // the data area, as every automatic tool (defaultTraceRegion, written further down)
+            searchArea(session.getDataArea(), session.getConfig().axesKind === 'spider' ? spiderBoxRegion(session.getAxes() as unknown as SpiderAxes | null) : null) ?? undefined);
           if ('error' in result) {
             setSegmentFillError(result.error);
             return;
@@ -4846,7 +4848,7 @@ export function Workspace() {
     if (sessionRef.current !== startedOn) return;
     // ⚑ The data area is set whatever the labels gave: it is where the plot is, not the scale (David, 2026-11-01).
     // One press is one undo step, the area and the points together.
-    const areaSet = !!frame && dataAreaApplies(startedOn.getConfig()) && startedOn.setDataArea(frame);
+    const areaSet = !!frame && startedOn.setDataArea(frame);
     if (areaSet) setDataAreaChosen(false);
     const found = calibrationFromLabels(read);
     if (!found) {
@@ -6551,22 +6553,13 @@ export function Workspace() {
     setGridRemovalError(null);
   }, [gridRemovalColor, gridRemovalTolerance, commit]);
 
-  // Default the By-colour trace region to the data area (v2.7, David 2026-11-01): it was the calibration box
-  // (2026-07-22 walkthrough: a whole-image trace grabbed the title, axis lines and tick labels - same colour as the
-  // curve - so the traced curve "crept" outside the plot), and since the calibration points sit on labelled ticks
-  // that box no longer covers the data. No data area marked: the whole image, as in WPD.
+  // ⚑ Every automatic tool searches the data area, on every graph type (v2.7; David 2026-11-02: "yes, every graph
+  // type gets the data area first"). It was the calibration box on XY (2026-07-22 walkthrough: a whole-image trace
+  // grabbed the title, axis lines and tick labels, the same colour as the curve) and nothing elsewhere. A bar counts
+  // when its centre is inside (engine/barDetectRun.ts). None marked: a spider's web, else the whole figure.
   const defaultTraceRegion = useCallback((): FilterRegion | null => {
-    // A spider's box is the web itself (centre + every spoke tip, plus the overshoot
-    // the tracer looks through). Worth having for the same reason as the XY one:
-    // radar charts print the axis NAMES just outside the outermost ring, often in
-    // the same ink as the grid.
-    if (session.getConfig().axesKind === 'spider') {
-      return spiderBoxRegion(session.getAxes() as unknown as SpiderAxes | null);
-    }
-    // ⚑ XY axes only, as the calibration box was: on a bar type the region also bounds the bar detector, which cuts a
-    // bar off at a hand-dragged edge, so those keep searching the whole figure (code review, 2026-11-02)
-    if (session.getConfig().axesKind !== 'xy') return null;
-    return session.getDataArea();
+    const web = session.getConfig().axesKind === 'spider' ? spiderBoxRegion(session.getAxes() as unknown as SpiderAxes | null) : null;
+    return searchArea(session.getDataArea(), web);
   }, [session]);
 
 
@@ -7635,7 +7628,7 @@ export function Workspace() {
    */
   const dataAreaStep =
     // (an armed eyedropper's click is a colour sample, and wins)
-    dataAreaApplies(config) && mode === 'calibrate' && figureCaptured && calibExpanded && eyedropper === null &&
+    mode === 'calibrate' && figureCaptured && calibExpanded && eyedropper === null &&
     (dataAreaChosen || (dataArea === null && Object.keys(placedPoints).length === 0 && !session.isStepChosen()));
 
   /**
@@ -8191,7 +8184,7 @@ export function Workspace() {
       });
     }
     // ⚑ The data area, outlined and unshaded (v2.7): where the automatic tools search, and nothing in it is left out.
-    if (dataArea && dataAreaApplies(session.getConfig())) {
+    if (dataArea) {
       const { x, y, width: w, height: h } = dataArea;
       list.push({
         id: 'data-area',
@@ -9424,7 +9417,7 @@ export function Workspace() {
           )}
           {/* ⚑ The data area, the walk's first step on every graph type that is XY in some form (David, 2026-11-01):
               a chip like the points' own, picked to mark it again. */}
-          {figureCaptured && calibExpanded && dataAreaApplies(config) && (
+          {figureCaptured && calibExpanded && (
             <div data-testid="calib-chip-data-area" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
               <span
                 role="button"

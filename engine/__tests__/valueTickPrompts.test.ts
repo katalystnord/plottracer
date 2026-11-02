@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
-import { dataAreaApplies } from '../dataArea.js';
 
 /**
  * The tick-mark step, its settled half (David, 2026-11-01, docs/v2.7-workflow-walk.md, "The data area, apart from the
@@ -10,7 +9,7 @@ import { dataAreaApplies } from '../dataArea.js';
  * a known value". The heatmap's corner walk is left as it is: where its points go is an open question.
  */
 const VALUE_STEPS = ['x1', 'x2', 'y1', 'y2', 'p1', 'p2', 'v1', 'v2'];
-const xyFamily = ALL_AXES_TYPE_CONFIGS.filter((c) => dataAreaApplies(c) && c.id !== 'heatmap');
+const xyFamily = ALL_AXES_TYPE_CONFIGS.filter((c) => (c.axesKind === 'xy' || c.axesKind === 'bar') && c.id !== 'heatmap');
 
 describe('every value axis is calibrated on labelled tick marks', () => {
   for (const config of xyFamily) {

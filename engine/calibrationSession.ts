@@ -207,7 +207,7 @@ import { BarAxes } from '../core/axes/bar.js';
 import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes, type NotDataRegion } from '../core/plotData.js';
-import { type DataArea, type Corner, isDataArea, withCornerMoved, mappedRect, dataAreaApplies, boxRoundPoints } from './dataArea.js';
+import { type DataArea, type Corner, isDataArea, withCornerMoved, mappedRect, boxRoundPoints } from './dataArea.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
 import { tickCountFor } from '../core/bandedAxis.js';
 import { findAxisTicks } from '../algorithms/axisTicks.js';
@@ -3376,7 +3376,9 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // is what Colour trace and Find lines searched until v2.7: on screen and adjustable, so an old project neither
     // loses its search area nor gains the whole image's labels and axes (code review, 2026-11-02; measured in
     // docs/v2.7-workflow-walk.md).
-    if (!this.dataArea && dataAreaApplies(this.config)) this.dataArea = boxRoundPoints(Object.values(this.placed));
+    // Only on the XY and bar axes: on a polar, ternary, map, CCR, spider or pie figure the calibration points span no
+    // box round the data, and those searched the whole figure (or a spider its web) until v2.7.
+    if (!this.dataArea && (this.config.axesKind === 'xy' || this.config.axesKind === 'bar')) this.dataArea = boxRoundPoints(Object.values(this.placed));
     this.stepIndex = this.getSteps().length;
     this.pendingPixel = null;
     // ⚑ THE THIRD ENTRANCE (found alongside restoreState's own fix, 2026-07-30,

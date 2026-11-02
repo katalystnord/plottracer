@@ -71,3 +71,19 @@ describe('runBarDetect', () => {
     expect(result.boxes[0]).toEqual({ start: { x: 2, y: 5 }, end: { x: 10, y: 15 } });
   });
 });
+
+describe('the bar reader searches the data area (v2.7, David 2026-11-02)', () => {
+  it('a bar counts when its centre is inside the data area: one crossing its edge is read whole, one outside is not read', () => {
+    const w = 60, h = 60;
+    const img = whiteImage(w, h);
+    fillBlock(img, w, 4, 20, 6, 30, BLUE); // inside
+    fillBlock(img, w, 20, 5, 6, 45, BLUE); // runs out past the top edge, centre inside
+    fillBlock(img, w, 50, 20, 6, 30, BLUE); // right of the data area
+    const result = runBarDetect(img, w, h, BLUE, 40, 'foreground', { x: 0, y: 15, width: 45, height: 45 });
+    if ('error' in result) throw new Error(result.error);
+    const xs = result.boxes.map((b) => Math.min(b.start.x, b.end.x)).sort((a, b) => a - b);
+    expect(xs).toEqual([4, 20]);
+    const crossing = result.boxes.find((b) => Math.min(b.start.x, b.end.x) === 20)!;
+    expect(Math.min(crossing.start.y, crossing.end.y)).toBe(5);
+  });
+});
