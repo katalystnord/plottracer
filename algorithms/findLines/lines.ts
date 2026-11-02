@@ -95,6 +95,7 @@ const O = {
   charGap: 5.0, labelCost: 0.6, dashAlign: 20, straightBelow: 8.0, crowdR: 3.5, crowdMin: 25,
   bandSkip: 4.0, bandLat: 3.0, unresLen: 40.0, selfClose: 4.0, maxBranches: 8,
   predictRatio: 0.6, sharedMargin: 0.15, smoothRatio: 0.6, touchP: 1.6, crossP: 1.3, runalongP: 2.7,
+  aheadAngle: 0.6,
 };
 
 const xyOf = (pix: readonly YX[]): Pt[] => pix.map(([y, x]) => [x, y]);
@@ -883,13 +884,29 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
   };
   const placesOut: Place[] = places.map((pl) => ({ kind: pl.kind, at: pl.at, lines: nearestLines(pl.at, 3 * lw + 6) }));
   for (const u of unresolved) placesOut.push({ kind: 'unresolved', at: centroid(u), lines: nearestLines(centroid(u), 3 * lw + 6) });
-  // A line that STOPS inside the plot is a place to check: a contour cannot end
-  // there, and a curve rarely does - most often it is a dash gap or a crossing
-  // the first version did not bridge. Ends near each other are one place.
+  // A line that STOPS inside the plot is a place to check when it may carry on.
+  // A contour cannot end there, so every contour end is one. A curve can: a
+  // series ends at its last point, often well inside the frame (the four blends
+  // end at 100 in a frame running to 110). So a curve's end is a place only when
+  // more of its colour lies ahead of it, where a dash gap or an unbridged
+  // crossing would leave the next piece. Ends near each other are one place.
+  const ahead = (li: number, P: readonly Pt[]): boolean => {
+    const p = P[P.length - 1]!;
+    let k = P.length - 1;
+    while (k > 0 && norm(sub(p, P[k]!)) < 4 * lw + 6) k--;
+    const t = unit(sub(p, P[k]!));
+    return out.some((M, mi) => mi !== li && M.points.some((q) => {
+      const d = sub(q, p), along = d[0] * t[0] + d[1] * t[1], across = Math.abs(d[0] * t[1] - d[1] * t[0]);
+      return along > 0 && across <= along * Math.tan(O.aheadAngle) + 2 * lw;
+    }));
+  };
   const ends: { at: Pt; line: number }[] = [];
   out.forEach((L, li) => {
     if (L.closed || L.points.length < 2) return;
-    for (const p of [L.points[0]!, L.points[L.points.length - 1]!]) if (!onFrame(p)) ends.push({ at: p, line: li });
+    for (const P of [[...L.points].reverse(), L.points]) {
+      const p = P[P.length - 1]!;
+      if (!onFrame(p) && (contour || ahead(li, P))) ends.push({ at: p, line: li });
+    }
   });
   const grouped = new Set<number>();
   ends.forEach((e, i) => {

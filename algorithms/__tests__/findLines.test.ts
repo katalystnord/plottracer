@@ -226,6 +226,27 @@ describe('Find lines with a region marked as not data (N4)', () => {
   });
 });
 
+describe('A dashed curve: an end with more of its colour ahead is a place to check', () => {
+  // The bundled dashed-release example, legend masked: the four curves come back as fifteen pieces. Where a piece
+  // stops and the next dash lies ahead, the user must say whether they are one curve; where a piece stops with
+  // nothing of its colour ahead, the curve has ended.
+  const BOX = { x0: 77.53, y0: 39.33, x1: 875.25, y1: 636.72 };
+  const MASK = { x0: 716, y0: 538, x1: 872, y1: 634 };
+  const run = () => {
+    const im = readPng(join(ROOT, 'samples', 'xy-dashed-release.png'));
+    return findLines(im.data, im.width, im.height, [0x11, 0x11, 0x11], BOX, { contour: false, masks: [MASK] });
+  };
+  const placeNear = (r: FindLinesResult, x: number, y: number) => r.places.some((p) => Math.hypot(p.at[0] - x, p.at[1] - y) < 12);
+
+  it('given a piece that stops with the next dash 40 px ahead, its end is a place to check', () => {
+    expect(placeNear(run(), 286, 226)).toBe(true);
+  });
+
+  it('given the last dash stopping 14 px short of the frame with nothing ahead, its end is not a place to check', () => {
+    expect(placeNear(run(), 861, 184)).toBe(false);
+  });
+});
+
 describe('Find lines takes only the colour asked for (role-play 2026-10-12)', () => {
   // The bundled four-blend example: red Blend B runs above purple Blend D. A
   // half-covered edge pixel of the purple line lies close to a paper-to-red

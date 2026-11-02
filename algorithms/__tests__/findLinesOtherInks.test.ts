@@ -31,3 +31,15 @@ describe('Find lines with the other series inks known', () => {
     });
   }
 });
+
+describe('A curve that ends with nothing of its colour beyond it is not a place to check', () => {
+  // The four blends start at 20 and end at 100, well inside the frame, which runs from 0 to 110: each end is where
+  // the data ends, and flagging all eight buried any real break among them.
+  for (const [name, ink] of Object.entries(INKS)) {
+    it(`given ${name} drawn from 20 to 100 inside the frame, neither of its ends is a place to check`, () => {
+      const others = Object.values(INKS).filter((o) => o !== ink);
+      const r = findLines(img.data, img.width, img.height, ink, box, { contour: false, masks, otherInks: others });
+      expect(r.places.filter((p) => p.kind === 'end' || p.kind === 'split')).toEqual([]);
+    });
+  }
+});
