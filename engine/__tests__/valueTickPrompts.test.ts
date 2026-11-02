@@ -32,4 +32,14 @@ describe('every value axis is calibrated on labelled tick marks', () => {
       }
     }
   });
+
+  it('X1 says that with Common origin it must be the corner labelled on both axes, where Y1 shares it (option C)', () => {
+    // ⚑ Common origin (on by default) gives Y1 X1's pixel with 0 filled in, which is right only at the corner labelled
+    // on both axes: the same rule [Automatic axis detection] follows (option C, David 2026-11-01). Found by the code
+    // review: a labelled tick that is not the corner put Y1 off the Y axis's own scale.
+    for (const config of xyFamily) {
+      const x1 = config.fixedSteps.find((s) => s.key === 'x1');
+      if (x1 && config.commonOrigin) expect(x1.prompt, config.label).toMatch(/Common origin.*corner labelled on both axes/);
+    }
+  });
 });

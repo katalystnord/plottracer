@@ -370,11 +370,13 @@ function notDataRegionsFrom(raw: unknown): NotDataRegion[] {
   return out;
 }
 
-/** The data area off a file: kept only if it is a real rectangle. */
+/** The data area off a file: kept only if it is a real rectangle of numbers, the same rule `setDataArea` applies on
+ * screen (engine/dataArea.ts `isDataArea`); nothing is coerced, so `null` is not 0. */
 function dataAreaFrom(raw: unknown): { x: number; y: number; width: number; height: number } | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const ns = ['x', 'y', 'width', 'height'].map((k) => Number((raw as Record<string, unknown>)[k]));
-  return ns.every((n) => Number.isFinite(n)) && ns[2]! > 0 && ns[3]! > 0 ? { x: ns[0]!, y: ns[1]!, width: ns[2]!, height: ns[3]! } : null;
+  const ns = ['x', 'y', 'width', 'height'].map((k) => (raw as Record<string, unknown>)[k]);
+  if (!ns.every((n): n is number => typeof n === 'number' && Number.isFinite(n))) return null;
+  return ns[2]! > 0 && ns[3]! > 0 ? { x: ns[0]!, y: ns[1]!, width: ns[2]!, height: ns[3]! } : null;
 }
 
 function heatmapLayerFrom(raw: unknown): SerializedHeatmapLayer | null {

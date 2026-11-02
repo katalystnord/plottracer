@@ -207,7 +207,7 @@ import { BarAxes } from '../core/axes/bar.js';
 import { SpiderAxes } from '../core/axes/spider.js';
 import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes, type NotDataRegion } from '../core/plotData.js';
-import { type DataArea, type Corner, isDataArea, withCornerMoved, mappedRect } from './dataArea.js';
+import { type DataArea, type Corner, isDataArea, withCornerMoved, mappedRect, dataAreaApplies, boxRoundPoints } from './dataArea.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
 import { tickCountFor } from '../core/bandedAxis.js';
 import { findAxisTicks } from '../algorithms/axisTicks.js';
@@ -3372,6 +3372,11 @@ export class CalibrationSession<A extends CalibratedAxes> {
         this.placed[step.key] = { px: cp.px, py: cp.py, values };
       });
     }
+    // ⚑ A file with no data area (every project before v2.7) opens with the box round its calibration points, which
+    // is what Colour trace and Find lines searched until v2.7: on screen and adjustable, so an old project neither
+    // loses its search area nor gains the whole image's labels and axes (code review, 2026-11-02; measured in
+    // docs/v2.7-workflow-walk.md).
+    if (!this.dataArea && dataAreaApplies(this.config)) this.dataArea = boxRoundPoints(Object.values(this.placed));
     this.stepIndex = this.getSteps().length;
     this.pendingPixel = null;
     // ⚑ THE THIRD ENTRANCE (found alongside restoreState's own fix, 2026-07-30,
@@ -3580,16 +3585,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
     this.loseCalibration();
   }
 
-  /**
-   * Make `key` the step the next click places, whatever else is placed - its chip in the calibration card. True
-   * when `key` is a step of this graph type. A placed step is placed again; on a calibrated figure nothing changes
-   * until it is (then `afterPlacing` loses the calibration).
-   */
   /** A step was chosen by its chip and not yet placed. */
   isStepChosen(): boolean {
     return this.chosenStep;
   }
 
+  /**
+   * Make `key` the step the next click places, whatever else is placed - its chip in the calibration card. True
+   * when `key` is a step of this graph type. A placed step is placed again; on a calibrated figure nothing changes
+   * until it is (then `afterPlacing` loses the calibration).
+   */
   chooseStep(key: string): boolean {
     const at = this.getSteps().findIndex((st) => st.key === key);
     if (at < 0) return false;

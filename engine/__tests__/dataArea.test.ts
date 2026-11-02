@@ -79,11 +79,26 @@ describe('the data area is a rectangle of its own', () => {
     expect(s2.getDataArea()).toEqual(AREA);
   });
 
-  it('a project saved before the data area existed opens with none', () => {
+  it('a project saved before the data area existed opens with the box round its calibration points, what v2.6 searched', () => {
     const s = calibrated();
     const file = serializeProject(s, PNG);
     if ('error' in file) throw new Error(file.error);
     const opened = deserializeProject(JSON.parse(JSON.stringify(file)));
+    if ('error' in opened) throw new Error(opened.error);
+    expect(opened.dataArea).toBeNull();
+    const s2 = session();
+    s2.loadCalibrated(opened.axes as XYAxes, opened.datasets, opened.categoryAxis, opened.heatmapLayer, opened.notDataRegions, opened.dataArea);
+    expect(s2.getDataArea()).toEqual({ x: 100, y: 100, width: 300, height: 150 });
+  });
+
+  it('a file\'s data area is held to the same rule as one marked on screen: a value that is not a number drops it', () => {
+    const s = calibrated();
+    s.setDataArea(AREA);
+    const file = serializeProject(s, PNG);
+    if ('error' in file) throw new Error(file.error);
+    const raw = JSON.parse(JSON.stringify(file));
+    const json = JSON.stringify(raw).replace('"dataArea":{"x":80', '"dataArea":{"x":null');
+    const opened = deserializeProject(JSON.parse(json));
     if ('error' in opened) throw new Error(opened.error);
     expect(opened.dataArea).toBeNull();
   });

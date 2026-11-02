@@ -3270,8 +3270,36 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     });
     await page.getByTestId('auto-axis-detect').click();
     await expect.poll(() => dataAreaRecorded()).not.toBeNull();
+    await expect.poll(async () => (await textOf('calib-chip-x2')).replace(/\s/g, '')).toBe('X210');
     const a = (await dataAreaRecorded())!;
     expect(a.height / a.width).toBeCloseTo(166.32 / 223.2, 2);
+    // one press is one undo step: the data area and the points go together (code review, 2026-11-02)
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+    await page.keyboard.press('Control+z');
+    await expect.poll(() => dataAreaRecorded()).toBeNull();
+    expect((await textOf('calib-chip-x2')).replace(/\s/g, '')).not.toBe('X210');
+  });
+
+  it('a graph type change keeps the data area: the same picture, the same rectangle', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    const before = (await dataAreaRecorded())!;
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-contour').click();
+    await expect.poll(() => textOf('axes-type-trigger')).toContain('Contour');
+    expect(await dataAreaRecorded()).toEqual(before);
+  });
+
+  it('a picked Data area chip is put down when the user leaves the card, so a later visit does not swallow clicks', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    await page.getByTestId('mode-calibrate').click();
+    await page.getByTestId('calib-chip-pick-data-area').click();
+    expect(await textOf('tips-bar')).toMatch(/Mark the data area/);
+    await page.getByTestId('mode-pan').click();
+    await page.getByTestId('mode-calibrate').click();
+    expect(await textOf('tips-bar')).not.toMatch(/Mark the data area/);
+    expect(await textOf('calib-chip-data-area')).toMatch(/marked/);
   });
 
   it('Automatic axis detection that fixes no point says so in the bottom bar, with the warning triangle', async () => {

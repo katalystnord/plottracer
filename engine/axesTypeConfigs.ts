@@ -1473,7 +1473,7 @@ export const XY_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
     //     reader expects (B14).
     // ⚑ On LABELLED TICK MARKS (David, 2026-11-01: "set the tick marks for value calibration"): the frame's corners
     // are the data area's business now, not the calibration's.
-    { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click a labelled tick mark on the X axis and enter the number printed there', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
+    { key: 'x1', label: 'X1', color: '#e0a458', prompt: 'Click a labelled tick mark on the X axis and enter the number printed there - with Common origin ticked, the corner labelled on both axes, which Y1 then shares', valueFields: [{ key: 'x1', label: 'X', field: 'dx' }] },
     { key: 'x2', label: 'X2', color: '#e0a458', prompt: 'Click a second labelled tick mark on the X axis, with a different number, and enter it', valueFields: [{ key: 'x2', label: 'X', field: 'dx' }] },
     // ⚑ THE SAME CORNER AGAIN, AND IT SAYS SO. The point is already placed -
     // three-point calibration shares it - so this step asks only for the Y value

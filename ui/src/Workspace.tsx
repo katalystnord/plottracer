@@ -3864,6 +3864,11 @@ export function Workspace() {
       clearMeasurements(); // measurements belong to the old figure; clear before snapshotting
       const next = new CalibrationSession(nextConfig);
       if (inputs) next.adoptCalibration(inputs);
+      // ⚑ The same picture, so the rectangles on it stay: the data area (where it applies), the legend and the masked
+      // areas (v2.7). They were dropped, and with the points kept the card never asked for the data area again.
+      next.setNotDataRegions(oldSession.getNotDataRegions());
+      const area = oldSession.getDataArea();
+      if (area && dataAreaApplies(nextConfig)) next.setDataArea(area);
       swapSession(id, next);
       setMode(keep ? 'pan' : 'calibrate'); // no tool is picked for the user (v2.7)
       setCalibExpanded(!keep); // a kept calibration is done -> stay folded (ckpt 86)
@@ -4454,6 +4459,18 @@ export function Workspace() {
   }, [mode, removeDataPointByIndex, selectSubMode, session, handleImageClick]);
 
   /** A calibration chip pressed: the next click places that point (David, 2026-10-31). */
+  // A picked Data area chip asks for its drag only while the user stays where they picked it: leaving Calibrate or
+  // switching figure puts it down, or the next visit to the card would swallow clicks meant for a point (code review).
+  useEffect(() => {
+    // (not on arriving IN Calibrate: picking the chip switches to it)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (mode !== 'calibrate') setDataAreaChosen(false);
+  }, [mode]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDataAreaChosen(false);
+  }, [session]);
+
   const chooseCalibrationStep = useCallback((key: string) => {
     if (!session.chooseStep(key)) return;
     setDataAreaChosen(false);
@@ -4793,6 +4810,8 @@ export function Workspace() {
   const detectAxes = useCallback(async () => {
     const img = readingImage();
     if (!img) return;
+    // the figure this read is for: a switch to another figure while the detector runs drops the result
+    const startedOn = sessionRef.current;
     const kind = figureKindRef.current?.kind;
     const drawing = pageDrawingReadRef.current;
     let read: AxesFromLabels | null = null;
@@ -4825,13 +4844,14 @@ export function Workspace() {
     } finally {
       setAxisDetecting(false);
     }
-    // ⚑ The data area is set whatever the labels gave: it is where the plot is, not the scale (David, 2026-11-01)
-    if (frame && dataAreaApplies(sessionRef.current.getConfig()) && sessionRef.current.setDataArea(frame)) {
-      setDataAreaChosen(false);
-      commit();
-    }
+    if (sessionRef.current !== startedOn) return;
+    // ⚑ The data area is set whatever the labels gave: it is where the plot is, not the scale (David, 2026-11-01).
+    // One press is one undo step, the area and the points together.
+    const areaSet = !!frame && dataAreaApplies(startedOn.getConfig()) && startedOn.setDataArea(frame);
+    if (areaSet) setDataAreaChosen(false);
     const found = calibrationFromLabels(read);
     if (!found) {
+      if (areaSet) commit();
       setOcrError('No calibration points could be fixed on this figure - place them by hand: click a point’s chip, then the figure.');
       return;
     }
@@ -6544,15 +6564,17 @@ export function Workspace() {
     if (session.getConfig().axesKind === 'spider') {
       return spiderBoxRegion(session.getAxes() as unknown as SpiderAxes | null);
     }
-    if (!dataAreaApplies(session.getConfig())) return null;
+    // ⚑ XY axes only, as the calibration box was: on a bar type the region also bounds the bar detector, which cuts a
+    // bar off at a hand-dragged edge, so those keep searching the whole figure (code review, 2026-11-02)
+    if (session.getConfig().axesKind !== 'xy') return null;
     return session.getDataArea();
   }, [session]);
 
   useEffect(() => {
     if (mode !== 'color-trace') return;
-    // On ENTERING By-colour mode, pre-fill the region with the calibration box -
-    // only when nothing is set yet, so a user-drawn or deliberately cleared
-    // region wins. It renders as the existing, adjustable "Restrict to a box".
+    // On ENTERING By-colour mode, pre-fill the region with the data area - only when nothing is set yet, so a
+    // user-drawn or deliberately cleared region wins. It renders as the existing, adjustable "Restrict to a box".
+    // ⚠️ Copied on entry, so a data area changed afterwards is not followed until the region is cleared.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setColorTraceRegion((cur) => cur ?? defaultTraceRegion());
   }, [mode, defaultTraceRegion]);

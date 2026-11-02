@@ -98,3 +98,12 @@ export function drawnFrame(d: PlacedDrawing, read: AxesFromLabels): DataArea | n
   const best = boxes.filter(holds).reduce<Box | null>((m, b) => (!m || (b.x1 - b.x0) * (b.y1 - b.y0) < (m.x1 - m.x0) * (m.y1 - m.y0) ? b : m), null);
   return best ? { x: best.x0, y: best.y0, width: best.x1 - best.x0, height: best.y1 - best.y0 } : null;
 }
+
+/** The box round some points, or null when they enclose no area. */
+export function boxRoundPoints(pts: readonly { px: number; py: number }[]): DataArea | null {
+  if (pts.length < 2) return null;
+  const xs = pts.map((p) => p.px), ys = pts.map((p) => p.py);
+  const x = Math.min(...xs), y = Math.min(...ys);
+  const width = Math.max(...xs) - x, height = Math.max(...ys) - y;
+  return width > 0 && height > 0 ? { x, y, width, height } : null;
+}
