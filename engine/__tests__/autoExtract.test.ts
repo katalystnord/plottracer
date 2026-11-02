@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import { autoExtractTools, planAutoExtract } from '../autoExtract.js';
+import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
+
+const getAxesTypeConfig = (id: string) => ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id)!;
+import type { LegendEntry } from '../legendRead.js';
+
+const box = { x0: 0, y0: 0, x1: 10, y1: 10 };
+const entry = (name: string, colour: [number, number, number] | null, sample: LegendEntry['sample'] = null): LegendEntry => ({ name, colour, sample, textBox: box });
+const RED: [number, number, number] = [192, 57, 43];
+const BLUE: [number, number, number] = [31, 119, 180];
+const one = [{ index: 0, name: 'Series 1', pointCount: 0 }];
+
+describe('Auto-extract all series: one step per series the legend names', () => {
+  it('given a legend of two names on an XY figure, each is read by Find lines on its own colour, into a series of its name', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('Blend A', BLUE), entry('Blend B', RED)], one);
+    expect(plan).toEqual([
+      { entry: 0, name: 'Blend A', colour: BLUE, tool: 'lines', into: 0 },
+      { entry: 1, name: 'Blend B', colour: RED, tool: 'lines', into: 'new' },
+    ]);
+  });
+
+  it('a legend entry drawn as a marker is read as points, one drawn as a line as a line', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('Fit', BLUE, 'line'), entry('Measured', RED, 'marker')], one);
+    expect(plan.map((s) => ('tool' in s ? s.tool : s.skip))).toEqual(['lines', 'points']);
+  });
+
+  it('on a bar chart every series is read as the type reads its shapes', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('bar'), [entry('2019', BLUE, 'swatch'), entry('2020', RED, 'swatch')], one);
+    expect(plan.map((s) => ('tool' in s ? s.tool : s.skip))).toEqual(['shapes', 'shapes']);
+  });
+
+  it('two entries in one ink: the colour is read once, and the second says colour cannot tell them apart', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('series 1', [0, 0, 0]), entry('series 2', [10, 10, 10])], one);
+    expect(plan[1]).toEqual({
+      entry: 1,
+      name: 'series 2',
+      skip: 'Same colour as series 1, so colour cannot tell them apart: its data was all read into series 1. Move each to its own series in the series list.',
+    });
+  });
+
+  it('an entry with no colour beside it is not read, and says what to do instead', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('Control', null)], one);
+    expect(plan[0]).toEqual({ entry: 0, name: 'Control', skip: 'No colour was found beside “Control” in the legend, so it was not read. Pick its colour from the figure with Find lines or Colour trace.' });
+  });
+
+  it('pressed again, each series goes back into the series of its name, never a second copy', () => {
+    const series = [
+      { index: 0, name: 'Blend A', pointCount: 120 },
+      { index: 1, name: 'Blend B', pointCount: 98 },
+    ];
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('Blend A', BLUE), entry('Blend B', RED)], series);
+    expect(plan.map((s) => ('into' in s ? s.into : null))).toEqual([0, 1]);
+  });
+
+  it('a series the user already filled is never taken over by another name', () => {
+    const series = [{ index: 0, name: 'My trace', pointCount: 40 }];
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('Blend A', BLUE)], series);
+    expect(plan[0]).toMatchObject({ into: 'new' });
+  });
+
+  it('an empty series another entry is named after is kept for that entry', () => {
+    const series = [{ index: 0, name: 'Blend B', pointCount: 0 }];
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('Blend A', BLUE), entry('Blend B', RED)], series);
+    expect(plan.map((s) => ('into' in s ? s.into : null))).toEqual(['new', 0]);
+  });
+
+  it('greyed where no tool on the card reads a series by colour: heatmap, box plot', () => {
+    expect(autoExtractTools(getAxesTypeConfig('heatmap'))).toEqual([]);
+    expect(autoExtractTools(getAxesTypeConfig('boxplot'))).toEqual([]);
+    expect(planAutoExtract(getAxesTypeConfig('heatmap'), [entry('A', BLUE)], one)).toEqual([]);
+  });
+});

@@ -71,6 +71,12 @@ export interface DataExtractionCardProps {
   onArmEyedropper: (target: 'trace' | 'find-one') => void;
 
   /**
+   * [Auto-extract all series] (v2.7; David 2026-10-31): every series the legend names, each read by the card's tool
+   * that suits it. `applies` false greys it in its place, as a tool that does not apply.
+   */
+  autoExtract: { applies: boolean; busy: boolean; said: readonly string[] | null; onRun: () => void };
+
+  /**
    * Find lines (v2.6, first version) - present only on the types it applies to
    * (`findLinesKind`). Shares the By-colour colour pick: it is the same question
    * ("which ink are the lines?") asked by a different reader.
@@ -154,8 +160,11 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
   heldBackOffer,
   onAddHeldBackBars,
     onArmEyedropper,
+    autoExtract,
     findLines,
   } = props;
+  // a line between the card's groups, to keep it legible (David, 2026-11-02)
+  const divider = <div role="separator" data-testid="extract-divider" style={{ height: 1, background: theme.color.border.regular, margin: '2px 0' }} />;
   const colourRow = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span>Colour:</span>
@@ -242,6 +251,32 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
         <span style={{ width: 10, height: 10, borderRadius: 2, background: into.color, flex: '0 0 auto' }} />
         <span style={{ color: theme.color.text.primary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{into.name}</span>
       </span>
+      {/* the same size as every other button on the card: one of its two columns */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+        <span title={autoExtract.applies ? undefined : 'No tool on this card reads a series of this graph type by its colour.'} style={{ pointerEvents: 'auto', display: 'flex' }}>
+          <button
+            type="button"
+            data-testid="auto-extract-all"
+            onClick={autoExtract.onRun}
+            disabled={!autoExtract.applies || autoExtract.busy}
+            style={{ flex: 1, fontSize: theme.font.size.small, padding: '4px 2px', opacity: autoExtract.applies ? 1 : 0.45 }}
+          >
+            {autoExtract.busy ? 'Reading the series…' : 'Auto-extract all series'}
+          </button>
+        </span>
+      </div>
+      <span style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+        Reads every series the legend names, each with the tool that suits it.
+      </span>
+      {autoExtract.said && (
+        <div data-testid="auto-extract-said" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 3, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+          {autoExtract.said.map((t, i) => (
+            <span key={i} data-testid={`auto-extract-said-${i}`}>{t}</span>
+          ))}
+          <span>Undo takes the whole read back.</span>
+        </div>
+      )}
+      {divider}
       <span style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>Find individual series</span>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
         {toolButton('find-lines')}
@@ -249,9 +284,12 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
         {toolButton('segment-fill')}
         {toolButton('interpolate')}
       </div>
+      {divider}
       <span style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>Trace by hand</span>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>{toolButton('place-point')}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 6 }}>{toolButton('cut')}</div>
+      {divider}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>{toolButton('cut')}</div>
+      {((mode === 'find-lines' && findLines) || mode === 'segment-fill' || mode === 'color-trace') && divider}
 
       {mode === 'find-lines' && findLines && (
         <div data-testid="find-lines-controls" style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 6, color: theme.color.text.secondary }}>

@@ -1916,6 +1916,12 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
               height={stageSize.height}
               onWheel={onWheel}
               onMouseDown={onStageMouseDown}
+              // ⚑ A drag keeps the pointer until it is released. Leaving the figure cancels a drag, and the cards float
+              // over the figure: a drag whose path crossed one of their buttons was cancelled half-way (a bar box
+              // dragged past the Data extraction card's Auto-extract button recorded nothing).
+              onPointerDown={(e) => {
+                if (e.evt.button !== 2) e.target.getStage()?.content.setPointerCapture?.(e.evt.pointerId);
+              }}
               onMouseMove={onMouseMove}
               onMouseUp={endDrag}
               onMouseLeave={onStageMouseLeave}

@@ -84,6 +84,9 @@ export interface FindLinesOptions {
   coloursAreLevels?: boolean;
   /** For measurement only: override the residual tolerance. */
   residualTolerance?: number;
+  /** The inks of the figure's OTHER series, when they are known (the legend names them: Auto-extract all series).
+   * A pixel nearer a paper-to-ink mix of one of them than of this colour is that series' ink, not this one's. */
+  otherInks?: readonly RGB[];
 }
 
 const O = {
@@ -287,6 +290,14 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
   // other level; 15 let 19 pieces of levels 22 and 26 through.
   const resTol = opts.residualTolerance ?? (opts.coloursAreLevels ? ownInkResidual(rgba, w, h, colour, cov, box) : 70);
   const mask = lineMask(cov, w, h, box, masks, 0.3, resTol);
+  // ⚑ Another series' anti-aliased edge sits as close to a mix of this ink as the per-coverage tolerance allows
+  // (dark blue against green on xy-multiseries-modulus: about 91 per unit of coverage, under the cut at 100), so
+  // with no more to go on it is read as faint ink of this colour, and a stretch of the blue line came back as nine
+  // "green" lines. Where the other inks are known, the nearer mix decides whose pixel it is.
+  for (const other of opts.otherInks ?? []) {
+    const oc = inkCoverage(rgba, w, h, other);
+    for (let i = 0; i < mask.length; i++) if (mask[i] && oc.alpha[i]! > 0.3 && oc.residual[i]! < cov.residual[i]!) mask[i] = 0;
+  }
   const skel = skeletonize(mask, w, h);
   const graph = skeletonGraph(skel, w, h);
   const nodes = graph.nodes;

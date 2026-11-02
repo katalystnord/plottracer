@@ -2763,8 +2763,10 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     // Two bars clear of the baseline (y=400 is value 0, 30 px to the unit):
     // 1.67 to 5.00 and 2.33 to 5.67.
     await pickTool('place-point'); // Calibrate picks no tool (David, 2026-11-01)
-    await dragMarker(150, 350, 150, 250);
-    await dragMarker(350, 330, 350, 230);
+    // drawn from the top down: the bottom of the first bar is under the Data extraction card's Auto-extract button,
+    // which a drag may end over but not start on
+    await dragMarker(150, 250, 150, 350);
+    await dragMarker(350, 230, 350, 330);
 
     const savePath = tempFilePath('zip');
     await stubSaveDialog(savePath);
@@ -12910,6 +12912,98 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
       await slowChannel('figdet:detect', 0);
     }
   }, 120000);
+
+  /** A drawn line chart, calibrated as the prompts ask, its legend marked with the Legend card from its truth box,
+   * then [Auto-extract all series] on the Data extraction card. Returns what the card says, one line per series. */
+  async function autoExtractDrawn(name: string): Promise<string[]> {
+    await openDrawnFigure(name);
+    const [lx0, ly0, lx1, ly1] = (vTruth(name) as unknown as { legend_box: [number, number, number, number] }).legend_box;
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-mark').click();
+    const from = await imageToLocal(...(vImg([lx0 - 3, ly1 + 3]) as [number, number]));
+    const to = await imageToLocal(...(vImg([lx1 + 3, ly0 - 3]) as [number, number]));
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('auto-extract-all').click();
+    await page.getByTestId('auto-extract-said').waitFor({ timeout: 60000 });
+    return page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+  }
+
+  it('Auto-extract all series on a line chart in two colours: each legend line names its series, Find lines reads each into it, one Undo takes it all back', async () => {
+    const said = await autoExtractDrawn('lines-legend-colour');
+    expect(said).toHaveLength(2);
+    expect(said[0]).toMatch(/^Control: Read from the figure’s drawing: 1 line found/);
+    expect(said[1]).toMatch(/^Treated: Read from the figure’s drawing: 1 line found/);
+    const series = await page.getByTestId('series-select').locator('option').allTextContents();
+    expect(series).toEqual(['Control (80)', 'Treated (80)']);
+    // ⚑ one run, one undo step
+    await page.getByTestId('undo').click();
+    expect(await page.getByTestId('series-select').locator('option').allTextContents()).toEqual(['Series 1 (0)']);
+    // pressed again, each goes back into the series of its name: never a second copy
+    await page.getByTestId('redo').click();
+    await page.getByTestId('auto-extract-all').click();
+    await expect.poll(async () => (await page.getByTestId('series-select').locator('option').allTextContents()).join(' | '), { timeout: 60000 }).toBe('Control (80) | Treated (80)');
+  }, 180000);
+
+  it('Auto-extract all series, two series in ONE ink: the colour is read once, and the second says colour cannot tell them apart', async () => {
+    const said = await autoExtractDrawn('lines-legend');
+    expect(said[0]).toMatch(/^series 1: Read from the figure’s drawing: 2 lines found/);
+    expect(said[1]).toBe('series 2: Same colour as series 1, so colour cannot tell them apart: its data was all read into series 1. Move each to its own series in the series list.');
+    const series = await page.getByTestId('series-select').locator('option').allTextContents();
+    // the two drawn lines, once each
+    expect(series.filter((t) => /\(80\)/.test(t))).toHaveLength(2);
+  }, 180000);
+
+  it('Auto-extract all series with no legend marked says so in the bottom bar, with the warning triangle', async () => {
+    await openDrawnFigure('lines-legend-colour');
+    await page.getByTestId('auto-extract-all').click();
+    await expect.poll(() => textOf('tips-bar')).toMatch(/Mark the legend first \(Legend, 3\)/);
+    expect(await page.getByTestId('tips-bar-warning').count()).toBe(1);
+    expect(await page.getByTestId('series-select').locator('option').allTextContents()).toEqual(['Series 1 (0)']);
+  }, 120000);
+
+  it('Find this line armed on one figure is put down when another is opened: no banner, and the card asks for the data area first', async () => {
+    await openDrawnFigure('lines-legend-colour');
+    await page.getByTestId('find-lines-one').click();
+    expect(await page.getByTestId('eyedropper-cancel').count()).toBe(1);
+    // the next figure (the open dialog answers with the sample picture)
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    expect(await page.getByTestId('eyedropper-cancel').count()).toBe(0);
+    expect(await textOf('calib-chip-data-area')).toMatch(/Data area\s*drag on image/);
+    expect(await textOf('tips-bar')).toMatch(/Mark the data area/);
+  }, 120000);
+
+  it('Auto-extract all series on a picture: detected axes, detected legend, and the four blends read by name', async () => {
+    await resetWorkspace('xy');
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(__dirname, '../../samples/xy-multiseries-modulus.png'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('capture-figure').click();
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => textOf('calib-chip-y2').then((t) => t.replace(/\s/g, '')), { timeout: 60000 }).toBe('Y23500');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-auto-detect').click();
+    await expect.poll(async () => (await recorded()).filter((r) => r.kind === 'legend').length, { timeout: 60000 }).toBe(1);
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('auto-extract-all').click();
+    await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+    const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+    const series = await page.getByTestId('series-select').locator('option').allTextContents();
+    expect(series.map((t) => t.replace(/ \(\d+\)$/, '')), JSON.stringify(said)).toEqual(['Blend A', 'Blend B', 'Blend C', 'Blend D']);
+    for (const t of series) expect(Number(/\((\d+)\)$/.exec(t)?.[1] ?? 0), t).toBeGreaterThan(50);
+  }, 240000);
 
   it('V30: zoomed past 100% on a drawn figure the view is redrawn sharp from the PDF; Find lines still reads the drawing', async () => {
     const sharp = () => page.getByTestId('base-canvas').getAttribute('data-sharp');

@@ -35,7 +35,9 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, readPictureAxes } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, readPictureAxes, readRegionWords } from './ocrClient.js';
+import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
+import { planAutoExtract, autoExtractTools } from '../../engine/autoExtract.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -1594,6 +1596,9 @@ export function Workspace() {
   const [ocrRereading, setOcrRereading] = useState(false);
   const [ocrAngleNotice, setOcrAngleNotice] = useState<string | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  /** Auto-extract all series is running; and what each series' tool said, once it has run. */
+  const [autoExtractBusy, setAutoExtractBusy] = useState(false);
+  const [autoExtractReport, setAutoExtractReport] = useState<{ on: CalibrationSession<CalibratedAxes>; lines: string[] } | null>(null);
 
   // The wrong-axis notice for the click just made (v1.4, Spider) -- transient UI
   // state, never part of the record. Every capture click overwrites it (with null
@@ -1614,6 +1619,8 @@ export function Workspace() {
   } | null>(null);
 
   const session = sessionRef.current;
+  // what Auto-extract said is about the figure it read, and shown only on that one
+  const autoExtractSaid = autoExtractReport?.on === session ? autoExtractReport.lines : null;
   const config = session.getConfig();
   // `version` is a deliberately unused dependency of the memos below - it
   // exists only to force recomputation after a mutation to the ref-held
@@ -1997,7 +2004,13 @@ export function Workspace() {
     );
   }, []);
 
+  /** While Auto-extract all series runs, each tool's own commit is held, so the whole run is one undo step. */
+  const holdCommitsRef = useRef(false);
   const commit = useCallback(() => {
+    if (holdCommitsRef.current) {
+      bump();
+      return;
+    }
     history.commit(captureDoc());
     dirtyRef.current = true;
     bump();
@@ -4469,6 +4482,9 @@ export function Workspace() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDataAreaChosen(false);
+    // a colour pick armed on one figure is put down with it: armed on the next, Find this line's banner stayed up on
+    // a type it does not apply to, and the calibration card skipped its Data area step (David, 2026-11-02)
+    setEyedropper(null);
   }, [session]);
 
   const chooseCalibrationStep = useCallback((key: string) => {
@@ -6920,7 +6936,9 @@ export function Workspace() {
     };
   }, [canvasView, figureKindText, provenance]);
 
-  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number] } = {}): Promise<{ text: string; error?: boolean; summary?: string }> => {
+  // `addPlaces`: the places to check are added to those listed (Auto-extract all series reads one colour after another).
+  // `otherInks`: the other series' colours, when the legend names them, so their ink is not read as this one's.
+  const findLinesWith = useCallback(async (colour: string, opts: { at?: readonly [number, number]; addPlaces?: boolean; otherInks?: readonly (readonly [number, number, number])[] } = {}): Promise<{ text: string; error?: boolean; summary?: string }> => {
     const kind = findLinesKind(session.getConfig().id);
     const imageData = readingImage();
     const target = hexToRGB(colour);
@@ -6961,7 +6979,7 @@ export function Workspace() {
       }
     }
     const found = fromDrawing ?? await findLinesInWorker(imageData.data, imageData.width, imageData.height, target,
-      plotBox, { contour: kind === 'contours', masks, coloursAreLevels: kind === 'contours' && session.getOptions()['hasColourKey'] === 'true' });
+      plotBox, { contour: kind === 'contours', masks, coloursAreLevels: kind === 'contours' && session.getOptions()['hasColourKey'] === 'true', ...(opts.otherInks ? { otherInks: opts.otherInks } : {}) });
     findLinesBusyRef.current = false;
     if ('error' in found || sessionRef.current !== session) {
       setFindLinesBusy(null);
@@ -7091,7 +7109,8 @@ export function Workspace() {
       }
     });
     const gaps = res.lines.reduce((n, L) => n + L.gaps.length, 0);
-    setLinePlaces(places);
+    if (opts.addPlaces) setLinePlaces((prev) => [...prev, ...places.map((pl, k) => ({ ...pl, id: prev.length + k }))]);
+    else setLinePlaces(places);
     setSelectedPointIndices([]); setLineSelection([]);
     const summary =
       (fromDrawing ? 'Read from the figure’s drawing: ' : '') +
@@ -7107,6 +7126,95 @@ export function Workspace() {
     return { text: `The Find lines card says: "${summary}"${placesText}`, summary };
   }, [session, commit, readLevelsFromKey, setLinePlaces, setFindLinesBusy, setFindLinesSummary, setFillLevelsNotice, setLineSelection, setSelectedPointIndices, readingImage]);
   const handleFindLines = useCallback(() => findLinesWith(colorTraceColor), [findLinesWith, colorTraceColor]);
+
+  /**
+   * [Auto-extract all series] (the Data extraction card, v2.7; David 2026-10-31: "Reads every series the legend
+   * names, each with the tool that suits it"). The legend is read where it is marked (from the drawing on a drawn
+   * figure, else the picture's words and the colour beside each), and each entry is read by one of the card's own
+   * tools on its colour into a series of its name (`planAutoExtract`). The whole run is one undo step. If nothing at
+   * all can be read, the bottom bar says so with the warning triangle, as the other automatic tools do.
+   */
+  const autoExtractAll = useCallback(async () => {
+    const s = sessionRef.current;
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return;
+    const say = (t: string) => {
+      setAutoExtractReport(null);
+      setOcrError(t);
+    };
+    if (!s.getAxes()) return say('Calibrate the axes first - Auto-extract gives the series their values from the calibration.');
+    const legend = s.getLegendRegion();
+    if (!legend) return say('Mark the legend first (Legend, 3) - Auto-extract reads the series the legend names.');
+    const b = { x0: legend.x, y0: legend.y, x1: legend.x + legend.width, y1: legend.y + legend.height };
+    setAutoExtractBusy(true);
+    setAutoExtractReport(null);
+    setOcrError(null);
+    try {
+      let entries: LegendEntry[] = [];
+      const k = figureKindRef.current;
+      const read = pageDrawingReadRef.current;
+      if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
+        const prov = provenanceRef.current;
+        const placed = placeDrawing(prov, read.drawing, read.text);
+        if (placed) entries = readLegendFromDrawing(placed, placeTextItems(prov, read.items), b);
+      }
+      if (!entries.length) {
+        // the picture itself: the legend is masked for every reader, never for its own read
+        const words = await readRegionWords(img.data, img.width, img.height, legend, { whitenColour: true });
+        if (sessionRef.current !== s) return;
+        if (isOcrFailure(words)) return say(words.error);
+        entries = readLegendFromPixels(words, img.data, img.width, img.height, b);
+      }
+      const plan = planAutoExtract(s.getConfig(), entries, s.getDatasetInfos());
+      if (!plan.length) return say('No series could be read from the legend - check the legend is marked round its entries, or use the tools below one series at a time.');
+      const said: string[] = [];
+      let readAny = false;
+      holdCommitsRef.current = true;
+      try {
+        for (const step of plan) {
+          if (sessionRef.current !== s) return;
+          if ('skip' in step) {
+            said.push(`${step.name}: ${step.skip}`);
+            continue;
+          }
+          let into = step.into;
+          if (into === 'new') into = s.addDataset();
+          s.setActiveDataset(into);
+          if ((s.getDatasetInfos()[into]?.pointCount ?? 0) > 0) s.clearPoints();
+          s.renameDataset(into, step.name);
+          s.setDatasetColor(into, step.colour);
+          const hex = `#${step.colour.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+          if (step.tool === 'lines') {
+            const before = s.getDatasetInfos().length;
+            const otherInks = plan.flatMap((o) => ('colour' in o && o !== step ? [o.colour] : []));
+            const res = await findLinesWith(hex, { addPlaces: readAny, otherInks });
+            // further lines of the same colour are named after it, and all keep the legend's colour
+            s.getDatasetInfos().slice(before).forEach((d, n) => {
+              s.renameDataset(d.index, `${step.name} ${n + 2}`);
+              s.setDatasetColor(d.index, step.colour);
+            });
+            s.renameDataset(into, step.name);
+            s.setDatasetColor(into, step.colour);
+            said.push(`${step.name}: ${res.summary ?? res.text}`);
+            if (!res.error) readAny = true;
+          } else {
+            colorTraceSaidRef.current = '';
+            colorTraceWith(hex, step.tool === 'points' ? 'scatter' : 'curve');
+            said.push(`${step.name}: ${colorTraceSaidRef.current}`);
+            if ((s.getDatasetInfos()[into]?.pointCount ?? 0) > 0) readAny = true;
+          }
+        }
+      } finally {
+        holdCommitsRef.current = false;
+      }
+      if (sessionRef.current !== s) return;
+      commit();
+      setAutoExtractReport({ on: s, lines: said });
+      if (!readAny) setOcrError('No series could be read: none of the legend’s colours was found inside the data area.');
+    } finally {
+      setAutoExtractBusy(false);
+    }
+  }, [findLinesWith, colorTraceWith, commit]);
 
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as
@@ -10358,6 +10466,7 @@ export function Workspace() {
               heldBackOffer={swatchHoldBackOffer(heldBackBars.length)}
               onAddHeldBackBars={addHeldBackBars}
               onArmEyedropper={setEyedropper}
+              autoExtract={{ applies: autoExtractTools(config).length > 0, busy: autoExtractBusy, said: autoExtractSaid, onRun: () => void autoExtractAll() }}
               {...(findLinesKind(config.id)
                 ? {
                     findLines: {
