@@ -3,10 +3,18 @@
 A short, task-oriented guide to getting numbers out of a figure. For features,
 install instructions, and keyboard shortcuts see the [README](README.md).
 
-PlotTracer's core loop is **calibrate → capture → trace → correct → export**. The
-canvas is the figure; everything else floats above it. The left rail holds the
-tools (each numbered with its hotkey); the top bar is document actions (open,
-save, export); the right panel is your extracted data.
+PlotTracer's work is **one workflow**: open → capture → calibrate → mark the
+legend → extract → correct → export. Each step is one card, and each card holds
+every way of doing that step - a click, the guided order, an automatic detection.
+They all make the same marks, any of them can finish or correct what another
+started, and nothing records which one was used.
+
+The canvas is the figure; everything else floats above it. The left rail holds the
+tools, each with its number key: **0** Pan, **1** Edit image, **2** Calibrate, **3**
+Legend, **4** Data extraction; then **5** Select, **6** Error bars and the Eraser;
+then **7** Measure, **8** Curve fit, **9** Geometry. The top bar is document actions
+(open, save, export); the right panel is your extracted data. The ring in the lower
+right corner turns while a long operation runs.
 
 ---
 
@@ -18,7 +26,18 @@ clipboard (`Ctrl+V`). Supported: PNG, JPG, GIF, BMP, WebP, SVG, TIFF, and **PDF*
 trackpad); pan with the middle mouse button or `Space`+drag;
 fit the view with `Ctrl+0`.
 
-## 2. Choose the graph type and calibrate
+## 2. Capture the figure
+
+Frame the figure in the window (on a whole page, zoom and pan to it) and press
+**Capture figure**. This freezes what is framed as the working image of record -
+what you see is what you captured - so the data always traces back to a stable
+source. Edit image's crop can cut it down further later. With a PDF, the captured
+figure and its page are remembered in the project, and the calibration card says
+whether the figure is **drawn** in the PDF, a **picture**, or partly each: a drawn
+figure is read from its drawing, exactly, by the tools that can (Find lines,
+markers, bars, the axes' labels), and past 100% zoom it is redrawn sharp.
+
+## 3. Choose the graph type and calibrate
 
 Pick the graph type from the **card picker** in the top bar - each type shows its
 own icon, so a bar chart and a histogram are told apart by their shape rather than
@@ -36,8 +55,44 @@ describes a distribution rather than a set of separate magnitudes.
 Error bars are not a graph type - they are **rail tool 6**, captured on top of
 whichever series they belong to.
 
-Open the **Calibration** card (top-center) and place the reference points it asks
-for - for XY that's two X points and two Y points.
+The **Calibration** card opens after Capture figure. It is always on screen, at
+least folded, so you can always see whether the figure is calibrated; clicking
+**Calibrate** on the rail unfolds it.
+
+**The data area comes first.** Drag a box from one corner of the plot to the
+opposite corner: that is where the automatic tools search, so labels, titles and
+axes outside it are never read as data. It never stops a point you place by hand
+and never cuts the record. Its four square grips can be dragged while the card is
+open. (Measured: with no data area, Find lines took the labels, title and axes for
+lines on every bundled figure tried.)
+
+**Then the calibration points, on labelled tick marks.** For XY, two X points and
+two Y points: click a labelled tick mark on the X axis and enter the number printed
+there, then a second one with a different number, and the same for Y. **Common
+origin** shares one point between X1 and Y1 when the corner where the axes meet is
+labelled on both. A **category axis** (Bar, Stacked bar, Line with categories, Box
+plot, Candlestick, Span chart) is calibrated on two tick marks too: **Cat 1** on the
+first category's tick mark, **Cat n** on the last one's, then how many categories
+the figure has. In the **Categories** stage after Calibrate you say whether the
+figure draws its ticks at the categories' centres (the default) or between them;
+the tick marks move on screen to show which, and Cat 1 and Cat n stay where you
+clicked them.
+
+**[Automatic axis detection]**, just under the card's header, does the same walk
+for you on XY, Contour and the bar family: it sets the data area to the plot's
+frame and places every point it can read, each on a labelled tick with the number
+printed there (on a bar chart, Cat 1 and Cat n where the first and last category
+labels are centred, with the count). A drawn PDF figure is read from its own text
+and drawing; a picture by a chart-element detector and the OCR, offline. Check the
+points, move any of them or retype a number, place a missing one by clicking its
+chip and then the figure, and press **Calibrate**. If nothing could be read, the
+bottom bar says no calibration points could be fixed, with the warning triangle.
+
+You can click any point's chip and then the figure at any time to place or move
+it. **Any change to the calibration loses it** - a moved point, even a one-pixel
+nudge, an edited value, an option such as Log X - and **Calibrate** sets it again.
+While the figure is not calibrated the data table keeps its rows and greys out
+the values.
 
 **Spider / radar charts** work differently, because the number of axes belongs to
 the figure rather than to the tool. You click the **centre** and give the value
@@ -132,55 +187,65 @@ a right-angled triangle - an ordinary convention - reads correctly rather than
 being read as though it were equilateral. Three corners in a line are refused: a
 triangle with no area has no interior for a composition to sit in.
 
-## 3. Capture the figure
+## 4. Mark the legend
 
-Press **Capture figure** on the calibration card. This freezes the framed figure
-as the working image of record - what you see is what you captured - so the data
-always traces back to a stable source. (With a PDF, the captured figure and its
-page are remembered in the project.)
+**Legend** (`3`) has three buttons. **Mark legend**: drag a box round the figure's
+legend. **Auto detect legend** finds it for you (if it finds nothing, the bottom bar
+says so). **Mask an area**: drag a box over anything else that is not data - text,
+arrows, an inset, a reference line. The legend and a masked area are rectangles
+laid over the figure, shaded in two colours: the picture stays as it was, every
+reader leaves them out, and their corners can be moved while the card is open. A
+marked legend is masked by itself. What is read from the legend (each entry's name
+and the colour beside it) is used to name series and by the automatic extraction;
+only the legend's corners are shown.
 
-## 4. Trace the curve
+## 5. Extract the data
 
-Several ways, depending on the figure - all on the left rail:
+**Data extraction** (`4`) is one card for every way to get points. When it opens
+no tool is picked; pick the one that suits the figure (a tool that does not apply to
+the graph type is greyed).
 
-- **Add points** (`3`) - click along the curve. A zoom loupe follows the cursor
-  for precision. This is the reliable default and works on anything.
-- **Auto-extract** (`4`) - the wand tool. On XY and Contour figures it offers four
-  mechanisms, the first being **Find lines**:
-  - **Find lines** (*first version*) - pick the lines' colour and press **Find
-    lines**: every line of that colour becomes its **own** line, even where
-    same-colour lines cross, touch, run together or are cut by their own labels.
-    Each found line gets its own colour on screen so you can see which is which.
-    A gap the figure drew no ink in (a label, a dash, a crossing) is filled by a
-    fair interpolation between the line's ends and those points are marked
-    **bridged**; a stretch two curves share is recorded in **both**, marked
-    **shared**. On a **Contour** figure it also reads each line's label: the read
-    is shown beside the line's **Level** as *"The label reads 0.4"*, and **Use**
-    makes it the level (exported as `Level from: label`). It is offered, not
-    written in, because the reader gets some labels wrong. **Fill in the other
-    levels** then fills unset lines in equal steps from the ones you set, and says
-    so if the levels are uneven. A legend inside the plot: mask it first with
-    **Image ▸ Mask an area** - every reader then leaves it out, and Find lines
-    also bridges a line that passes behind it. Pressing **Find lines again** replaces the lines the last
-    press found (a line you renamed is kept). Where Find lines is unsure it does **not** guess:
-    it leaves the pieces apart and lists the place under **Places to check**.
-  - **Flood-fill** - click one point on a solid curve; it traces the connected line.
-  - **By colour** - pick the series' colour (type a hex value, or take it from the
-    figure with the pipette); it extracts every matching pixel in one pass (good for
-    dashed or marker curves). A live preview highlights exactly which pixels it will
-    take; **Restrict to a box** limits it to a region so a same-coloured legend is
-    ignored. The series then **takes that colour**, so its markers sit on the curve
-    they came from rather than in whatever colour the series happened to be given.
-  - **Guide points** - for monochrome, dashed, or overlapping curves that colour
-    can't separate: click a few guide points along one line and a spline fills the
-    rest. The guide points are your record; the fill is marked as derived.
-- For **scatter**, set Auto-extract ▸ By colour's shape to **Scattered points** -
-  one point per marker instead of one per pixel column.
+- **Auto-extract all series** reads every series the legend names, each with the
+  tool that suits it, into a series of that name: a line in the legend with Find
+  lines, a marker with Colour trace's Scattered points, a bar with the type's own
+  shapes. A short report says what each series' read found; one **Undo** takes the
+  whole read back. Pressed again, it replaces what it found before.
+- **Find individual series**: the **Series** row picks the series to read into
+  (rename it in place, or **+ Add** one). Then:
+  - **Find lines** (XY and Contour) - every line of the picked colour becomes its
+    **own** line, even where same-colour lines cross, touch, run together or are
+    cut by their own labels, and each gets its own colour on screen. A gap the
+    figure drew no ink in (a label, a dash, a crossing) is filled by a fair
+    interpolation between the line's ends, marked **bridged**; a stretch two curves
+    share is recorded in **both**, marked **shared**; a spectrum's narrow peaks are
+    read through their tips. Where it is unsure it does **not** guess: it leaves
+    the pieces apart and lists the place under **Places to check**, including a
+    line that stops inside the plot while more of its colour lies ahead. **Find
+    this line** takes just the line you click. On a **Contour** figure it also
+    reads each line's label: *"The label reads 0.4"* is offered beside the line's
+    **Level**, and **Use** makes it the level (exported as `Level from: label`).
+    **Fill in the other levels** fills unset lines in equal steps from the ones you
+    set, and says so if the levels are uneven. Pressing Find lines again replaces
+    the lines the last press found (a line you renamed is kept).
+  - **Colour trace** - every pixel of the picked colour inside the data area, in
+    one pass; on XY and Contour it reads markers (one point per marker), where Find
+    lines reads the lines. On Polar, Ternary, Map and the circular chart recorder,
+    where Find lines does not run, its **Shape** choice reads a curve or scattered
+    points. The series then **takes that colour**.
+  - **Fill a region** - click one point on a solid curve; it spreads along the
+    connected ink inside the data area.
+  - **Follow guide points** - for monochrome, dashed or overlapping curves that
+    colour cannot separate: click a few guide points along one line and a spline
+    fills the rest. The guide points are your record; the fill is marked as derived.
+- **Trace by hand: Place points** - click along the curve. A zoom loupe follows the
+  cursor for precision. This is the reliable default and works on anything.
+- **Split a line** - click a line where it should become two.
 
-Every automatic method shows you what it captured *before* you commit, so you can
-trust the result.
+The colour Find lines and Colour trace read is shown at the bottom of the card,
+beside a small crop of the figure where it was picked, with **Pick from image**.
+Every automatic tool shows you what it captured, and one Undo takes it back.
 
-**Bars are captured as a drag-box.** With **Add points** (`3`) on a Bar chart you
+**Bars are captured as a drag-box.** With **Place points** on a Bar chart you
 press at one corner of a bar and release at the opposite one: a bar's value is its
 *extent*, not a point on it, so those two corners **are** the measurement. Plain
 and grouped bars work this way, and a bar below the baseline reads negative. A bar that floats clear of the axis belongs on a **Span chart**
@@ -188,7 +253,7 @@ instead: Bar means measured from a baseline, so a bar that never reaches one
 reports a note rather than a plain reading. A plain click places one corner and leaves the bar half-captured -
 its row shows a dash until you place the other.
 
-**Auto-extract ▸ By colour also works on Bar, Histogram and Span chart**, for the
+**Colour trace also works on Bar, Histogram and Span chart**, for the
 same reason: the blob's own *bounding box* is its two ends, so nothing is
 averaged or centroided away. It is greyed out for **Box plot**, **Candlestick**,
 **Heatmap**, **Line** (categorical X) and **Pie / Donut** - a box's five
@@ -245,7 +310,7 @@ wrong way round, tick **Swap which colour rises** on that card and every candle
 changes at once. A figure drawn in a single colour has no direction to read, so
 every candle is reported rising.
 
-**Spider charts trace along their own axes.** Auto-extract ▸ **By colour** is the
+**Spider charts trace along their own axes.** **Colour trace** is the
 only mechanism offered there, and it does a different job: it walks each calibrated
 ray outward and records the value where the series' colour crosses it - one reading
 per axis, filed into that axis's own row. Where a ray crosses the colour more than
@@ -258,20 +323,20 @@ stopped, so nothing is recorded and the message says which axis and what to chec
 capture cursor lands on them, so what the trace refused is what you are asked for
 next. A reading you placed by hand is never overwritten.
 
-## 5. Correct
+## 6. Correct
 
 **After Find lines** (a first version - it will sometimes get a line wrong):
 - **Places to check** (right panel) lists every place it was unsure - lines
   meeting, pieces left apart, merged ink it could not separate, labels not used.
   Click one to go there; tick it once it is right.
-- **Cut** (rail, beside the eraser) - click a line where it should become two.
-  A closed line opens at the cut instead.
+- **Split a line** (Data extraction card) - click a line where it should become
+  two. A closed line opens at the cut instead.
 - **Join with** (series panel) - joins the active line to another at their
   nearest ends; the gap is bridged and marked as bridged. Two lines with
   different levels are refused.
 - **Move N selected to** (Data points header) - moves the points you selected
   with **Select** onto another line, in order along it.
-- Two curves swapped at a crossing: **Cut** both there, then **Join** the right
+- Two curves swapped at a crossing: **Split** both there, then **Join** the right
   pairs. One **Undo** reverses any of these, or the whole Find lines result.
 
 - **Select** (`5`) - click a point to select it, or drag a box to select a range.
@@ -364,17 +429,16 @@ next. A reading you placed by hand is never overwritten.
   example draws its rings a lighter grey than its rays. That separation belongs to
   the *figure*, not to the tool - plenty of radar charts draw both in one grey, and
   there the rays go too. Check the rays survived before you trace, and undo if not.
-- **Mask an area** (image tool `2` ▸ Image card) paints a dragged rectangle out
-  with the paper colour measured around it. It is the answer to a **legend drawn
-  inside the plot box**: a legend's swatches are the series' own ink at roughly
-  the series' own size, so no colour filter and no plot-area rule can tell them
-  from the bars they describe, and a trace picks them up as data every time.
-  Masking removes them once for every mechanism at once - the colour trace, the
-  bar detect, the scatter detect, the flood fill and the label reader all stop
-  seeing them together. Unlike a crop the image keeps its size and nothing moves.
+- **Mask an area** (Legend, `3`) lays a rectangle over anything that is not data.
+  It is also the answer to a **legend drawn inside the plot box** (Mark legend
+  masks it by itself): a legend's swatches are the series' own ink at roughly the
+  series' own size, so no colour filter can tell them from the data they describe.
+  A masked area is left out by every reader at once - Find lines, the colour trace,
+  the bar and scatter detection, Fill a region and the label reader - and Find
+  lines carries a line across it. The picture itself is not changed.
 - **Undo/redo** (`Ctrl+Z` / `Ctrl+Shift+Z`) covers everything, including image edits.
 
-## 6. Multiple series and figures
+## 7. Multiple series and figures
 
 - **+ Add** (right panel) starts another series on the same calibration - each
   named and colour-coded, captured side by side.
@@ -382,7 +446,7 @@ next. A reading you placed by hand is never overwritten.
   a fresh figure. Flip between figures with the ◀ ▶ arrows by the calibration card;
   each keeps its own image, calibration, series, and graph type.
 
-## 7. Error bars (optional)
+## 8. Error bars (optional)
 
 Error bars are **not a graph type** - they are rail tool `6`, captured on top of
 whichever series they belong to.
@@ -446,13 +510,13 @@ and Excel want deltas, ggplot's `ymin`/`ymax` want the absolutes - so neither
 reader has to do arithmetic on the record. A row with no cap leaves the delta
 blank rather than reporting an error of zero.
 
-## 8. Measure (optional)
+## 9. Measure (optional)
 
 The **ruler** tool (`7`) opens a Measure card: **distance, angle, area, slope** -
 in the chart's own units, or a scale you set from any known length on the image.
 Measurements are a separate collection from your series data.
 
-## 9. Analyse (optional)
+## 10. Analyse (optional)
 
 Open **Curve fit** from the tool rail to fit a model through a traced series.
 
@@ -491,7 +555,7 @@ polynomial is solved directly and has nothing to converge, so it reads `n/a`.
 The fit is always a **separate block** from the record - the traced points are
 never overwritten by the model drawn through them.
 
-## 10. Heatmaps
+## 11. Heatmaps
 
 A heatmap is a **matrix**, not a set of points, so nothing on it is clicked as a
 data point. You calibrate the two axes and the colour key, put a **grid** over
@@ -717,7 +781,7 @@ travel in their own column.
 
 ---
 
-## 11. Export
+## 12. Export
 
 **Export** (top bar) → **CSV, TSV, JSON, OpenDocument (ODS), Excel (XLSX), LaTeX,
 MATLAB, Python, R**,
@@ -765,11 +829,11 @@ diverging key genuinely does, the row says so instead of picking one: an
 ambiguous reading is not a number until you resolve it. Colour measurements copy
 and export like any other, with the colour in its own column.
 
-**Guide-point traces carry a `role` column.** If a series was traced with **Guide
-points**, its export gains a `role` telling you where each number came from:
+**Guide-point traces carry a `role` column.** If a series was traced with **Follow
+guide points**, its export gains a `role` telling you where each number came from:
 `anchor` for a point you placed by eye, `interpolated` for one the spline filled in
 between your anchors, and **blank** for an ordinary point you clicked yourself with
-Add points. Keep only the anchors if you want strictly what a human put on
+Place points. Keep only the anchors if you want strictly what a human put on
 the figure. The column appears only for series that were traced this way - an
 ordinary trace exports exactly as before.
 
