@@ -578,10 +578,87 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
     places.push({ kind: 'bridge', at: centroid(pc.pts), ends: [...o1, ...o2] });
   }
 
+  // --- A NARROW PEAK'S TIP (v2.7): where a curve turns back sharply, its two flanks run closer than a line's width
+  // and the ink fuses into one stroke, twice as thick, running on to the tip. The skeleton then shows two arms
+  // arriving side by side, heading the same way, and a thick stub carrying on to a free end - which was read as a
+  // three-way meeting nobody could pair, so a spectrum came apart at every narrow peak and lost the peak's tip
+  // (algorithms/__tests__/findLinesSpectra.test.ts). The curve runs down the stub to the tip and back up it: the stub
+  // is ink the two flanks share, so it is walked twice, as the shared stretch's twin is (role 'shared').
+  const lineDt = (lw + 1) / 2;
+  const thickness = (pc: Piece): number => {
+    const ds = pc.pts.slice(1, -1).map(([x, y]) => dt[roundHalfEven(y) * w + roundHalfEven(x)] ?? 0);
+    if (!ds.length) return 0;
+    ds.sort((a, b) => a - b);
+    return ds[Math.floor(ds.length / 2)]!;
+  };
+  const readThroughTip = (reg: number, br: End[]): boolean => {
+    if (br.length < 3) return false;
+    // a stub: a piece of this meeting whose far end is free and inside the plot, its ink fused (half again as thick)
+    const isStub = ([i, k]: End): boolean => {
+      const pc = P[i]!;
+      const far = pc.node[1 - k] ?? null;
+      return !isJunc(far) && !onFrame(pc.end((1 - k) as 0 | 1)) && thickness(pc) >= 1.5 * lineDt;
+    };
+    const stubs = br.filter(isStub);
+    const arms = br.filter((b) => !isStub(b));
+    if (arms.length !== 2 || stubs.length === 0) return false;
+    const T = (b: End): Pt => P[b[0]]!.tangent(b[1], skip);
+    const [ta, tb] = [T(arms[0]!), T(arms[1]!)];
+    const side = dot(ta, tb);
+    // the arms arrive side by side (one tip: the stub carries on the way they were heading), or from either side of
+    // a blob (small turns fused on a steep flank: each stub one of them); anything between is not this
+    if (side > -0.5 && side < 0.5) return false;
+    if (side >= 0.5 && !stubs.some((s) => dot(T(s), ta) < -0.5 && dot(T(s), tb) < -0.5)) return false;
+    // every stub is fused ink of this curve, walked out and back where it meets it
+    const tipsHere = [...stubs];
+    // in the order the curve meets them, coming in along the first arm
+    const from = P[arms[0]![0]]!.end(arms[0]![1]);
+    tipsHere.sort((a, b) => norm(sub(P[a[0]]!.end(a[1]), from)) - norm(sub(P[b[0]]!.end(b[1]), from)));
+    const twoPoint = (x: End, y: End): Pt[] => [P[x[0]]!.end(x[1]), P[y[0]]!.end(y[1])];
+    let at: End = arms[0]!;
+    for (const stub of tipsHere) {
+      const pc = P[stub[0]]!;
+      // the skeleton stops short of a fused tip by about the stroke's half width; the ink says where the tip is:
+      // carry on along the stub through the ink, to half a line's width short of where the ink ends (the centre of
+      // the stroke's round end)
+      const tipK = (1 - stub[1]) as 0 | 1;
+      const dir = pc.tangent(tipK, 0, 6);
+      const from = pc.end(tipK);
+      let last = 0;
+      for (let s = 0.5; s <= 4 * lw + 6; s += 0.5) {
+        const x = roundHalfEven(from[0] + dir[0] * s), y = roundHalfEven(from[1] + dir[1] * s);
+        if (x < 0 || y < 0 || x >= w || y >= h || !mask[y * w + x]) break;
+        last = s;
+      }
+      const reach = last - lw / 2;
+      if (reach >= 1) {
+        const out: Pt[] = [];
+        for (let s = 1; s <= reach; s += 1) out.push([from[0] + dir[0] * s, from[1] + dir[1] * s]);
+        if (tipK === 1) pc.pts.push(...out);
+        else pc.pts.unshift(...out.reverse());
+      }
+      const twin = new Piece(pc.pts.map((p) => [p[0], p[1]] as Pt));
+      twin.node = [pc.node[0], pc.node[1]];
+      twin.shared = true;
+      pc.shared = true;
+      P.push(twin);
+      const ti = P.length - 1;
+      const [si, sk] = stub;
+      const tip = (1 - sk) as 0 | 1;
+      link(at, stub, twoPoint(at, stub));
+      link([si, tip], [ti, tip], twoPoint([si, tip], [ti, tip]));
+      at = [ti, sk];
+    }
+    link(at, arms[1]!, twoPoint(at, arms[1]!));
+    handled.add(reg);
+    return true;
+  };
+
   // --- 3. pair the branch ends at each meeting place
   const placeBest = new Map<number, Set<string>>();
   for (const [reg, br] of endsAt) {
     if (handled.has(reg) || br.length < 2) continue;
+    if (!contour && readThroughTip(reg, br)) continue;
     if (br.length > O.maxBranches) {
       places.push({ kind: 'split', at: centroid(br.map(([i, k]) => P[i]!.end(k))), ends: br });
       continue;
