@@ -41,6 +41,7 @@ import {
   type CalibratedAxes,
 } from '../calibrationSession.js';
 import { sampleCandleBody } from '../candleDirection.js';
+import { truthCategoryEdges } from './helpers/categoryWalk.js';
 
 const FIGURE = 'samples/candlestick-trading-week.png';
 const TRUTH = JSON.parse(readFileSync('samples/candlestick-trading-week.truth.json', 'utf8')) as {
@@ -61,8 +62,7 @@ function yOf(value: number): number {
 /** Category i's centre. The axis spans the plot box and holds `count` bands, so
  *  a centre sits half a band in - the same rule the app's own ticks follow. */
 function xOf(index: number): number {
-  const c1 = A['c1']!;
-  const c2 = A['c2']!;
+  const [c1, c2] = truthCategoryEdges(A);
   const count = c2.value!;
   return c1.px + ((index + 0.5) * (c2.px - c1.px)) / count;
 }

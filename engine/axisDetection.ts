@@ -51,3 +51,80 @@ export function calibrationFromLabels(read: AxesFromLabels): DetectedCalibration
   }
   return { points, sharedOrigin, log: { x: read.x.ok && read.x.log, y: read.y.ok && read.y.log } };
 }
+
+type LabelBox = { x0: number; y0: number; x1: number; y1: number };
+type Frame = { x: number; y: number; width: number; height: number };
+
+/**
+ * The categories along a bar chart's category axis, from the boxes of the labels printed beside it (v2.7, the
+ * category axis on two tick marks): each category's label is centred on its category (labels lead, as on a
+ * picture's value axes), so the centres of the labels in the row nearest the axis are the categories' centres, in
+ * order along the axis, and how many there are is the count. Words of one label (`Group A`) are joined first.
+ * `side` is where the category axis runs: the frame's bottom on upright bars, its left on horizontal ones.
+ */
+export function categoryCentresFromLabels(labels: readonly LabelBox[], frame: Frame, side: 'bottom' | 'left'): number[] {
+  const along = side === 'bottom' ? ([0, 2] as const) : ([1, 3] as const);
+  const lo = side === 'bottom' ? frame.x : frame.y;
+  const hi = side === 'bottom' ? frame.x + frame.width : frame.y + frame.height;
+  const span = hi - lo;
+  const box = (b: LabelBox) => [b.x0, b.y0, b.x1, b.y1] as const;
+  // distance out from the axis, and the label's size across it
+  const out = (b: LabelBox) => (side === 'bottom' ? b.y0 - (frame.y + frame.height) : frame.x - b.x1);
+  const thick = (b: LabelBox) => (side === 'bottom' ? b.y1 - b.y0 : b.x1 - b.x0);
+  const centre = (b: LabelBox) => (box(b)[along[0]] + box(b)[along[1]]) / 2;
+  const beside = labels.filter((b) => {
+    const c = centre(b);
+    return c >= lo - 0.02 * span && c <= hi + 0.02 * span && out(b) >= -thick(b) / 4;
+  });
+  if (beside.length === 0) return [];
+  // the row nearest the axis: an axis title further out is not a category
+  const sizes = beside.map(thick).sort((a, b) => a - b);
+  const size = sizes[Math.floor(sizes.length / 2)]!;
+  const nearest = Math.min(...beside.map(out));
+  const row = beside.filter((b) => out(b) <= nearest + 0.75 * size);
+  // words of one label: a gap smaller than half a label's size
+  const runs = row
+    .map((b) => [box(b)[along[0]], box(b)[along[1]]] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const r of runs) {
+    const last = merged[merged.length - 1];
+    if (last && r[0] - last[1] < size / 2) last[1] = Math.max(last[1], r[1]);
+    else merged.push([r[0], r[1]]);
+  }
+  const centres = merged.map(([a, b]) => (a + b) / 2);
+  // upright: left to right; horizontal: bottom to top, as the values on a vertical axis run
+  return side === 'bottom' ? centres : centres.reverse();
+}
+
+/** What [Automatic axis detection] places on a bar-family figure: the value axis's two points with their numbers,
+ * Cat 1 and Cat n on the first and last category's tick marks with the count, as the walk would place them. */
+export interface DetectedBarCalibration {
+  value: { px: number; py: number; value: number }[];
+  /** Cat 1 and Cat n, and how many categories, or null when fewer than two category labels were found. */
+  categories: { first: { px: number; py: number }; last: { px: number; py: number }; count: number } | null;
+  log: boolean;
+}
+
+/** Null when neither axis could be read: nothing to place, and the caller warns. */
+export function barCalibrationFromLabels(
+  read: AxesFromLabels,
+  categoryLabels: readonly LabelBox[],
+  frame: Frame | null,
+  horizontal: boolean
+): DetectedBarCalibration | null {
+  const valueAxis = horizontal ? read.x : read.y;
+  const v = ends(valueAxis);
+  const value = v ? v.map((p) => ({ px: p.tick[0], py: p.tick[1], value: p.value })) : [];
+  let categories: DetectedBarCalibration['categories'] = null;
+  if (frame) {
+    const side = horizontal ? 'left' : 'bottom';
+    const centres = categoryCentresFromLabels(categoryLabels, frame, side);
+    if (centres.length >= 2) {
+      const at = (c: number) => (horizontal ? { px: frame.x, py: c } : { px: c, py: frame.y + frame.height });
+      categories = { first: at(centres[0]!), last: at(centres[centres.length - 1]!), count: centres.length };
+    }
+  }
+  if (value.length === 0 && !categories) return null;
+  return { value, categories, log: valueAxis.ok && valueAxis.log };
+}

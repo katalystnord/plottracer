@@ -15,7 +15,7 @@ import type { CalibratedAxes } from '../axesTypeConfigs.js';
 import { runBarDetect } from '../barDetectRun.js';
 import { categoryMissReport } from '../colorTraceReport.js';
 import { reconcileWithExpected } from '../../algorithms/barSplit.js';
-import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { tickMarksWithin, walkCategoryAxis } from './helpers/categoryWalk.js';
 import { loadWithoutCategoryAxis } from './helpers/noCategoryAxis.js';
 
 /**
@@ -54,7 +54,8 @@ function withTicks(n = 4): CalibrationSession<BarAxes> {
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(100, 100);
   s.confirmCalibrationValues(['10']);
-  walkCategoryAxis(s, { from: A, to: B, count: n });
+  // v2.7: the walk clicks the first and last tick marks of the axis whose edges are A and B
+  walkCategoryAxis(s, { ...tickMarksWithin(A, B, n), count: n });
   expect(s.runCalibration()).toBe(true);
   return s;
 }
@@ -199,7 +200,7 @@ describe('which graph types have categories at all', () => {
  */
 
 describe('marking the axis and declaring the categories', () => {
-  it('the whole gesture: reuse P1, click the far edge, say how many', () => {
+  it('the whole gesture: click the first and last tick marks, say how many', () => {
     const s = withTicks(4);
     const ca = s.getCategoryAxis();
     expect(ca.hasGeometry()).toBe(true);
@@ -231,10 +232,11 @@ describe('marking the axis and declaring the categories', () => {
     // is saying where the axis runs, not abandoning the categories they typed.
     const s = withTicks(3);
     s.getCategoryAxis().renameCategory(0, 'Flax');
-    s.updateCalibPointPixel('c1', 150, 480);
-    s.updateCalibPointPixel('c2', 650, 480);
+    // v2.7: onto the first and last of three tick marks, 150 apart, so the axis runs from 175 to 625
+    s.updateCalibPointPixel('c1', 250, 480);
+    s.updateCalibPointPixel('c2', 550, 480);
     expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
-    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 150, y: 480 }, { x: 650, y: 480 }]);
+    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 175, y: 480 }, { x: 625, y: 480 }]);
     expect(s.getCategoryAxis().getCategories()).toEqual(['Flax', '', '']);
   });
 
@@ -265,7 +267,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(s.getCategoryAxis().hasAdjustments()).toBe(true);
   });
 
-  it('⚑⚑ but re-declaring a DIFFERENT count DOES regenerate, ends unmoved', () => {
+  it('⚑⚑ but re-declaring a DIFFERENT count DOES regenerate, the handles unmoved', () => {
     // ⚑⚑ THE COMPANION ASSERTION to the test above, and the reason this one
     // exists: that guard is a DISABLING one. It stops `runCalibration` from
     // rebuilding the ticks, and the only thing separating "does not throw away
@@ -275,16 +277,17 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     const s = withTicks(4);
     s.moveCategoryTick(1, { x: 300, y: 500 });
     expect(s.getCategoryAxis().hasAdjustments()).toBe(true);
-    const edges = s.getCategoryAxis().getAxisEdges();
+    const handles = [s.getPlacedPoints()['c1']!.px, s.getPlacedPoints()['c2']!.px];
 
     expect(s.setCalibrationValues('c2', ['6'])).toBe(true);
     expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
 
     expect(s.getCategoryAxis().getCategoryCount()).toBe(6);
     expect(s.getCategoryAxis().getTickPoints()).toHaveLength(6);
-    // ⚑ And the ENDS did not move, which is what makes this the count's own
-    // path rather than `setAxisEdges` regenerating as a side effect.
-    expect(s.getCategoryAxis().getAxisEdges()).toEqual(edges);
+    // ⚑ The HANDLES did not move. Since v2.7 they are the first and last tick marks, so six categories between
+    // them put the axis's ends at half the new spacing outside them: 162.5 and 537.5, 75 apart, ends at 125 and 575.
+    expect([s.getPlacedPoints()['c1']!.px, s.getPlacedPoints()['c2']!.px]).toEqual(handles);
+    expect(s.getCategoryAxis().getAxisEdges()!.map((p) => p.x)).toEqual([125, 575]);
     // ⚑ A count change is a NEW set of boundaries, so the old drag is gone -
     // correctly. There is no tick 1 of four left to have been adjusted.
     expect(s.getCategoryAxis().hasAdjustments()).toBe(false);
@@ -314,7 +317,8 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     // and its adjusted flag are exactly what undo has to bring back.
     s.updateCalibPointPixel('c2', 800, 500);
     expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
-    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 800, y: 500 }]);
+    // at ticks between categories the clicked tick marks are the ends themselves (v2.7)
+    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 162.5, y: 500 }, { x: 800, y: 500 }]);
     expect(s.getCategoryAxis().hasAdjustments()).toBe(false);
 
     s.restoreState(before);
@@ -324,7 +328,7 @@ describe('⚑ the geometry survives the OTHER entrances', () => {
     expect(ca.getTickParams()).toEqual(ticks);
     expect(ca.hasAdjustments()).toBe(true);
     expect(ca.getCategories()[2]).toBe('Jute');
-    expect(ca.getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 600, y: 500 }]);
+    expect(ca.getAxisEdges()).toEqual([{ x: 162.5, y: 500 }, { x: 537.5, y: 500 }]);
   });
 
   it('⚑⚑ deleting ONE bar under bands does not wipe every category', () => {
@@ -663,7 +667,7 @@ describe('the dividers the DETECTOR is handed', () => {
     s.confirmCalibrationValues(['0']);
     s.handleCalibrationClick(500, 300);
     s.confirmCalibrationValues(['10']);
-    walkCategoryAxis(s, { from: { x: 90, y: 100 }, to: { x: 90, y: 600 }, count: 2 });
+    walkCategoryAxis(s, { ...tickMarksWithin({ x: 90, y: 100 }, { x: 90, y: 600 }, 2), count: 2 });
     expect(s.runCalibration()).toBe(true);
     const d = s.categoryDividersForDetect()!;
     expect(d.categoryAxis).toBe('y');
@@ -697,7 +701,7 @@ describe('the divider handover holds up against the awkward cases', () => {
     // of the model descending, and splitRunAtDividers requires ascending -- it
     // would cut nothing at all and the feature would silently do nothing.
     const s = calibratedBar();
-    walkCategoryAxis(s, { from: { x: 600, y: 500 }, to: { x: 100, y: 500 }, count: 4 });
+    walkCategoryAxis(s, { ...tickMarksWithin({ x: 600, y: 500 }, { x: 100, y: 500 }, 4), count: 4 });
     s.runCalibration();
     const d = s.categoryDividersForDetect()!;
     expect(d.dividers).toEqual([...d.dividers].sort((a, b) => a - b));

@@ -412,6 +412,8 @@ describe('the category TICK geometry round-trips (v2.1)', () => {
     expect(plot.serialize().categoryAxisColl![0]!.geometry).toEqual({
       edges: [{ x: 100, y: 500 }, { x: 600, y: 500 }],
       convention: 'centred',
+      // v2.7: what Cat 1 and Cat n were clicked on; a file from before has no such key and reads as the edges
+      clicked: 'ticks',
       ticks: [0.125, 0.375, 0.625, 0.875],
       // `withGeometry` calls setCategoryCount, so the declaration is real.
       countDeclared: true,

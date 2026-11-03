@@ -26,16 +26,16 @@
         "value": 450
       },
       "c1": {
-        "px": 77.75,
+        "px": 158.0,
         "py": 660.28
       },
       "c2": {
-        "px": 885.25,
+        "px": 804.0,
         "py": 660.28,
         "value": 5
       }
     },
-    "categoryAxisNote": "c1/c2 are the two ends of the CATEGORY axis: the OUTER EDGE of the first and last category band. MEASURED off the figure from the bars themselves - the first and last bar (or group) centre, extended by half the pitch - NOT the plot box. They differ: on this figure the plot spines sit outside the category extent, and using them puts every band boundary far enough off to cut through a bar. c2 carries how many categories the figure draws."
+    "categoryAxisNote": "c1/c2 are the walk's Cat 1 and Cat n: the TICK MARKS of the first and last category (v2.7; before v2.7 they were the outer edges). MEASURED off the figure: the middle of the tick mark drawn under the first and last category, found in the pixels just below the axis line. c2 carries how many categories the figure draws."
   },
   "series": [
     {

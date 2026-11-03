@@ -119,13 +119,12 @@ describe.runIf(RUN)('the packaged app is complete', () => {
       await page.locator('[data-testid="confirm-data-value"]').click({ timeout: 8000, force: true });
       await page.waitForTimeout(160);
     };
-    await page.getByTestId('common-origin').uncheck();
     await clickAt(77.53, 660.28);
     await confirm('0');
     await clickAt(77.53, 39.33);
     await confirm('450');
-    await clickAt(87.45, 660.28);
-    await clickAt(874.05, 660.28);
+    await clickAt(154.0, 660.28);
+    await clickAt(809.0, 660.28);
     await confirm('6');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(600);

@@ -84,8 +84,9 @@ function withThreeCategories<S extends {
   // v2.3 the category axis IS calibration steps c1/c2, so `markCategoryAxis`
   // moved the geometry while leaving the calibration record pointing at the old
   // ends - a state no gesture can produce.
-  s.updateCalibPointPixel('c1', 100, 300);
-  s.updateCalibPointPixel('c2', 400, 300);
+  // v2.7: the handles go on the first and last tick marks, x 150 and 350
+  s.updateCalibPointPixel('c1', 150, 300);
+  s.updateCalibPointPixel('c2', 350, 300);
   expect(s.setCalibrationValues('c2', ['3'])).toBe(true);
   // ⚑ and Calibrate is pressed again, as a user must: any change to the
   // calibration loses it (David, 2026-11-01).

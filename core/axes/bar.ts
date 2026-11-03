@@ -281,8 +281,8 @@ export class BarAxes {
    * David: *"We set the calibration on the value axis (y-axis), and THEN! we
    * also set the x-axis with a value. baseline value == x axis position."*
    *
-   * The walk's third click - `Cat 1`, the outer edge of the first category - is
-   * a point ON the line the bars stand on, and the value axis calibrated in the
+   * The walk's third click - `Cat 1`, the first category's tick mark (its outer
+   * edge before v2.7) - is a point ON the line the bars stand on, and the value axis calibrated in the
    * first two clicks says what value that line has. So the origin is already in
    * this calibration and always was: on the ordinary figure `pixelToData` at
    * that pixel reads 0, and on a chart whose axis is truncated it reads the

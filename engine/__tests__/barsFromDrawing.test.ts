@@ -19,7 +19,7 @@ import type { PlacedDrawing } from '../../algorithms/findLines/fromDrawing.js';
 import { barsFromDrawing } from '../barsFromDrawing.js';
 import { partitionSwatchSuspects } from '../barDetectRun.js';
 import { CalibrationSession, BAR_AXES_CONFIG, STACKED_AXES_CONFIG, type CalibratedAxes } from '../calibrationSession.js';
-import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { tickMarksWithin, walkCategoryAxis } from './helpers/categoryWalk.js';
 
 const FIX = join(__dirname, 'fixtures/vector');
 type Pt = [number, number];
@@ -64,7 +64,11 @@ function session(name: string, stacked = false): CalibrationSession<CalibratedAx
     s.confirmCalibrationValues([String(v)]);
   }
   const from = f.at(t.category.from), to = f.at(t.category.to);
-  walkCategoryAxis(s, { from: { x: from[0], y: from[1] }, to: { x: to[0], y: to[1] }, count: t.category.count });
+  // the generator gives the category axis's outer edges; the walk clicks its first and last tick marks, here on the
+  // line the bars stand on. ⚠️ On bars-grouped (negative bars) that is the zero line, above the frame where the tick
+  // marks are drawn; clicked on the drawn tick marks instead, the baseline is the frame's value and the second series'
+  // second bar reads 1.35 off (measured 2026-11-03). Open for David: docs/v2.7-workflow-walk.md, "The category axis on two tick marks".
+  walkCategoryAxis(s, { ...tickMarksWithin({ x: from[0], y: from[1] }, { x: to[0], y: to[1] }, t.category.count), count: t.category.count });
   if (!s.runCalibration()) throw new Error(`${name}: calibration refused: ${s.getCalibrationError()}`);
   return s;
 }

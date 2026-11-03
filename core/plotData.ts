@@ -176,6 +176,9 @@ export interface SerializedCategoryGeometry {
   /** The two placed points that ARE the category axis. */
   edges: [{ x: number; y: number }, { x: number; y: number }];
   convention: TickConvention;
+  /** What Cat 1 and Cat n were clicked on (v2.7). Absent in a file from before v2.7, whose clicks were the outer
+   * edges, so absent reads as `edges`. */
+  clicked?: 'ticks';
   /** Parameters in (0,1), strictly increasing. Validated on load - see
    * CategoryAxis.restoreTickParams. */
   ticks: number[];
@@ -902,6 +905,7 @@ export class PlotData {
         // rebuilding them, where refusing would cost the user their data.
         const geo = caData.geometry;
         if (geo && ca.setAxisEdges(geo.edges?.[0] as never, geo.edges?.[1] as never)) {
+          ca.setClicked(geo.clicked === 'ticks' ? 'ticks' : 'edges');
           ca.setConvention(geo.convention);
           ca.restoreTickParams(geo.ticks ?? [], geo.adjusted === true);
           // ⚑ READ, not inferred. See SerializedCategoryGeometry.countDeclared.
@@ -1266,6 +1270,7 @@ export class PlotData {
                     { x: edges[1].x, y: edges[1].y },
                   ] as SerializedCategoryGeometry['edges'],
                   convention: ca.getConvention(),
+                  ...(ca.getClicked() === 'ticks' ? { clicked: 'ticks' as const } : {}),
                   ticks: [...ca.getTickParams()],
                   ...(ca.hasAdjustments() ? { adjusted: true } : {}),
                   ...(ca.hasDeclaredCount() ? { countDeclared: true } : {}),

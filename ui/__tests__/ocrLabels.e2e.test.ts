@@ -83,7 +83,6 @@ describe('OCR: reading category names off the figure', () => {
     const at = (px: number, py: number): [number, number] => [px * scale + ox, py * scale + oy];
 
     await page.waitForTimeout(250);
-    await page.getByTestId('common-origin').uncheck();
     // the data area first, as the calibration card asks (v2.7): a drag round the plot
     {
       const [x0, y0] = at(77.53, 39.33), [x1, y1] = at(874.05, 660.28);
@@ -98,8 +97,8 @@ describe('OCR: reading category names off the figure', () => {
     await confirm('0');
     await clickAt(...at(77.53, 39.33));
     await confirm('450');
-    await clickAt(...at(87.45, 660.28));
-    await clickAt(...at(874.05, 660.28));
+    await clickAt(...at(154.0, 660.28)); // the first and last category's tick marks (v2.7)
+    await clickAt(...at(809.0, 660.28));
     await confirm('6');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(600);

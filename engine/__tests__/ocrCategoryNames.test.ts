@@ -12,6 +12,7 @@ import {
 } from '../ocrRegion.js';
 import { encodePng } from './helpers/encodePng.js';
 import { readPng } from './helpers/readPng.js';
+import { truthCategoryEdges } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ THE WHOLE FEATURE, ON REAL INK, AGAINST COMMITTED GROUND TRUTH (v2.4).
@@ -58,8 +59,7 @@ describe('OCR: one band drag names every category', () => {
 
     // The category axis exactly as the walk records it: two clicked ends and a
     // declared count, which is what CategoryAxis turns into N+1 dividers.
-    const c1 = truth.calibration.anchors['c1']!;
-    const c2 = truth.calibration.anchors['c2']!;
+    const [c1, c2] = truthCategoryEdges(truth.calibration.anchors);
     const count = c2.value!;
     const ends = [
       { x: c1.px, y: c1.py },

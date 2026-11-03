@@ -283,9 +283,8 @@ export function categoryTickIndexFromId(id: string): number | null {
  *   · there is no prompt here - each click has its own step prompt, in the walk,
  *     beside the handle it places;
  *   · there is no seed, so nothing has to name the handle it was taken from;
- *   · there is no short-span note, because there is no click that can be
- *     mistaken for the end of the first category - the step says "the outer edge
- *     of the LAST category";
+ *   · there is no short-span note, because each click names what it is on - the
+ *     step says "the tick mark of the LAST category" (v2.7);
  *   · and there is no offer, because a required step is not offered.
  *
  * ▶ What is left is what the heatmap's stage has: a SUMMARY LINE and what the

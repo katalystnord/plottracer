@@ -117,6 +117,35 @@ export function dividerParamsFrom(
   return [0, ...interior, 1];
 }
 
+/** What the two category clicks (Cat 1, Cat n) were put on (v2.7). */
+export type CategoryClicks = 'ticks' | 'edges';
+
+/**
+ * The axis's two outer edges from its two CLICKS (v2.7, docs/v2.7-workflow-walk.md, "The category axis on two tick
+ * marks"). Since v2.7 Cat 1 and Cat n are the first and last category's tick marks, and the convention says what a
+ * tick mark is: at `centred` the clicks are the first and last category's centres, so the edges lie half a spacing
+ * further out; at `edge` the outermost tick marks are the outer edges themselves. A file from before v2.7 says
+ * `edges`: its clicks were the outer edges, whatever the convention. One category has one tick mark to click, so
+ * its two clicks are its edges.
+ */
+export function edgesFromClicks(
+  a: CategoryAxisPoint,
+  b: CategoryAxisPoint,
+  count: number,
+  convention: TickConvention,
+  clicked: CategoryClicks
+): [CategoryAxisPoint, CategoryAxisPoint] {
+  if (clicked === 'edges' || convention === 'edge' || !Number.isInteger(count) || count < 2) {
+    return [{ x: a.x, y: a.y }, { x: b.x, y: b.y }];
+  }
+  const half = 1 / (2 * (count - 1));
+  const dx = b.x - a.x, dy = b.y - a.y;
+  return [
+    { x: a.x - dx * half, y: a.y - dy * half },
+    { x: b.x + dx * half, y: b.y + dy * half },
+  ];
+}
+
 /**
  * Which band a parameter falls in, given `dividers` from `dividerParamsFrom`.
  *

@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { readPng } from './helpers/readPng.js';
 import { encodePng } from './helpers/encodePng.js';
 import { cropForOcr, upscaleForOcr, labelRegionsInBand, axisQuarterTurn, normalizeOcrText, axisRunsAlong, type QuarterTurn } from '../ocrRegion.js';
+import { truthCategoryEdges } from './helpers/categoryWalk.js';
 
 const require_ = createRequire(import.meta.url);
 const ocr = require_('../../ui/electron-ocr.cjs') as {
@@ -99,7 +100,7 @@ describe('reading the category names on every figure we ship', () => {
         calibration: { anchors: Record<string, { px: number; py: number; value?: number }> };
         series: { points: { category?: string }[] }[];
       };
-      const c1 = truth.calibration.anchors['c1']!, c2 = truth.calibration.anchors['c2']!;
+      const [c1, c2] = truthCategoryEdges(truth.calibration.anchors);
       const N = c2.value!;
       // ⚑⚑ AXIS ORDER, NOT FIRST-APPEARANCE ORDER. A series lists its categories
       // along the axis, but a series may be MISSING one - which is the whole

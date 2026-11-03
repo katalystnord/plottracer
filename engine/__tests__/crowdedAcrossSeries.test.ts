@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationSession, BAR_AXES_CONFIG } from '../calibrationSession.js';
 import type { BarAxes } from '../../core/axes/bar.js';
-import { walkCategoryAxis } from './helpers/categoryWalk.js';
+import { tickMarksWithin, walkCategoryAxis } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ A CROWDED READING BELONGS TO A SERIES, AND THE ACTIONS ON IT MUST TOO.
@@ -27,7 +27,7 @@ function twoSeries() {
   s.confirmCalibrationValues(['0']);
   s.handleCalibrationClick(100, 100);
   s.confirmCalibrationValues(['10']);
-  walkCategoryAxis(s, { from: { x: 100, y: 500 }, to: { x: 400, y: 500 }, count: 3 });
+  walkCategoryAxis(s, { ...tickMarksWithin({ x: 100, y: 500 }, { x: 400, y: 500 }, 3), count: 3 });
   s.runCalibration();
   // Series 1: three good bars, one per band.
   for (const x of [120, 220, 320]) {

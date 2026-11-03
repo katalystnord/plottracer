@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 import { runBarDetect } from '../barDetectRun.js';
 import { readPng } from './helpers/readPng.js';
+import { truthCategoryEdges } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ THE HATCHED EXAMPLE, TRACED END TO END ON ITS OWN INK.
@@ -30,8 +31,7 @@ describe('the hatched example is traced as six bars, not as confetti', () => {
     const anchors = truth.calibration.anchors;
     const p1 = anchors['p1']!;
     const p2 = anchors['p2']!;
-    const c1 = anchors['c1']!;
-    const c2 = anchors['c2']!;
+    const [c1, c2] = truthCategoryEdges(anchors);
     const count = c2.value!;
     // The declared bands: the two clicked ends, split evenly by the count.
     const dividers = Array.from(

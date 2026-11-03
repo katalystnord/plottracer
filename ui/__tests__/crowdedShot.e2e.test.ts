@@ -49,10 +49,9 @@ describe.runIf(RUN)('crowded shot', () => {
       await page.waitForTimeout(200);
     };
     await page.waitForTimeout(250);
-    await page.getByTestId('common-origin').uncheck();
     await clickAt(150, 744); await confirm('0');
     await clickAt(150, 167); await confirm('450');
-    await clickAt(100, 744); await clickAt(825, 744); await confirm('6');
+    await clickAt(160.4, 744); await clickAt(764.6, 744); await confirm('6'); // the first and last tick marks (v2.7)
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(500);
     // ⚑ Calibrate picks no tool since v2.7 (David, 2026-11-01): pick Place points in the Data extraction card.

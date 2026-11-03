@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 import { runBarDetect } from '../barDetectRun.js';
 import { readPng } from './helpers/readPng.js';
+import { truthCategoryEdges as edges } from './helpers/categoryWalk.js';
 
 /**
  * ⚑⚑ THE HATCH JOIN, WITH NOTHING DECLARED - on real ink.
@@ -51,7 +52,7 @@ describe('a hatched figure with nothing declared', () => {
     // and rejoining this figure still needs the walk's declared axis.
     const { img, a } = hatchedFigure();
     const count = a['c2']!.value!;
-    const mid = Math.round(a['c1']!.px + (a['c2']!.px - a['c1']!.px) / (2 * count));
+    const mid = Math.round(edges(a)[0].px + (edges(a)[1].px - edges(a)[0].px) / (2 * count));
     const target = barFill(img, mid, Math.round(a['p1']!.py - 30));
 
     const result = runBarDetect(
@@ -72,7 +73,7 @@ describe('a hatched figure with nothing declared', () => {
     const count = a['c2']!.value!;
     const dividers = Array.from(
       { length: count + 1 },
-      (_, i) => a['c1']!.px + ((a['c2']!.px - a['c1']!.px) * i) / count
+      (_, i) => edges(a)[0].px + ((edges(a)[1].px - edges(a)[0].px) * i) / count
     );
     const mid = Math.round((dividers[0]! + dividers[1]!) / 2);
     const target = barFill(img, mid, Math.round(a['p1']!.py - 30));
@@ -96,7 +97,7 @@ describe('a hatched figure with nothing declared', () => {
     ) as { calibration: { anchors: Record<string, { px: number; py: number; value?: number }> } };
     const a = truth.calibration.anchors;
     const count = a['c2']!.value!;
-    const mid = Math.round(a['c1']!.px + (a['c2']!.px - a['c1']!.px) / (2 * count));
+    const mid = Math.round(edges(a)[0].px + (edges(a)[1].px - edges(a)[0].px) / (2 * count));
     const target = barFill(img, mid, Math.round(a['p1']!.py - 20));
 
     const result = runBarDetect(

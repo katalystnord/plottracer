@@ -287,8 +287,8 @@ describe('a marked axis OWNS the categories - capture must not mint more', () =>
     // instead, and since v2.3 that axis IS steps c1/c2, so moving it means
     // moving them. `markCategoryAxis` moved the geometry and left the
     // calibration record on the old ends - a state no gesture produces.
-    session.updateCalibPointPixel('c1', 100, 500);
-    session.updateCalibPointPixel('c2', 900, 500);
+    session.updateCalibPointPixel('c1', 200, 500); // v2.7: the first and last of four tick marks
+    session.updateCalibPointPixel('c2', 800, 500);
     expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
@@ -357,8 +357,8 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
     // instead, and since v2.3 that axis IS steps c1/c2, so moving it means
     // moving them. `markCategoryAxis` moved the geometry and left the
     // calibration record on the old ends - a state no gesture produces.
-    session.updateCalibPointPixel('c1', 100, 500);
-    session.updateCalibPointPixel('c2', 900, 500);
+    session.updateCalibPointPixel('c1', 200, 500); // v2.7: the first and last of four tick marks
+    session.updateCalibPointPixel('c2', 800, 500);
     expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
@@ -370,8 +370,8 @@ describe("🔴 THE SEQUENCE THAT MINTED A FIFTH CATEGORY - 'Re-place axis'", () 
       session.getCategoryAxis().renameCategory(i, name),
     );
     // ⚑ RE-PLACING is dragging the two handles back onto the figure.
-    session.updateCalibPointPixel('c1', 100, 500);
-    session.updateCalibPointPixel('c2', 900, 500);
+    session.updateCalibPointPixel('c1', 200, 500); // v2.7: the first and last of four tick marks
+    session.updateCalibPointPixel('c2', 800, 500);
     expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
@@ -434,8 +434,8 @@ describe('⚑⚑ the columns are the TYPE\u2019s named values', () => {
     // instead, and since v2.3 that axis IS steps c1/c2, so moving it means
     // moving them. `markCategoryAxis` moved the geometry and left the
     // calibration record on the old ends - a state no gesture produces.
-    session.updateCalibPointPixel('c1', 100, 500);
-    session.updateCalibPointPixel('c2', 900, 500);
+    session.updateCalibPointPixel('c1', 200, 500); // v2.7: the first and last of four tick marks
+    session.updateCalibPointPixel('c2', 800, 500);
     expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }
@@ -445,8 +445,8 @@ describe('⚑⚑ the columns are the TYPE\u2019s named values', () => {
   function markedFourBandsBar(): CalibrationSession<BarAxes> {
     const session = new CalibrationSession<BarAxes>(BAR_AXES_CONFIG);
     calibratedBar(session);
-    session.updateCalibPointPixel('c1', 100, 500);
-    session.updateCalibPointPixel('c2', 900, 500);
+    session.updateCalibPointPixel('c1', 200, 500); // v2.7: the first and last of four tick marks
+    session.updateCalibPointPixel('c2', 800, 500);
     expect(session.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     return session;
   }

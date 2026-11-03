@@ -70,6 +70,9 @@ export interface AxesFromLabels {
   /** Where the plot is, for the data area (v2.7, engine/dataArea.ts): set by the picture reader from the frame it
    * found. A drawn figure's frame is read apart from the labels, by `drawnFrame`. */
   dataArea?: { x: number; y: number; width: number; height: number };
+  /** The boxes of every tick label the picture reader's detector found, numbers or not (v2.7): a bar chart's
+   * category labels are words, and where they are centred is where its categories are (`categoryCentresFromLabels`). */
+  tickLabels?: Box[];
 }
 
 /** A label candidate: a number as printed, or 10 to a printed power. */

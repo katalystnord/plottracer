@@ -70,10 +70,9 @@ describe.runIf(RUN)('swatch hold-back offer shot', () => {
     const at = (px: number, py: number): [number, number] => [px * scale + ox, py * scale + oy];
 
     await page.waitForTimeout(250);
-    await page.getByTestId('common-origin').uncheck();
     await clickAt(...at(67.78, 660.28)); await confirm('0');
     await clickAt(...at(67.78, 39.33)); await confirm('70');
-    await clickAt(...at(74.08, 660.28)); await clickAt(...at(877.42, 660.28)); await confirm('4');
+    await clickAt(...at(175.0, 660.28)); await clickAt(...at(778.0, 660.28)); await confirm('4');
     await page.getByTestId('run-calibration').click();
     await page.waitForTimeout(600);
 

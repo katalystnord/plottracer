@@ -26,15 +26,16 @@
         "value": 40
       },
       "c1": {
-        "px": 67.78,
+        "px": 119.0,
         "py": 601.74
       },
       "c2": {
-        "px": 885.0,
+        "px": 834.0,
         "py": 601.74,
         "value": 8
       }
-    }
+    },
+    "categoryAxisNote": "c1/c2 are the walk's Cat 1 and Cat n: the TICK MARKS of the first and last category (v2.7; before v2.7 they were the outer edges). MEASURED off the figure: the middle of the tick mark drawn under the first and last category, found in the pixels just below the axis line. c2 carries how many categories the figure draws."
   },
   "series": [
     {

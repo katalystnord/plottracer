@@ -741,21 +741,13 @@ describe('the shared corner is declared, not named at the call site', () => {
    * ⚑ The pixel is shared and NO value is prefilled, because `Cat 1` takes none -
    * the behaviour `commonOriginReuse` grew for the heatmap's category edge.
    */
-  it('⚑⚑ the bar family shares its VALUE ORIGIN with the category axis start', () => {
-    for (const config of [BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG] as unknown as AxesTypeConfig<CalibratedAxes>[]) {
-      expect(commonOriginPairs(config), config.id).toEqual([{ from: 'p1', to: 'c1' }]);
+  it('⚑⚑ the bar family shares NO corner (v2.7): Cat 1 is a category tick mark, never where P1 stands', () => {
+    for (const config of [BAR_AXES_CONFIG, BOX_PLOT_AXES_CONFIG, CATEGORICAL_LINE_CONFIG] as unknown as AxesTypeConfig<CalibratedAxes>[]) {
+      expect(commonOriginPairs(config), config.id).toEqual([]);
     }
-    // A Line's value origin is `v1`; it has no `p1` to share.
-    expect(commonOriginPairs(CATEGORICAL_LINE_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>))
-      .toEqual([{ from: 'v1', to: 'c1' }]);
-  });
-
-  it('⚑ and the shared pixel carries NO prefill, because Cat 1 takes no value', () => {
     const bar = BAR_AXES_CONFIG as unknown as AxesTypeConfig<CalibratedAxes>;
     const catStep = bar.fixedSteps.find((st) => st.key === 'c1')!;
-    expect(catStep.valueFields).toEqual([]);
-    expect(commonOriginReuse(bar, true, 'c1', placedWith('p1', 'p2'), catStep))
-      .toEqual({ from: 'p1', prefill: [] });
+    expect(commonOriginReuse(bar, true, 'c1', placedWith('p1', 'p2'), catStep)).toBeNull();
   });
 
   it('the types with no shared corner declare none', () => {

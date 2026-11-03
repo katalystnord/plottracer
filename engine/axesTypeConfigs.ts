@@ -2464,12 +2464,13 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
    * box). The seed, `Re-place axis`, `Remove ticks` and the entry button all
    * stop existing rather than being redesigned.
    *
-   * ⚑ THE CONVENTION IS NOT ASKED HERE, and that is a deliberate divergence from
-   * the heatmap. There the two clicks land ON a band edge or ON a band centre,
-   * so the convention has to be chosen first. Here they are the OUTER ENDS of
-   * the whole axis either way, and the convention only decides where the ticks
-   * fall INSIDE that span - so it is asked once, on the card, after the clicks,
-   * which is the order David gave.
+   * ⚑ THE CONVENTION IS ASKED AFTER THE CLICKS, on the card, which is the order
+   * David gave. Since v2.7 Cat 1 and Cat n are the first and last category's TICK
+   * MARKS (David, 2026-11-01: two tick marks on a category axis too); the
+   * convention then says what those tick marks are, a category's centre or its
+   * outer edge, and the axis's edges are worked out from the clicks by
+   * `edgesFromClicks` (`categoryAxisOnTickMarks.test.ts`). The heatmap asks
+   * first because its clicks also carry the X and Y values.
    */
   fixedSteps: [
     { key: 'p1', label: 'P1', color: '#e0a458', prompt: 'Click a labelled tick mark on the value axis and enter the number printed there', valueFields: [{ key: 'p1', label: 'value', field: 'dy' }] },
@@ -2481,8 +2482,8 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     // ⚑ No typed value on the first end - a click with nothing to type is the
     // difference between recording where the ink is and inferring it, which is
     // the same shape the heatmap's first column edge has.
-    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click where the category axis STARTS - the outer edge of the FIRST category', valueFields: [] },
-    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click where the category axis ENDS - the outer edge of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
+    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click the tick mark of the FIRST category', valueFields: [] },
+    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click the tick mark of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
   ],
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
   // shape as pie's sector / histogram's bin -- see OPPOSITE_CORNER_SLOTS.
@@ -2497,36 +2498,10 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // Without this the Calibration drops the third field silently and the count
   // never reaches `checkValues` or the axis.
   calibrationDimensions: 3,
-  /**
-   * ⚑⚑ THE VALUE ORIGIN IS OFFERED AS THE CATEGORY AXIS'S FIRST END (v2.3).
-   * David: *"I think that we can offer to reuse the lowest point on the Y axis
-   * as the first point for the Category axis as well... It is the same mechanism
-   * as for XY-graphs."*
-   *
-   * ▶ And it IS the same mechanism, not a second one: `commonOrigin` already
-   * declares "these two steps stand on one pixel", already renders its own
-   * checkbox, and already knows to share the pixel WITHOUT a prefill when the
-   * target step takes no typed value - which is exactly `Cat 1`. That last part
-   * exists because of David's own report that *"the common origin does not work
-   * when you have a categorial axis."*
-   *
-   * ⚠️ WHY THIS IS NOT THE SEED THAT WAS DELETED THIS MORNING, which reused P1
-   * for the same purpose and produced a category axis running diagonally across
-   * the figure. Three things differ, and they are the whole difference:
-   *   · it is an OFFER WITH A VISIBLE CHECKBOX the user can untick, not an
-   *     invisible precondition;
-   *   · the reused pixel lands on a NAMED STEP with its own chip and handle, so
-   *     it is on screen and draggable rather than implied;
-   *   · and the far end is still a step of the walk with its own prompt, instead
-   *     of one unexplained click on the canvas.
-   *
-   * ⚑ `p1` RATHER THAN "WHICHEVER IS LOWER", because the declaration is static
-   * and the mechanism keys on a step. On a chart calibrated low-then-high - the
-   * ordinary way - P1 is the bottom one and this is right. Calibrate high-first
-   * and the offer seeds the wrong end: the checkbox is how you decline it, and
-   * the handle is on screen to drag either way.
-   */
-  commonOrigin: [{ from: 'p1', to: 'c1' }],
+  // ⚑ NO COMMON ORIGIN (v2.7). From v2.3 the value origin P1 was offered as Cat 1,
+  // when Cat 1 was the axis's outer end. Cat 1 is a category's tick mark now, which
+  // is never the corner P1 stands on, so the offer would place it wrong
+  // (`categoryAxisOnTickMarks.test.ts`).
   categoryTicks: { startStep: 'c1', endStep: 'c2' },
   // ⚑ Stage 2: the ticks INSIDE the axis the walk just calibrated - the same
   // shape, and now the same card, as the heatmap's grid.
@@ -2846,9 +2821,7 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
   // Without this the Calibration drops the third field silently and the count
   // never reaches `checkValues` or the axis.
   calibrationDimensions: 3,
-  // ⚑ The same offer Bar makes, with this type's own value origin - see
-  // `BAR_AXES_CONFIG.commonOrigin` for why it is `commonOrigin` and not a seed.
-  commonOrigin: [{ from: 'v1', to: 'c1' }],
+  // ⚑ No common origin, as on Bar: Cat 1 is a category's tick mark (v2.7).
   categoryTicks: { startStep: 'c1', endStep: 'c2' },
   // Stage 2: the ticks INSIDE the axis the walk calibrated - the same shape,
   // and the same card, as Bar, Box Plot and the heatmap's grid.
@@ -2860,8 +2833,8 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
     // ⚑ The same two clicks Bar asks for, in the same words and the same violet.
     // A categorical Line's other axis is a category axis exactly as a bar
     // chart's is, so it is asked for the same way - MIRROR, not merely match.
-    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click where the category axis STARTS - the outer edge of the FIRST category', valueFields: [] },
-    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click where the category axis ENDS - the outer edge of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
+    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click the tick mark of the FIRST category', valueFields: [] },
+    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click the tick mark of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
   ],
   // Same BarAxes, same v2.0-audit refusal -- see barCalibrationValueCheck.
   checkValues(cal, options) {
@@ -2955,7 +2928,7 @@ export const BOX_PLOT_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this
   // list; see the comment immediately below for why sharing it was a bug.
   fixedSteps: BAR_AXES_CONFIG.fixedSteps,
-  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard', 'commonOrigin']),
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard']),
   // ⚑ v2.0 Phase 6: `options` is now its OWN array -- log scale + horizontal
   // bars only -- rather than reusing BAR_AXES_CONFIG.options by reference.
   // Bar's own array grew `hasBaseline`/`baselineValue` in Phase 2, and
@@ -3117,7 +3090,7 @@ export const CANDLESTICK_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // drifting apart, as Histogram does with XY. ⚑ Note `options` is NOT in this
   // list; see the comment immediately below for why sharing it was a bug.
   fixedSteps: BAR_AXES_CONFIG.fixedSteps,
-  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard', 'commonOrigin']),
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard']),
   // ⚑ v2.0 Phase 6: `options` is now its OWN array -- log scale + horizontal
   // bars only -- rather than reusing BAR_AXES_CONFIG.options by reference.
   // Bar's own array grew `hasBaseline`/`baselineValue` in Phase 2, and
@@ -3414,7 +3387,7 @@ export const SPAN_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
   // Shares Bar's calibration walk and guards, as Box Plot does - reusing the
   // arrays is what keeps them from drifting apart.
   fixedSteps: BAR_AXES_CONFIG.fixedSteps,
-  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard', 'commonOrigin']),
+  ...borrowFrom(BAR_AXES_CONFIG, ['logScaleGuards', 'distinctPixelSteps', 'parallelAxisGuard']),
   /**
    * ⚑⚑ NO BASELINE OPTIONS, AND THAT IS THE POINT OF THE TYPE. David: *"All
    * three chart types reject a fixed zero baseline. Instead, they focus on

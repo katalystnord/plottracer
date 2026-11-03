@@ -26,6 +26,7 @@ import { encodePng } from './helpers/encodePng.js';
 import { axisRunsAlong, cropForOcr, upscaleForOcr } from '../ocrRegion.js';
 import { deskewBand, findBandAngle } from '../ocrDeskew.js';
 import { wordsToTicks } from '../ocrWordsToTicks.js';
+import { truthCategoryEdges } from './helpers/categoryWalk.js';
 
 const require_ = createRequire(import.meta.url);
 const ocr = require_('../../ui/electron-ocr.cjs') as {
@@ -110,8 +111,7 @@ describe('reading each figure’s label band in ONE pass', () => {
         calibration: { anchors: Record<string, { px: number; py: number; value?: number }> };
         series: { points: { category?: string }[] }[];
       };
-      const c1 = truth.calibration.anchors['c1']!;
-      const c2 = truth.calibration.anchors['c2']!;
+      const [c1, c2] = truthCategoryEdges(truth.calibration.anchors);
       const N = c2.value!;
       const longest = truth.series.reduce((a, b) => (b.points.length > a.points.length ? b : a));
       const names: string[] = [];

@@ -233,7 +233,7 @@ describe('⚑⚑ an imported bar chart can still be given a category axis', () =
     // ⚑ The screen has to carry it: an import is exactly the case where the
     // user did not walk the first two steps and has no idea a third exists.
     const s = importedBar();
-    expect(s.getCurrentStep()?.prompt).toMatch(/category axis STARTS/);
+    expect(s.getCurrentStep()?.prompt).toMatch(/tick mark of the FIRST category/);
   });
 
   it('places the axis from those two clicks, keeping the imported calibration', () => {
@@ -242,7 +242,9 @@ describe('⚑⚑ an imported bar chart can still be given a category axis', () =
     s.handleCalibrationClick(500, 500);
     expect(s.confirmCalibrationValues(['4'])).toBe(true);
     expect(s.runCalibration()).toBe(true);
-    expect(s.getCategoryAxis().getAxisEdges()).toEqual([{ x: 100, y: 500 }, { x: 500, y: 500 }]);
+    // v2.7: the clicks are the first and last tick marks, so the axis reaches half a spacing past each
+    const edges = s.getCategoryAxis().getAxisEdges()!;
+    expect([edges[0].x, edges[1].x].map((x) => +x.toFixed(6))).toEqual([+(100 - 400 / 6).toFixed(6), +(500 + 400 / 6).toFixed(6)]);
     expect(s.getCategoryAxis().getCategoryCount()).toBe(4);
     expect(s.isCalibrated()).toBe(true);
   });

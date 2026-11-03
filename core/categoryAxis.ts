@@ -33,6 +33,7 @@ import {
   pointAtParam,
   tickCountFor,
   type CategoryAxisPoint,
+  type CategoryClicks,
   type TickConvention,
 } from './bandedAxis.js';
 
@@ -48,7 +49,7 @@ export {
   pointAtParam,
   tickCountFor,
 };
-export type { CategoryAxisPoint, TickConvention };
+export type { CategoryAxisPoint, CategoryClicks, TickConvention };
 
 export class CategoryAxis {
   name = 'Category';
@@ -254,6 +255,20 @@ export class CategoryAxis {
    * declaration any more - the count is typed on the click that places the
    * second end, and correcting it means editing it there.
    */
+
+  /**
+   * What Cat 1 and Cat n were clicked on: the first and last category's tick marks since v2.7, the outer edges in a
+   * file from before (see `edgesFromClicks`). Stored, never inferred: the same two pixels mean two different axes.
+   */
+  private _clicked: CategoryClicks = 'ticks';
+
+  getClicked(): CategoryClicks {
+    return this._clicked;
+  }
+
+  setClicked(clicked: CategoryClicks): void {
+    this._clicked = clicked;
+  }
 
   getConvention(): TickConvention {
     return this._bands.getConvention();

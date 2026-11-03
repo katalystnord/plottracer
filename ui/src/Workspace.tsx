@@ -175,7 +175,7 @@ import type { LoadedDocument } from './pagedDocument.js';
 import { pagedDocumentFormat } from '../../engine/pdfDetect.js';
 import { figureKind, figureKindLine, type FigureKind, type PageDrawing, type PageText } from '../../engine/pdfDrawing.js';
 import { readAxesFromLabels, type AxesFromLabels } from '../../engine/labelCalibration.js';
-import { calibrationFromLabels } from '../../engine/axisDetection.js';
+import { barCalibrationFromLabels, calibrationFromLabels } from '../../engine/axisDetection.js';
 import { LegendCard } from './panels/LegendCard.js';
 import { legendFromDetections } from '../../engine/pictureAxes.js';
 import { regionCornerMarkers, regionCornerFromId, dataAreaCornerMarkers, dataAreaCornerFromId } from '../../engine/regionHandles.js';
@@ -4819,6 +4819,9 @@ export function Workspace() {
     let read: AxesFromLabels | null = null;
     // the data area: a drawn figure's frame, read from its drawing; a picture's, found by the picture reader
     let frame: { x: number; y: number; width: number; height: number } | null = null;
+    // every label's box (a drawn figure's text; a picture's detected tick labels): a bar chart's categories are where
+    // its category labels are centred
+    let labelBoxes: { x0: number; y0: number; x1: number; y1: number }[] = [];
     setAxisDetecting(true);
     try {
       if ((kind === 'drawn' || kind === 'partly') && drawing) {
@@ -4832,6 +4835,7 @@ export function Workspace() {
         if (placed && text.some((t) => /\d/.test(t.str))) {
           read = readAxesFromLabels(placed, text, { width: img.width, height: img.height });
           frame = drawnFrame(placed, read);
+          labelBoxes = text.map((t) => t.box);
         }
       }
       if (!read || (!read.x.ok && !read.y.ok)) {
@@ -4842,6 +4846,7 @@ export function Workspace() {
         }
         read = fromPicture;
         frame = fromPicture.dataArea ?? null;
+        labelBoxes = fromPicture.tickLabels ?? [];
       }
     } finally {
       setAxisDetecting(false);
@@ -4851,6 +4856,32 @@ export function Workspace() {
     // One press is one undo step, the area and the points together.
     const areaSet = !!frame && startedOn.setDataArea(frame);
     if (areaSet) setDataAreaChosen(false);
+    const stepKeys = startedOn.getSteps().map((st) => st.key);
+    if (stepKeys.includes('c1') && stepKeys.includes('c2')) {
+      // A bar-family figure (v2.7): its value axis's two points, and Cat 1 and Cat n on the first and last category's
+      // tick marks with the count, each placed as the walk places it
+      const bars = barCalibrationFromLabels(read, labelBoxes, frame, startedOn.getOptions()['isRotated'] === 'true');
+      if (!bars) {
+        if (areaSet) commit();
+        setOcrError('No calibration points could be fixed on this figure - place them by hand: click a point’s chip, then the figure.');
+        return;
+      }
+      setOcrError(null);
+      const [v1, v2] = stepKeys.filter((k) => k !== 'c1' && k !== 'c2');
+      if (bars.value.length && startedOn.getConfig().options?.some((o) => o.key === 'isLog')) startedOn.setOption('isLog', String(bars.log));
+      const place = (key: string | undefined, px: number, py: number, value: string | null) => {
+        if (!key || !startedOn.chooseStep(key)) return;
+        if (startedOn.handleCalibrationClick(px, py) === 'awaiting-value' && value !== null) startedOn.confirmCalibrationValues([value]);
+      };
+      bars.value.forEach((p, i) => place(i === 0 ? v1 : v2, p.px, p.py, String(p.value)));
+      if (bars.categories) {
+        place('c1', bars.categories.first.px, bars.categories.first.py, null);
+        place('c2', bars.categories.last.px, bars.categories.last.py, String(bars.categories.count));
+      }
+      setDataValueInputs([]);
+      commit();
+      return;
+    }
     const found = calibrationFromLabels(read);
     if (!found) {
       if (areaSet) commit();
@@ -7788,8 +7819,11 @@ export function Workspace() {
   // identity every render silently disabled the memoization of everything
   // downstream of it (caught by the compiler lint, not by eye).
   const steps = useMemo(() => session.getSteps(), [session, version]);
-  /** [Automatic axis detection] reads an X and a Y value axis: it applies where the walk is X1, X2, Y1, Y2. */
-  const autoAxesApplies = (config.id === 'xy' || config.id === 'contour') && ['x1', 'x2', 'y1', 'y2'].every((k) => steps.some((st) => st.key === k));
+  /** [Automatic axis detection] reads an X and a Y value axis where the walk is X1, X2, Y1, Y2 (XY, Contour), and a
+   * value axis and the category axis on the bar family (v2.7). */
+  const autoAxesApplies =
+    ((config.id === 'xy' || config.id === 'contour') && ['x1', 'x2', 'y1', 'y2'].every((k) => steps.some((st) => st.key === k))) ||
+    (!!config.categoryTicks && ['c1', 'c2'].every((k) => steps.some((st) => st.key === k)));
 
   /**
    * WHAT THE CALIBRATION CARD SHOWS - decided in `engine/`, rendered here.
@@ -9435,7 +9469,7 @@ export function Workspace() {
               kind of figure, drawn or picture. It reads X and Y axes, so it is greyed in its place on graph types
               calibrated otherwise. */}
           {figureCaptured && calibExpanded && (
-            <span title={autoAxesApplies ? undefined : 'Reads the X and Y axes of an XY or contour figure; this graph type is calibrated by hand.'} style={{ display: 'flex' }}>
+            <span title={autoAxesApplies ? undefined : 'Reads the axes of an XY, contour or bar-family figure; this graph type is calibrated by hand.'} style={{ display: 'flex' }}>
               <button
                 type="button"
                 data-testid="auto-axis-detect"

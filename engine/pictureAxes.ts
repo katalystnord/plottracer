@@ -223,16 +223,17 @@ export function pictureAxes(
   const pxPerPt = heights.length ? median(heights) / 9 : 1.2;
   const drawing: PlacedDrawing = { shapes: labelTicks(text, dets, pxPerPt), text: text.map((t) => t.box), pxPerPt };
   const read = picturesOwnWords(readAxesFromLabels(drawing, text, size));
+  const tickLabels = dets.filter((d) => (d.cls === 'x_tick_label' || d.cls === 'y_tick_label') && d.score >= DETECTION_AT).map((d) => d.box);
   const plots = dets.filter((d) => d.cls === 'plot_area');
-  if (plots.length === 0) return read;
+  if (plots.length === 0) return { ...read, tickLabels };
   const pa = plots.reduce((a, b) => (b.score > a.score ? b : a)).box;
   const area = (b: { x0: number; y0: number; x1: number; y1: number }) => ({ x: b.x0, y: b.y0, width: b.x1 - b.x0, height: b.y1 - b.y0 });
-  if (!src) return { ...withSecondAxes(read, dets, pa), dataArea: area(pa) };
+  if (!src) return { ...withSecondAxes(read, dets, pa), dataArea: area(pa), tickLabels };
   // A) the corners of the data area: the detector's plot area, on the lines the figure draws; B) each
   // axis's range at them, from its labels (`atCorners`)
   const lines = axisLinesNear(src, dets);
   const corners = { x0: lines.y ?? pa.x0, y0: lines.top ?? pa.y0, x1: lines.right ?? pa.x1, y1: lines.x ?? pa.y1 };
-  return { ...withSecondAxes(atCorners(onAxisLines(read, lines), corners), dets, pa), dataArea: area(corners) };
+  return { ...withSecondAxes(atCorners(onAxisLines(read, lines), corners), dets, pa), dataArea: area(corners), tickLabels };
 }
 
 /** On a picture each label's own centre is its tick (labels lead), so an axis with no pairs read no

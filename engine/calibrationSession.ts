@@ -209,7 +209,7 @@ import { PieAxes } from '../core/axes/pie.js';
 import { PlotData, type SerializedPlotData, type SerializedHeatmapLayer, type AnyAxes, type NotDataRegion } from '../core/plotData.js';
 import { type DataArea, type Corner, isDataArea, withCornerMoved, mappedRect, boxRoundPoints } from './dataArea.js';
 import { CategoryAxis, type TickConvention } from '../core/categoryAxis.js';
-import { tickCountFor } from '../core/bandedAxis.js';
+import { edgesFromClicks, tickCountFor } from '../core/bandedAxis.js';
 import { findAxisTicks } from '../algorithms/axisTicks.js';
 import type { PixelSource } from '../algorithms/samplePixel.js';
 import { outwardNormal } from './categoryTickOverlay.js';
@@ -5035,17 +5035,25 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // gesture this whole feature rests on.
     // ⚑ Moving an end SHOULD regenerate: the span changed, so the marks derived
     // from it are no longer where the user put them relative to anything.
-    const edges = this.categoryAxis.getAxisEdges();
-    const same =
-      edges !== null &&
-      edges[0].x === a.px && edges[0].y === a.py &&
-      edges[1].x === b.px && edges[1].y === b.py;
-    if (!same && !this.categoryAxis.setAxisEdges({ x: a.px, y: a.py }, { x: b.px, y: b.py })) return false;
     // ⚑ The count is the second end's only typed field. An unparseable one is
     // left to `checkValues`, which refuses the calibration with a sentence -
     // silently defaulting it here would be a count nobody declared.
     const declared = Number(b.values[0] ?? '');
     if (!Number.isInteger(declared) || declared < 1) return false;
+    // v2.7: Cat 1 and Cat n are tick marks, and the edges are worked out from them (`edgesFromClicks`). Compared
+    // within a millionth of a pixel: an image edit maps the stored edges and the clicks by the same map, and the
+    // edges worked out again from the mapped clicks differ from the mapped edges only by rounding.
+    const want = edgesFromClicks(
+      { x: a.px, y: a.py },
+      { x: b.px, y: b.py },
+      declared,
+      this.categoryAxis.getConvention(),
+      this.categoryAxis.getClicked()
+    );
+    const edges = this.categoryAxis.getAxisEdges();
+    const near = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-6;
+    const same = edges !== null && near(edges[0], want[0]) && near(edges[1], want[1]);
+    if (!same && !this.categoryAxis.setAxisEdges(want[0], want[1])) return false;
     // ⚑ Re-declaring the SAME count must not rebuild the ticks, or a nudge to
     // either end (which re-runs the whole calibration) would discard every tick
     // the user had dragged. `setAxisEdges` has already regenerated them from the
@@ -5079,7 +5087,10 @@ export class CalibrationSession<A extends CalibratedAxes> {
   /** Switch between ticks under the categories and ticks between them. */
   setCategoryTickConvention(convention: TickConvention): boolean {
     if (!this.supportsCategoryTicks()) return false;
-    return this.categoryAxis.setConvention(convention);
+    if (!this.categoryAxis.setConvention(convention)) return false;
+    // v2.7: the convention says what the clicked tick marks are, so the edges move with it (the handles do not)
+    this.applyCalibratedCategoryAxis();
+    return true;
   }
 
   /** Drag one tick; the model clamps it between its neighbours. */
