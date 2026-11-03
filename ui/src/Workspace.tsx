@@ -4866,6 +4866,16 @@ export function Workspace() {
         setOcrError('No calibration points could be fixed on this figure - place them by hand: click a point’s chip, then the figure.');
         return;
       }
+      if (bars.otherWayRound) {
+        if (areaSet) commit();
+        const rotated = startedOn.getOptions()['isRotated'] === 'true';
+        setOcrError(
+          rotated
+            ? 'The numbers run along the bottom, so these bars look upright: untick Horizontal bars and press Automatic axis detection again.'
+            : 'The numbers run up the side, so these bars look horizontal: tick Horizontal bars and press Automatic axis detection again.'
+        );
+        return;
+      }
       setOcrError(null);
       const [v1, v2] = stepKeys.filter((k) => k !== 'c1' && k !== 'c2');
       if (bars.value.length && startedOn.getConfig().options?.some((o) => o.key === 'isLog')) startedOn.setOption('isLog', String(bars.log));
@@ -4875,6 +4885,9 @@ export function Workspace() {
       };
       bars.value.forEach((p, i) => place(i === 0 ? v1 : v2, p.px, p.py, String(p.value)));
       if (bars.categories) {
+        // the points are where the labels are centred, so they are the categories' centres: say so, as the ticks-at
+        // choice does, so that the axis's ends are worked out from centres
+        startedOn.setCategoryTickConvention('centred');
         place('c1', bars.categories.first.px, bars.categories.first.py, null);
         place('c2', bars.categories.last.px, bars.categories.last.py, String(bars.categories.count));
       }

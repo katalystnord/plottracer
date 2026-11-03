@@ -46,8 +46,8 @@ describe('Cat 1 and Cat n are asked for as tick marks', () => {
     it(`given a ${name} figure at the Cat 1 and Cat n steps, the prompts ask for the first and last category's tick marks`, () => {
       const c1 = config.fixedSteps.find((s) => s.key === 'c1')!;
       const c2 = config.fixedSteps.find((s) => s.key === 'c2')!;
-      expect(c1.prompt).toBe('Click the tick mark of the FIRST category');
-      expect(c2.prompt).toBe('Click the tick mark of the LAST category, then enter how many CATEGORIES the figure has');
+      expect(c1.prompt).toBe("Click where the FIRST category's tick mark meets the axis line");
+      expect(c2.prompt).toBe("Click where the LAST category's tick mark meets the axis line, then enter how many CATEGORIES the figure has");
     });
 
     it(`given a ${name} figure, the calibration card offers no Common origin: Cat 1 is a category's tick mark, never the corner`, () => {
@@ -152,6 +152,16 @@ describe('a project saved before v2.7 clicked the outer edges', () => {
   it('given such a project, its categories open where they were: four bands from x = 50 to 450', () => {
     const s = savedBeforeV27();
     expect(xs(s.getCategoryAxis().getDividerPoints())).toEqual([50, 150, 250, 350, 450]);
+  });
+
+  it('given such a project and Cat 1 clicked again where the prompt asks, on the first tick mark, the categories stay where they were, and Cat n moves onto its tick mark', () => {
+    const s = savedBeforeV27();
+    expect(s.chooseStep('c1')).toBe(true);
+    s.handleCalibrationClick(100, 500);
+    s.runCalibration();
+    expect(xs(s.getCategoryAxis().getDividerPoints())).toEqual([50, 150, 250, 350, 450]);
+    expect(s.getPlacedPoints()['c2']!.px).toBe(400);
+    expect(s.getCategoryAxis().getClicked()).toBe('ticks');
   });
 
   it('given such a project and the calibration run again, they stay there', () => {

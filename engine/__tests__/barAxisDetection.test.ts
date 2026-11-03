@@ -30,6 +30,12 @@ describe('the categories, from the labels beside the category axis', () => {
     expect(categoryCentresFromLabels(labels, FRAME, 'bottom')).toEqual([150, 300, 450]);
   });
 
+  it('given horizontal bars with wide labels close together, each label is still its own category', () => {
+    // 60 px wide and 12 px tall, 20 px apart: the 8 px between them is a gap between labels, not between words
+    const labels = [label(60, 100, 60, 12), label(60, 120, 60, 12), label(60, 140, 60, 12), label(60, 160, 60, 12)];
+    expect(categoryCentresFromLabels(labels, FRAME, 'left')).toEqual([160, 140, 120, 100]);
+  });
+
   it('given horizontal bars, the categories are the labels left of the plot, bottom to top', () => {
     const labels = [label(70, 100), label(70, 200), label(70, 300), label(300, 365)];
     expect(categoryCentresFromLabels(labels, FRAME, 'left')).toEqual([300, 200, 100]);
@@ -56,6 +62,19 @@ describe('what the button places on a bar chart', () => {
     const got = barCalibrationFromLabels(read, [label(150, 365), label(450, 365)], FRAME, false)!;
     expect(got.value).toEqual([]);
     expect(got.categories?.count).toBe(2);
+  });
+
+  it('given a horizontal bar chart while Horizontal bars is not ticked (numbers along the bottom, words up the side), no category is placed and the answer says the axes look the other way round', () => {
+    const xNumbers: AxesFromLabels['x'] = {
+      axis: 'x', ok: true, log: false, side: 'bottom', second: null, unused: [],
+      pairs: [0, 10, 20, 30].map((v, i) => ({ value: v, label: String(v), labelBox: label(150 + 100 * i, 365), tick: [150 + 100 * i, 350] as [number, number] })),
+    };
+    const read: AxesFromLabels = { x: xNumbers, y: { ...notRead, axis: 'y' }, points: null };
+    const labels = [label(150, 365), label(250, 365), label(350, 365), label(450, 365), label(70, 100), label(70, 200)];
+    const got = barCalibrationFromLabels(read, labels, FRAME, false)!;
+    expect(got.categories).toBeNull();
+    expect(got.value).toEqual([]);
+    expect(got.otherWayRound).toBe(true);
   });
 
   it('given nothing read on either axis, nothing is placed', () => {

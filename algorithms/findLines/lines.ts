@@ -593,14 +593,17 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
   };
   const readThroughTip = (reg: number, br: End[]): boolean => {
     if (br.length < 3) return false;
-    // a stub: a piece of this meeting whose far end is free and inside the plot, its ink fused (half again as thick)
+    // a stub: a piece of this meeting whose far end is free and inside the plot, its ink two strokes fused: half again
+    // as thick as a line, and no thicker than three (a filled marker is thicker, and is no peak's tip)
     const isStub = ([i, k]: End): boolean => {
       const pc = P[i]!;
       const far = pc.node[1 - k] ?? null;
-      return !isJunc(far) && !onFrame(pc.end((1 - k) as 0 | 1)) && thickness(pc) >= 1.5 * lineDt;
+      if (isJunc(far) || onFrame(pc.end((1 - k) as 0 | 1))) return false;
+      const th = thickness(pc);
+      return th >= 1.5 * lineDt && th <= 3 * lineDt;
     };
-    const stubs = br.filter(isStub);
-    const arms = br.filter((b) => !isStub(b));
+    const stubs: End[] = [], arms: End[] = [];
+    for (const b of br) (isStub(b) ? stubs : arms).push(b);
     if (arms.length !== 2 || stubs.length === 0) return false;
     const T = (b: End): Pt => P[b[0]]!.tangent(b[1], skip);
     const [ta, tb] = [T(arms[0]!), T(arms[1]!)];
@@ -650,6 +653,9 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
       at = [ti, sk];
     }
     link(at, arms[1]!, twoPoint(at, arms[1]!));
+    // ⚑ No place to check is listed here, unlike a bridge: nothing is filled in. The stub is the figure's own ink,
+    // walked where it lies, and a place at every narrow peak was exactly what made a spectrum unreadable (23 places
+    // on one IR figure, 2026-11-02)
     handled.add(reg);
     return true;
   };

@@ -284,7 +284,7 @@ export function categoryTickIndexFromId(id: string): number | null {
  *     beside the handle it places;
  *   · there is no seed, so nothing has to name the handle it was taken from;
  *   · there is no short-span note, because each click names what it is on - the
- *     step says "the tick mark of the LAST category" (v2.7);
+ *     step says "where the LAST category's tick mark meets the axis line" (v2.7);
  *   · and there is no offer, because a required step is not offered.
  *
  * ▶ What is left is what the heatmap's stage has: a SUMMARY LINE and what the

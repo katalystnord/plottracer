@@ -233,7 +233,7 @@ describe('⚑⚑ an imported bar chart can still be given a category axis', () =
     // ⚑ The screen has to carry it: an import is exactly the case where the
     // user did not walk the first two steps and has no idea a third exists.
     const s = importedBar();
-    expect(s.getCurrentStep()?.prompt).toMatch(/tick mark of the FIRST category/);
+    expect(s.getCurrentStep()?.prompt).toMatch(/FIRST category's tick mark meets the axis line/);
   });
 
   it('places the axis from those two clicks, keeping the imported calibration', () => {

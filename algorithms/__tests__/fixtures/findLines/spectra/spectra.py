@@ -52,3 +52,18 @@ x1 = np.linspace(400, 4000, 7200)
 t1 = 100 * np.exp(-0.9 * lor(x1, 2200, 6))
 save('one-narrow-peak', [(x1, t1, '#1f77b4')], 100)
 print('ok')
+
+# a curve drawn through filled markers: a marker's blob is thicker than a line's fused flanks and is no peak tip
+xm = np.linspace(0, 10, 400)
+ym = 40 + 30 * np.sin(xm / 2.0)
+fig, ax = plt.subplots(figsize=(6.4, 4.0), dpi=100)
+ax.plot(xm, ym, color='#1f77b4', lw=1.0)
+ax.plot(xm[::40], ym[::40], 'o', color='#1f77b4', ms=6)
+fig.tight_layout(); fig.canvas.draw()
+H = fig.canvas.get_width_height()[1]
+p = ax.transData.transform(np.column_stack([xm, ym]))
+bb = ax.get_window_extent()
+fig.savefig(f'{out}/line-through-markers.png', dpi=100)
+json.dump({'box': [bb.x0, H - bb.y1, bb.x1, H - bb.y0], 'series': [{'colour': [31, 119, 180], 'px': p[:, 0].tolist(), 'py': (H - p[:, 1]).tolist()}]}, open(f'{out}/line-through-markers.json', 'w'))
+plt.close(fig)
+print('ok')

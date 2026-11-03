@@ -48,6 +48,20 @@ describe('a narrow peak is read through its tip, not split there', () => {
     expect(missed(points, tips(truth, box))).toEqual([]);
   });
 
+  it('given a curve drawn through filled markers, it is one line on the curve, with no detour into a marker', () => {
+    const { r, truth } = read('line-through-markers');
+    expect(r.lines).toHaveLength(1);
+    expect(r.places).toEqual([]);
+    expect(r.lines[0]!.roles.filter((x) => x === 'shared')).toEqual([]);
+    // as before the change (measured 2026-11-04): the markers' own ink beside the curve, nothing walked out into them
+    const off = (r.lines[0]!.points as P[]).filter((p) => !truth.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) <= 2.5));
+    expect(off.length).toBeLessThanOrEqual(271);
+  });
+
+  it('given the noisy IR spectrum (a black line with noise), Find lines reads it in 32 pieces at most (48 before)', () => {
+    expect(read('ir-noisy').r.lines.length).toBeLessThanOrEqual(32);
+  });
+
   // ⚑ The five spectra, measured 2026-11-02 before the change and 2026-11-03 after it: the pieces each comes in, and
   // the peak tips with no read point within 3 px. What is left is recorded in the walk notes (narrow peaks that fuse
   // into one meeting with more than two arms, and small bumps on a steep flank); these hold what was won.

@@ -2482,8 +2482,8 @@ export const BAR_AXES_CONFIG: AxesTypeConfig<BarAxes> = {
     // ⚑ No typed value on the first end - a click with nothing to type is the
     // difference between recording where the ink is and inferring it, which is
     // the same shape the heatmap's first column edge has.
-    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click the tick mark of the FIRST category', valueFields: [] },
-    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click the tick mark of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
+    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: "Click where the FIRST category's tick mark meets the axis line", valueFields: [] },
+    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: "Click where the LAST category's tick mark meets the axis line, then enter how many CATEGORIES the figure has", valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
   ],
   // v2.0: a bar is a 2-slot OBJECT tuple (its two dragged corners), same
   // shape as pie's sector / histogram's bin -- see OPPOSITE_CORNER_SLOTS.
@@ -2833,8 +2833,8 @@ export const CATEGORICAL_LINE_CONFIG: AxesTypeConfig<BarAxes> = {
     // ⚑ The same two clicks Bar asks for, in the same words and the same violet.
     // A categorical Line's other axis is a category axis exactly as a bar
     // chart's is, so it is asked for the same way - MIRROR, not merely match.
-    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: 'Click the tick mark of the FIRST category', valueFields: [] },
-    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: 'Click the tick mark of the LAST category, then enter how many CATEGORIES the figure has', valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
+    { key: 'c1', label: 'Cat 1', color: '#7c3aed', prompt: "Click where the FIRST category's tick mark meets the axis line", valueFields: [] },
+    { key: 'c2', label: 'Cat n', color: '#7c3aed', prompt: "Click where the LAST category's tick mark meets the axis line, then enter how many CATEGORIES the figure has", valueFields: [{ key: 'c2n', label: 'Categories', field: 'dz' }] },
   ],
   // Same BarAxes, same v2.0-audit refusal -- see barCalibrationValueCheck.
   checkValues(cal, options) {

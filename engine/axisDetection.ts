@@ -70,15 +70,16 @@ export function categoryCentresFromLabels(labels: readonly LabelBox[], frame: Fr
   const box = (b: LabelBox) => [b.x0, b.y0, b.x1, b.y1] as const;
   // distance out from the axis, and the label's size across it
   const out = (b: LabelBox) => (side === 'bottom' ? b.y0 - (frame.y + frame.height) : frame.x - b.x1);
-  const thick = (b: LabelBox) => (side === 'bottom' ? b.y1 - b.y0 : b.x1 - b.x0);
+  // a label's height is its font size whichever side it is on: the measure for a gap between words and for a row
+  const height = (b: LabelBox) => b.y1 - b.y0;
   const centre = (b: LabelBox) => (box(b)[along[0]] + box(b)[along[1]]) / 2;
   const beside = labels.filter((b) => {
     const c = centre(b);
-    return c >= lo - 0.02 * span && c <= hi + 0.02 * span && out(b) >= -thick(b) / 4;
+    return c >= lo - 0.02 * span && c <= hi + 0.02 * span && out(b) >= -height(b) / 4;
   });
   if (beside.length === 0) return [];
   // the row nearest the axis: an axis title further out is not a category
-  const sizes = beside.map(thick).sort((a, b) => a - b);
+  const sizes = beside.map(height).sort((a, b) => a - b);
   const size = sizes[Math.floor(sizes.length / 2)]!;
   const nearest = Math.min(...beside.map(out));
   const row = beside.filter((b) => out(b) <= nearest + 0.75 * size);
@@ -104,6 +105,9 @@ export interface DetectedBarCalibration {
   /** Cat 1 and Cat n, and how many categories, or null when fewer than two category labels were found. */
   categories: { first: { px: number; py: number }; last: { px: number; py: number }; count: number } | null;
   log: boolean;
+  /** The numbers were read along the axis the categories should run on, and none along the value axis: the bars
+   * look to run the other way from the Horizontal bars option, so nothing was placed. */
+  otherWayRound?: true;
 }
 
 /** Null when neither axis could be read: nothing to place, and the caller warns. */
@@ -114,6 +118,9 @@ export function barCalibrationFromLabels(
   horizontal: boolean
 ): DetectedBarCalibration | null {
   const valueAxis = horizontal ? read.x : read.y;
+  const categoryAxis = horizontal ? read.y : read.x;
+  // numbers along the category side and none along the value side: the figure runs the other way round
+  if (categoryAxis.ok && !valueAxis.ok) return { value: [], categories: null, log: false, otherWayRound: true };
   const v = ends(valueAxis);
   const value = v ? v.map((p) => ({ px: p.tick[0], py: p.tick[1], value: p.value })) : [];
   let categories: DetectedBarCalibration['categories'] = null;

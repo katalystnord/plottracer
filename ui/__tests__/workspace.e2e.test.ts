@@ -1323,7 +1323,7 @@ describe('Workspace: Bar axes', () => {
     expect(await page.getByTestId('calib-chip-c1').count()).toBe(1);
     // ⚑ v2.7: the walk asks for the first category's tick mark by name; nothing is offered in its place.
     expect(await textOf('tips-bar')).toContain('3/4 - Cat 1');
-    expect(await textOf('tips-bar')).toContain('Click the tick mark of the FIRST category');
+    expect(await textOf('tips-bar')).toContain("Click where the FIRST category's tick mark meets the axis line");
   });
 
   /**
@@ -1342,9 +1342,9 @@ describe('Workspace: Bar axes', () => {
     await clickAt(300, 100);
     await confirmValue('10');
 
-    // "Click the tick mark of the FIRST category" (four categories between x 100 and 500: tick marks at 150..450)
+    // "Click where the FIRST category's tick mark meets the axis line" (four categories between x 100 and 500: tick marks at 150..450)
     await clickAt(150, 400);
-    expect(await textOf('tips-bar')).toContain('Click the tick mark of the LAST category');
+    expect(await textOf('tips-bar')).toContain("Click where the LAST category's tick mark meets the axis line");
 
     // "…then enter how many CATEGORIES the figure has"
     await clickAt(450, 400);
@@ -12855,10 +12855,10 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
       const k = 1 / (2 * t.category.count);
       return vImg([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]);
     };
-    expect(await textOf('tips-bar')).toMatch(/tick mark of the FIRST category/);
+    expect(await textOf('tips-bar')).toMatch(/FIRST category's tick mark meets the axis line/);
     const c1 = tick(0);
     await clickImagePixel(c1[0], c1[1]);
-    expect(await textOf('tips-bar')).toMatch(/tick mark of the LAST category/);
+    expect(await textOf('tips-bar')).toMatch(/LAST category's tick mark meets the axis line/);
     const cn = tick(1);
     await clickImagePixel(cn[0], cn[1]);
     await confirmValue(String(t.category.count));

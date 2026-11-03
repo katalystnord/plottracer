@@ -71,9 +71,10 @@ two Y points: click a labelled tick mark on the X axis and enter the number prin
 there, then a second one with a different number, and the same for Y. **Common
 origin** shares one point between X1 and Y1 when the corner where the axes meet is
 labelled on both. A **category axis** (Bar, Stacked bar, Line with categories, Box
-plot, Candlestick, Span chart) is calibrated on two tick marks too: **Cat 1** on the
-first category's tick mark, **Cat n** on the last one's, then how many categories
-the figure has. In the **Categories** stage after Calibrate you say whether the
+plot, Candlestick, Span chart) is calibrated on two tick marks too: **Cat 1** where
+the first category's tick mark meets the axis line, **Cat n** where the last one's
+does, then how many categories the figure has (the bars' baseline is measured at
+that line). In the **Categories** stage after Calibrate you say whether the
 figure draws its ticks at the categories' centres (the default) or between them;
 the tick marks move on screen to show which, and Cat 1 and Cat n stay where you
 clicked them.

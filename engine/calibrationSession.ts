@@ -3547,6 +3547,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     // exactly as before.
     const step = this.getCurrentStep();
     if (!step) return 'ignored';
+    if (step.key === this.config.categoryTicks?.startStep || step.key === this.config.categoryTicks?.endStep) this.adoptTickClicks();
     if (this.completeValuelessStep(px, py)) return 'point-placed';
     this.pendingPixel = { px, py };
     return 'awaiting-value';
@@ -5082,6 +5083,30 @@ export class CalibrationSession<A extends CalibratedAxes> {
     if (!this.categoryAxis.hasGeometry()) return false;
     this.categoryAxis.markCategories();
     return true;
+  }
+
+  /**
+   * A project saved before v2.7 clicked Cat 1 and Cat n on the axis's outer edges. When the walk places one of them
+   * again by a click, it follows today's prompt, a tick mark; so both handles first move onto the tick marks those
+   * edges imply (at centres, half a spacing in; between categories, where they are), and the axis takes the tick
+   * meaning from then on. The categories do not move.
+   */
+  private adoptTickClicks(): void {
+    if (this.categoryAxis.getClicked() === 'ticks') return;
+    const ticks = this.config.categoryTicks;
+    const edges = this.categoryAxis.getAxisEdges();
+    const a = ticks ? this.placed[ticks.startStep] : undefined;
+    const b = ticks ? this.placed[ticks.endStep] : undefined;
+    const n = this.categoryAxis.getCategoryCount();
+    if (edges && a && b && this.categoryAxis.getConvention() === 'centred' && n >= 2) {
+      const k = 1 / (2 * n);
+      const [e0, e1] = edges;
+      a.px = e0.x + (e1.x - e0.x) * k;
+      a.py = e0.y + (e1.y - e0.y) * k;
+      b.px = e1.x - (e1.x - e0.x) * k;
+      b.py = e1.y - (e1.y - e0.y) * k;
+    }
+    this.categoryAxis.setClicked('ticks');
   }
 
   /** Switch between ticks under the categories and ticks between them. */
