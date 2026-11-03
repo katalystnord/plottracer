@@ -32,7 +32,17 @@ export interface Coverage {
   contrast: Float64Array;
 }
 
-export function inkCoverage(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, colour: RGB, size = 9): Coverage {
+/** The figure's channels and the paper under its lines, which depend on the figure and not on the ink: built once,
+ * every ink read against them (Auto-extract tells Find lines the other series' inks; per ink, four series took
+ * 4.2 s on xy-multiseries-modulus against 1.3 s read alone). */
+export interface Paper {
+  ch: Float64Array[];
+  lum: number;
+  /** The paper, by the operation that removed the lines and its size. */
+  bg: Map<string, Float64Array[]>;
+}
+
+export function paperOf(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number): Paper {
   const n = w * h;
   const ch = [new Float64Array(n), new Float64Array(n), new Float64Array(n)];
   let lum = 0;
@@ -40,13 +50,24 @@ export function inkCoverage(rgba: Uint8ClampedArray | Uint8Array, w: number, h: 
     for (let k = 0; k < 3; k++) ch[k]![i] = rgba[i * 4 + k]!;
     lum += (ch[0]![i]! + ch[1]![i]! + ch[2]![i]!) / 3;
   }
-  lum /= n;
+  return { ch, lum: lum / n, bg: new Map() };
+}
+
+export function inkCoverage(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, colour: RGB, size = 9, paper: Paper = paperOf(rgba, w, h)): Coverage {
+  const n = w * h;
+  const { ch, lum } = paper;
   const cMean = (colour[0] + colour[1] + colour[2]) / 3;
   // lines darker than the paper vanish under a closing; lighter ones under an opening
-  const bg = ch.map((c) => {
-    const p: Plane = { data: c, width: w, height: h };
-    return lum > cMean ? greyClosing(p, size) : greyOpening(p, size);
-  });
+  const closing = lum > cMean;
+  const key = `${closing ? 'closing' : 'opening'} ${size}`;
+  let bg = paper.bg.get(key);
+  if (!bg) {
+    bg = ch.map((c) => {
+      const p: Plane = { data: c, width: w, height: h };
+      return closing ? greyClosing(p, size) : greyOpening(p, size);
+    });
+    paper.bg.set(key, bg);
+  }
   const alpha = new Float64Array(n);
   const residual = new Float64Array(n);
   const contrast = new Float64Array(n);

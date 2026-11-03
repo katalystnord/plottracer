@@ -29,7 +29,7 @@
  * can join them. Nothing is guessed silently.
  */
 import { dilateCross, distanceTransform, label, skeletonize } from './raster.js';
-import { inkCoverage, lineMask, ridgeChains, ridgePoints, type Box, type RGB } from './ink.js';
+import { inkCoverage, paperOf, lineMask, ridgeChains, ridgePoints, type Box, type RGB } from './ink.js';
 import { skeletonGraph, type GraphEdge, type YX } from './graph.js';
 import {
   centroid, cross, dot, hermite, nearestDistances, netTurn, norm, pathLength, polyfit, polyval,
@@ -275,7 +275,8 @@ export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: nu
 function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, colour: RGB, box: Box, opts: FindLinesOptions): FindLinesResult {
   const contour = opts.contour;
   const masks = opts.masks ?? [];
-  const cov = inkCoverage(rgba, w, h, colour);
+  const paper = paperOf(rgba, w, h);
+  const cov = inkCoverage(rgba, w, h, colour, 9, paper);
   // ⚑⚑ WHEN EACH LEVEL HAS ITS OWN COLOUR, THE RESIDUAL MUST BE TIGHT. It is how
   // far a pixel is from any paper-to-ink mix. 70 was measured on same-colour
   // figures, where nothing near the picked colour is a different line - and a
@@ -296,7 +297,7 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
   // with no more to go on it is read as faint ink of this colour, and a stretch of the blue line came back as nine
   // "green" lines. Where the other inks are known, the nearer mix decides whose pixel it is.
   for (const other of opts.otherInks ?? []) {
-    const oc = inkCoverage(rgba, w, h, other);
+    const oc = inkCoverage(rgba, w, h, other, 9, paper);
     for (let i = 0; i < mask.length; i++) if (mask[i] && oc.alpha[i]! > 0.3 && oc.residual[i]! < cov.residual[i]!) mask[i] = 0;
   }
   const skel = skeletonize(mask, w, h);
