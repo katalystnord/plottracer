@@ -9,7 +9,7 @@
  */
 
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
-import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
+import { detectBlobs, markerCentres, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import type { Point2D } from '../algorithms/segmentFill.js';
 
 export interface BlobDetectSuccess {
@@ -46,7 +46,7 @@ export function runBlobDetect(
   if (count < MIN_MATCHED_PIXELS) {
     return { error: 'No pixels matched that colour. Repick the marker colour, or raise the tolerance.' };
   }
-  const blobs = detectBlobs(mask, width, height, opts);
+  const blobs = detectBlobs(mask, width, height, { ...opts, trackMembership: true });
   if (blobs.length === 0) {
     return { error: 'No markers of that size were found. Lower the minimum marker size, or adjust the colour / tolerance.' };
   }
@@ -57,6 +57,10 @@ export function runBlobDetect(
   // sitting higher on the page comes back before one to its left. Sorted
   // ascending by (x, then y) instead, so the series lists low-to-high the
   // way the reader -- and the figure's own x-axis -- already does.
-  const points = blobs.map((b) => b.centroid).sort((a, b) => a.x - b.x || a.y - b.y);
-  return { points, matched: count, blobs: blobs.length };
+  // ⚑ v2.7: each point on the MARKER's own body, without an error bar or line of its colour that touches it
+  // (algorithms/blobDetect.ts, markerCentres); a marker with nothing attached reads exactly as before.
+  const points = blobs
+    .flatMap((b) => markerCentres(b, width, { minDiameter: opts?.minDiameter ?? 0 }))
+    .sort((a, b) => a.x - b.x || a.y - b.y);
+  return { points, matched: count, blobs: points.length };
 }

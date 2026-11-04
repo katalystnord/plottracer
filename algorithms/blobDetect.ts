@@ -147,3 +147,114 @@ export function detectBlobs(
   }
   return blobs;
 }
+
+/**
+ * THE MARKER'S OWN BODY, without the lines touching it (v2.7; David, 2026-11-04). A marker and an error bar (or a
+ * connecting line) of the same colour touch, so they are one blob, and the blob's centroid is pulled along the longer
+ * arm: on errorbar-failure-time-asymmetric every point read too high, by up to 67 of 820 h.
+ *
+ * The body is the blob OPENED by a disc a little wider than a line: every pixel within `radius` of a pixel that is
+ * itself at least `radius` from the blob's edge. A line up to about 2 x radius wide has no such pixel and goes; a
+ * marker keeps its shape. Returns one centre per body piece (a bar joining two markers leaves two), each with +0.5 to
+ * the pixel centre as the centroid has. ⚑ When the opening takes away little (`keep` of the blob or more: a lone
+ * marker, whose corners an opening rounds) or nothing survives it (a marker too small to open), the answer is the
+ * blob's own centroid, so a marker with nothing attached reads exactly as it always did.
+ */
+export function markerCentres(
+  blob: Blob,
+  width: number,
+  opts: { radius?: number; keep?: number; minDiameter?: number } = {}
+): Point2D[] {
+  const members = blob.members;
+  if (!members || members.length === 0) return [blob.centroid];
+  const radius = opts.radius ?? 2;
+  const keep = opts.keep ?? 0.8;
+  const minDia = opts.minDiameter ?? 0;
+  // a local grid with a one-pixel margin of background round the blob
+  const x0 = Math.floor(blob.bbox.minX) - 1;
+  const y0 = Math.floor(blob.bbox.minY) - 1;
+  const w = Math.ceil(blob.bbox.maxX) - x0 + 1;
+  const h = Math.ceil(blob.bbox.maxY) - y0 + 1;
+  const inBlob = new Uint8Array(w * h);
+  for (const p of members) {
+    const px = p % width;
+    const py = (p - px) / width;
+    inBlob[(py - y0) * w + (px - x0)] = 1;
+  }
+  // chamfer 3-4 distances (3 per pixel straight, 4 diagonal) from the cells where `from` is 0
+  const chamfer = (from: Uint8Array): Float64Array => {
+    const d = new Float64Array(w * h);
+    for (let i = 0; i < d.length; i++) d[i] = from[i] ? Infinity : 0;
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (d[i] === 0) continue;
+        if (x > 0) d[i] = Math.min(d[i]!, d[i - 1]! + 3);
+        if (y > 0) {
+          d[i] = Math.min(d[i]!, d[i - w]! + 3);
+          if (x > 0) d[i] = Math.min(d[i]!, d[i - w - 1]! + 4);
+          if (x < w - 1) d[i] = Math.min(d[i]!, d[i - w + 1]! + 4);
+        }
+      }
+    for (let y = h - 1; y >= 0; y--)
+      for (let x = w - 1; x >= 0; x--) {
+        const i = y * w + x;
+        if (d[i] === 0) continue;
+        if (x < w - 1) d[i] = Math.min(d[i]!, d[i + 1]! + 3);
+        if (y < h - 1) {
+          d[i] = Math.min(d[i]!, d[i + w]! + 3);
+          if (x < w - 1) d[i] = Math.min(d[i]!, d[i + w + 1]! + 4);
+          if (x > 0) d[i] = Math.min(d[i]!, d[i + w - 1]! + 4);
+        }
+      }
+    return d;
+  };
+  const r3 = radius * 3;
+  // erode: the pixels more than `radius` from the edge (distance to the nearest background pixel)
+  const toEdge = chamfer(inBlob);
+  const notCore = new Uint8Array(w * h);
+  let cores = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (toEdge[i]! > r3) cores++;
+    else notCore[i] = 1;
+  }
+  if (cores === 0) return [blob.centroid];
+  // dilate back, inside the blob: the pixels within `radius` of a core pixel
+  const toCore = chamfer(notCore);
+  const body = new Uint8Array(w * h);
+  let bodyArea = 0;
+  for (let i = 0; i < w * h; i++)
+    if (inBlob[i] && toCore[i]! <= r3) {
+      body[i] = 1;
+      bodyArea++;
+    }
+  if (bodyArea >= keep * members.length) return [blob.centroid];
+  // one centre per piece of the body
+  const out: Point2D[] = [];
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  for (let s = 0; s < w * h; s++) {
+    if (!body[s] || seen[s]) continue;
+    seen[s] = 1;
+    stack.push(s);
+    let sx = 0, sy = 0, n = 0;
+    while (stack.length) {
+      const p = stack.pop()!;
+      const px = p % w;
+      const py = (p - px) / w;
+      sx += px;
+      sy += py;
+      n++;
+      for (let ny = Math.max(0, py - 1); ny <= Math.min(h - 1, py + 1); ny++)
+        for (let nx = Math.max(0, px - 1); nx <= Math.min(w - 1, px + 1); nx++) {
+          const q = ny * w + nx;
+          if (body[q] && !seen[q]) {
+            seen[q] = 1;
+            stack.push(q);
+          }
+        }
+    }
+    if (2 * Math.sqrt(n / Math.PI) >= minDia) out.push({ x: x0 + sx / n + 0.5, y: y0 + sy / n + 0.5 });
+  }
+  return out.length ? out : [blob.centroid];
+}

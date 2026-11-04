@@ -12,7 +12,7 @@ import {
   type SessionSnapshot,
 } from '../../engine/calibrationSession.js';
 import { describeCaptureProgress } from '../../engine/captureProgress.js';
-import { AUTO_EXTRACT_MODES, DATA_EXTRACTION_MODES, dataExtractionToolsFor, findLinesKind, type ToolMode } from '../../engine/toolMode.js';
+import { AUTO_EXTRACT_MODES, DATA_EXTRACTION_MODES, dataExtractionToolsFor, findLinesKind, toolAfterClosingCard, type ToolMode } from '../../engine/toolMode.js';
 import { findLinesInWorker } from './findLinesClient.js';
 import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
 import { inferLevelsInScale } from '../../algorithms/findLines/levels.js';
@@ -1184,7 +1184,7 @@ export function Workspace() {
     setCropRect(null);
     setPreviewAngle(0); // and abandons an un-applied deskew preview
     setMode((m) => {
-      if (m === 'image-edit') return preImageEditModeRef.current;
+      if (m === 'image-edit') return toolAfterClosingCard(preImageEditModeRef.current);
       preImageEditModeRef.current = m;
       return 'image-edit';
     });
@@ -1900,7 +1900,7 @@ export function Workspace() {
     setSettingScale(false);
     setScaleDraftPx(null);
     setMode((m) => {
-      if (m === 'measure') return preMeasureModeRef.current;
+      if (m === 'measure') return toolAfterClosingCard(preMeasureModeRef.current);
       preMeasureModeRef.current = m;
       return 'measure';
     });
@@ -1914,7 +1914,7 @@ export function Workspace() {
     errorDragRef.current = null;
     setErrorDrag(null);
     setMode((m) => {
-      if (m === 'error-bars') return preErrorBarsModeRef.current;
+      if (m === 'error-bars') return toolAfterClosingCard(preErrorBarsModeRef.current);
       preErrorBarsModeRef.current = m;
       return 'error-bars';
     });
@@ -1932,7 +1932,7 @@ export function Workspace() {
     setCropRect(null);
     setCropIntent('crop');
     setMode((m) => {
-      if (m === 'legend') return preLegendModeRef.current;
+      if (m === 'legend') return toolAfterClosingCard(preLegendModeRef.current);
       preLegendModeRef.current = m;
       return 'legend';
     });
@@ -1942,7 +1942,7 @@ export function Workspace() {
     setSegmentFillError(null);
     setColorTraceInfo(null);
     setMode((m) => {
-      if (DATA_EXTRACTION_MODES.includes(m)) return preDataExtractionModeRef.current;
+      if (DATA_EXTRACTION_MODES.includes(m)) return toolAfterClosingCard(preDataExtractionModeRef.current);
       preDataExtractionModeRef.current = m;
       return 'extract';
     });

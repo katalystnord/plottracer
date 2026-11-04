@@ -97,3 +97,15 @@ export function autoExtractModesFor(
   if (k === 'curve') return AUTO_EXTRACT_MODES.filter((m) => m !== 'find-lines' || (configId !== undefined && findLinesKind(configId) !== null));
   return ['color-trace'];
 }
+
+/** The tools that open a card of their own: the left fold-outs, and Calibrate, whose card is the one at the top. */
+const TOOLS_WITH_A_CARD: readonly ToolMode[] = ['legend', 'image-edit', 'error-bars', 'measure', 'calibrate', ...DATA_EXTRACTION_MODES];
+
+/**
+ * The tool left picked when a card is closed by clicking its rail icon again (v2.7). It goes back to the tool used
+ * before the card, as it always has, unless that tool has a card of its own: then to Pan. David, 2026-11-04, closing
+ * Data extraction and getting the Legend card: closing a card never opens another one.
+ */
+export function toolAfterClosingCard(before: ToolMode): ToolMode {
+  return TOOLS_WITH_A_CARD.includes(before) ? 'pan' : before;
+}

@@ -14033,3 +14033,19 @@ describe('the Eraser (v2.7)', () => {
     await expect.poll(bars).toBe(1);
   });
 });
+
+describe('closing a card (v2.7)', () => {
+  // David, 2026-11-04: closing Data extraction by its rail icon opened the Legend card, the tool used before it.
+  it('given the Legend card, then Data extraction, a click on Data extraction\'s rail icon closes it and opens no other card', async () => {
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // ends with the Data extraction card open, Place points picked
+    await page.getByTestId('mode-legend').click();
+    expect(await page.getByTestId('legend-card').count()).toBe(1);
+    await page.getByTestId('mode-data-extraction').click();
+    expect(await page.getByTestId('data-extraction-card').count()).toBe(1);
+    await page.getByTestId('mode-data-extraction').click();
+    expect(await page.getByTestId('data-extraction-card').count()).toBe(0);
+    expect(await page.getByTestId('legend-card').count()).toBe(0);
+    expect(await page.getByTestId('mode-pan').getAttribute('aria-pressed')).toBe('true');
+  });
+});
