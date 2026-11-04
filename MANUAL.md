@@ -3,9 +3,9 @@
 A short, task-oriented guide to getting numbers out of a figure. For features,
 install instructions, and keyboard shortcuts see the [README](README.md).
 
-PlotTracer's work is **one workflow**: open → capture → calibrate → mark the
-legend → extract → correct → export. Each step is one card, and each card holds
-every way of doing that step - a click, the guided order, an automatic detection.
+PlotTracer's workflow is: open → capture → calibrate → mark the legend → extract →
+correct → export. Each step is one card, and each card holds every way of doing that
+step: a click, the guided order, an automatic detection.
 They all make the same marks, any of them can finish or correct what another
 started, and nothing records which one was used.
 
