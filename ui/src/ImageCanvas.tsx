@@ -2274,6 +2274,26 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
                         }}
                       >
                         <Circle radius={11} fill="#000000" opacity={0} listening={interactive} />
+                        {point.label && (
+                          // ⚑ An aid's own text is an OFFER (v2.7: a category name read from the figure's labels,
+                          // until it is used): greyed, centred under the grip, in the Group so it follows a drag, and
+                          // haloed in white so it reads over the figure's own labels and ink.
+                          <KonvaText
+                            x={-100}
+                            y={9}
+                            width={200}
+                            align="center"
+                            text={point.label}
+                            fontSize={12}
+                            fontStyle={point.labelMuted ? 'italic' : 'normal'}
+                            fontFamily="system-ui, sans-serif"
+                            fill={point.labelMuted ? theme.color.text.legend : theme.color.overlay.stroke}
+                            stroke="#ffffff"
+                            strokeWidth={3}
+                            fillAfterStrokeEnabled
+                            listening={false}
+                          />
+                        )}
                       </Group>
                     );
                   }

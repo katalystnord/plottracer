@@ -23,6 +23,32 @@ function word(text: string, x0: number, x1: number, y0 = 210, y1 = 225, confiden
   return { text, confidence, bbox: { x0, y0, x1, y1 } };
 }
 
+describe('the words of one label, in reading order (v2.7)', () => {
+  // David's table read "3 Day" for the label "Day 3" (2026-11-04): the "3" box started a pixel higher than "Day", and
+  // the words were ordered by the top of their boxes before left to right.
+  it('given "Day" and "3" on one line, the "3" box a pixel higher, the label reads "Day 3"', () => {
+    const out = wordsToTicks({
+      words: [word('Day', 20, 50, 211, 225), word('3', 54, 62, 210, 224)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out.map((r) => r.text)).toEqual(['Day 3']);
+  });
+
+  it('given a label on two lines, the upper line is still read first, each left to right', () => {
+    const out = wordsToTicks({
+      words: [word('dose', 52, 80, 228, 242), word('High', 20, 48, 211, 225), word('(mg)', 20, 46, 229, 243)],
+      toSource: identity,
+      dividers: DIVIDERS,
+      along: 'x',
+      axisAt: 200,
+    });
+    expect(out.map((r) => r.text)).toEqual(['High (mg) dose']);
+  });
+});
+
 describe('relating one whole-band read to the ticks', () => {
   it('files each word under the category its anchor lands in', () => {
     const out = wordsToTicks({

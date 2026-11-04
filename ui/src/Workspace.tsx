@@ -984,6 +984,16 @@ export function Workspace() {
   const [graphTypeSuggestion, setGraphTypeSuggestion] = useState<string | null>(null);
   const [suggestionAnswered, setSuggestionAnswered] = useState(0);
   const suggestionTokenRef = useRef(0);
+  // The row of category labels [Automatic axis detection] found on a bar-family figure (v2.7): their names are read
+  // from it once Calibrate has built the category axis (docs/v2.7-workflow-walk.md, "Automatic axis detection reads
+  // the category names too"). Belongs to the figure and the detection it came from; read once, then forgotten.
+  const pendingNameRowRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const readCategoryLabelsRef = useRef<
+    ((band: { x: number; y: number; width: number; height: number }, opts?: { offer?: boolean }) => Promise<void>) | null
+  >(null);
+  // The names read from that row, OFFERED: greyed under each tick mark and one line under the card's header, until
+  // they are used or withdrawn (David, 2026-11-04: no popup; once used they leave the figure).
+  const [nameOffer, setNameOffer] = useState<OcrProposal[] | null>(null);
   const dropGraphTypeSuggestion = useCallback(() => {
     suggestionTokenRef.current++;
     setGraphTypeSuggestion(null);
@@ -3412,6 +3422,8 @@ export function Workspace() {
     (s: CalibrationSession<CalibratedAxes>) => {
       setAxesTypeId(s.getConfig().id);
       dropGraphTypeSuggestion(); // the suggestion was about the figure we are leaving
+      pendingNameRowRef.current = null; // ...and so was a row of labels found on it
+      setNameOffer(null);
       // A pending figure-rename belongs to the figure we are leaving.
       setFigureNameDraft(null);
       setFigureNameNotice(null);
@@ -3952,6 +3964,8 @@ export function Workspace() {
       applyProvenance({}); // a new figure has its own (empty) origin
       setFigureCaptured(false); // a new document's figure-of-record isn't captured yet (ckpt 102)
       dropGraphTypeSuggestion(); // ...so nothing has been suggested for it either
+      pendingNameRowRef.current = null;
+      setNameOffer(null);
       applyPdfState(null); // a genuinely new document is not a live PDF page (openPdf re-sets it after)
       swapSession(id, new CalibrationSession(ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG));
       setMode('calibrate');
@@ -4869,6 +4883,14 @@ export function Workspace() {
       // invents, and a figure with no drawn cells simply gets no grid - which is
       // the honest answer until the user asks for a lattice.
       if (heatmapActive) queueMicrotask(() => runHeatmapDetect());
+      // ⚑ The category names, from the row of labels [Automatic axis detection] found (v2.7): read now, because the
+      // category axis the reader splits the row by, and the names are written onto, exists from Calibrate on. The same
+      // read as a box dragged round the labels, but OFFERED rather than popped up. Read again at every Calibrate until
+      // they are used or withdrawn, so the offer always fits the categories now marked.
+      const nameRow = pendingNameRowRef.current;
+      if (nameRow && session.getCategoryAxis().getAxisEdges()) {
+        queueMicrotask(() => void readCategoryLabelsRef.current?.(nameRow, { offer: true }));
+      }
     } else {
       bump();
     }
@@ -4934,6 +4956,8 @@ export function Workspace() {
       // A bar-family figure (v2.7): its value axis's two points, and Cat 1 and Cat n on the first and last category's
       // tick marks with the count, each placed as the walk places it
       const bars = barCalibrationFromLabels(read, labelBoxes, frame, startedOn.getOptions()['isRotated'] === 'true');
+      // the names are read from the labels' row after Calibrate; a detection that found no categories leaves none
+      pendingNameRowRef.current = bars?.categories?.labelRow ?? null;
       if (!bars) {
         if (areaSet) commit();
         setOcrError('No calibration points could be fixed on this figure - place them by hand: click a point’s chip, then the figure.');
@@ -5243,20 +5267,26 @@ export function Workspace() {
   );
 
   const readCategoryLabels = useCallback(
-    async (band: { x: number; y: number; width: number; height: number }) => {
-      setOcrArmed(false);
-      setOcrError(null);
+    // `offer`: the names [Automatic axis detection] found the labels for (v2.7), read after Calibrate into the offer
+    // under the card's header instead of the review card, and quietly: a read that finds nothing offers nothing.
+    async (band: { x: number; y: number; width: number; height: number }, opts: { offer?: boolean } = {}) => {
+      const offer = opts.offer === true;
+      const target = offer ? 'category' : ocrTarget;
+      if (!offer) {
+        setOcrArmed(false);
+        setOcrError(null);
+      }
       const image = readingImage();
       // ⚑ A heatmap's columns and rows are bands like any other, so the read is
       // the same read - only where the dividers come from differs.
-      const heat = ocrTarget === 'category' ? null : heatmapBandFrame(ocrTarget);
-      if (ocrTarget !== 'category' && (!image || !heat)) {
+      const heat = target === 'category' ? null : heatmapBandFrame(target);
+      if (target !== 'category' && (!image || !heat)) {
         setOcrError('Place the grid first - its boundaries are what split the box you drew.');
         return;
       }
       const edges = heat ? null : session.getCategoryAxis().getAxisEdges();
       if (!image || (!heat && !edges)) {
-        setOcrError('Mark the category axis first - its dividers are what split the box you drew.');
+        if (!offer) setOcrError('Mark the category axis first - its dividers are what split the box you drew.');
         return;
       }
       const dividers = heat ? heat.dividers : session.getCategoryAxis().getDividerPoints();
@@ -5266,7 +5296,7 @@ export function Workspace() {
       const axisAt = heat ? heat.axisAt : along === 'x' ? edges![0].y : edges![0].x;
       const answer = await readBandAtAngle(image, band, dividers, along, axisAt);
       if (isOcrFailure(answer)) {
-        setOcrError(answer.error);
+        if (!offer) setOcrError(answer.error);
         return;
       }
       // ⚑ The box is KEPT, which is the whole of what a re-read needs: the same
@@ -5278,10 +5308,18 @@ export function Workspace() {
       setOcrMeasuredDeg(Math.round(((answer.angleRadians ?? 0) * 180) / Math.PI));
       setOcrAngleIsYours(false);
       setOcrAngleNotice(null);
-      setOcrProposals(answer.proposals);
+      if (offer) {
+        if (target !== ocrTarget) setOcrTarget('category');
+        setNameOffer(answer.proposals);
+      } else setOcrProposals(answer.proposals);
     },
     [session, ocrTarget, heatmapBandFrame, setOcrError, setOcrBand, setOcrAngleNotice, setOcrProposals, readingImage]
   );
+
+  // Calibrate is declared above this reader, so it reaches it through a ref (the names after a detection, v2.7).
+  useEffect(() => {
+    readCategoryLabelsRef.current = readCategoryLabels;
+  }, [readCategoryLabels]);
 
   /**
    * ⚑⚑ READ THE SAME BAND AGAIN, AT AN ANGLE THE USER NAMED.
@@ -5375,8 +5413,8 @@ export function Workspace() {
    * that one, and the category keeps whatever it had.
    * ⚑ ONE undo step for the whole card, because one press was one decision.
    */
-  const applyOcrNames = useCallback(() => {
-    const rows = ocrProposals ?? [];
+  const applyOcrNames = useCallback((offered?: readonly OcrProposal[]) => {
+    const rows = offered ?? ocrProposals ?? [];
     let wrote = false;
     // ⚑⚑ A HEATMAP'S NAMES GO IN AS ONE WRITE, not one per row. Each name is
     // stored in the axis's own list, and the per-name editor rebuilds that list
@@ -5402,6 +5440,9 @@ export function Workspace() {
     }
     setOcrProposals(null);
     setOcrError(null);
+    // ⚑ Whatever was offered is settled now: used, so it leaves the figure for the table (David, 2026-11-04)
+    setNameOffer(null);
+    pendingNameRowRef.current = null;
     if (wrote) commit();
   }, [ocrProposals, session, commit, ocrTarget, setHeatmapCategoryNames, setOcrProposals, setOcrError]);
 
@@ -5577,6 +5618,8 @@ export function Workspace() {
       return;
     }
     session.reset();
+    pendingNameRowRef.current = null; // the labels' row belonged to the calibration being reset
+    setNameOffer(null);
     setDataValueInputs([]);
     setMode('calibrate');
     // Re-expand the card (checkpoint 86). Calibrate auto-folds it, so without
@@ -8074,8 +8117,17 @@ export function Workspace() {
    */
   const categoryOverlay = useMemo(() => {
     const ca = session.getCategoryAxis();
-    return { edges: ca.getAxisEdges(), tickPoints: ca.getTickPoints() };
-  }, [session, version]);
+    const edges = ca.getAxisEdges();
+    const tickPoints = ca.getTickPoints();
+    // The offered names, greyed under their tick marks (v2.7): only while the ticks are the categories' centres, so
+    // each name stands under its own category, and only while calibrated, as the offer's line is.
+    const n = ca.getCategories().length;
+    const offeredNames =
+      nameOffer && axes && ca.getConvention() === 'centred' && tickPoints.length === n
+        ? Array.from({ length: n }, (_, i) => nameOffer.find((r) => r.categoryIndex === i)?.text.trim() || null)
+        : undefined;
+    return { edges, tickPoints, ...(offeredNames ? { offeredNames } : {}) };
+  }, [session, version, nameOffer, axes]);
   const categoryGlyphs = useMemo(() => categoryAidGlyphs(categoryOverlay), [categoryOverlay]);
   const categoryMarkers = useMemo(() => categoryTickMarkers(categoryOverlay), [categoryOverlay]);
 
@@ -9549,6 +9601,22 @@ export function Workspace() {
               Reset calibration
             </button>
           </div>
+          )}
+          {/* ⚑ The category names [Automatic axis detection] read (v2.7), OFFERED in one line under the header, folded or
+              not: nothing is written until Use them, and Check… opens the review card for correcting them (David,
+              2026-11-04: no popup). */}
+          {figureCaptured && axes && nameOffer && nameOffer.length > 0 && (
+            <div data-testid="name-offer" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
+              <span>
+                {nameOffer.length} {nameOffer.length === 1 ? 'name' : 'names'} read from the labels
+              </span>
+              <button type="button" data-testid="name-offer-use" onClick={() => applyOcrNames(nameOffer)} style={{ fontSize: 12 }}>
+                Use them
+              </button>
+              <button type="button" data-testid="name-offer-check" onClick={() => setOcrProposals(nameOffer)} style={{ fontSize: 12 }}>
+                Check…
+              </button>
+            </div>
           )}
           {/* Point matrix: laid out as a grid with 2 columns, so an XY graph
               reads as one row per axis (X1 X2 / Y1 Y2). Values are entered right
@@ -11895,12 +11963,15 @@ export function Workspace() {
           onReadAgain={rereadCategoryLabels}
           busy={ocrRereading}
           notice={ocrAngleNotice}
-          onApply={applyOcrNames}
+          onApply={() => applyOcrNames()}
           onCancel={() => {
             setOcrProposals(null);
             setOcrError(null);
             setOcrBand(null);
             setOcrAngleNotice(null);
+            // Cancel on names that were offered withdraws the offer: the one way to dismiss it (walk notes)
+            setNameOffer(null);
+            pendingNameRowRef.current = null;
           }}
         />
       )}

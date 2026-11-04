@@ -63,26 +63,11 @@ type Frame = { x: number; y: number; width: number; height: number };
  * `side` is where the category axis runs: the frame's bottom on upright bars, its left on horizontal ones.
  */
 export function categoryCentresFromLabels(labels: readonly LabelBox[], frame: Frame, side: 'bottom' | 'left'): number[] {
+  const found = categoryRow(labels, frame, side);
+  if (!found) return [];
+  const { row, size } = found;
   const along = side === 'bottom' ? ([0, 2] as const) : ([1, 3] as const);
-  const lo = side === 'bottom' ? frame.x : frame.y;
-  const hi = side === 'bottom' ? frame.x + frame.width : frame.y + frame.height;
-  const span = hi - lo;
   const box = (b: LabelBox) => [b.x0, b.y0, b.x1, b.y1] as const;
-  // distance out from the axis, and the label's size across it
-  const out = (b: LabelBox) => (side === 'bottom' ? b.y0 - (frame.y + frame.height) : frame.x - b.x1);
-  // a label's height is its font size whichever side it is on: the measure for a gap between words and for a row
-  const height = (b: LabelBox) => b.y1 - b.y0;
-  const centre = (b: LabelBox) => (box(b)[along[0]] + box(b)[along[1]]) / 2;
-  const beside = labels.filter((b) => {
-    const c = centre(b);
-    return c >= lo - 0.02 * span && c <= hi + 0.02 * span && out(b) >= -height(b) / 4;
-  });
-  if (beside.length === 0) return [];
-  // the row nearest the axis: an axis title further out is not a category
-  const sizes = beside.map(height).sort((a, b) => a - b);
-  const size = sizes[Math.floor(sizes.length / 2)]!;
-  const nearest = Math.min(...beside.map(out));
-  const row = beside.filter((b) => out(b) <= nearest + 0.75 * size);
   // words of one label: a gap smaller than half a label's size
   const runs = row
     .map((b) => [box(b)[along[0]], box(b)[along[1]]] as [number, number])
@@ -98,12 +83,59 @@ export function categoryCentresFromLabels(labels: readonly LabelBox[], frame: Fr
   return side === 'bottom' ? centres : centres.reverse();
 }
 
+/** The labels in the row nearest the category axis, and the labels' size (their median height): the row the
+ * categories' labels stand in, without an axis title further out or the value axis's numbers. */
+function categoryRow(labels: readonly LabelBox[], frame: Frame, side: 'bottom' | 'left'): { row: LabelBox[]; size: number } | null {
+  const along = side === 'bottom' ? ([0, 2] as const) : ([1, 3] as const);
+  const lo = side === 'bottom' ? frame.x : frame.y;
+  const hi = side === 'bottom' ? frame.x + frame.width : frame.y + frame.height;
+  const span = hi - lo;
+  const box = (b: LabelBox) => [b.x0, b.y0, b.x1, b.y1] as const;
+  // distance out from the axis, and the label's size across it
+  const out = (b: LabelBox) => (side === 'bottom' ? b.y0 - (frame.y + frame.height) : frame.x - b.x1);
+  // a label's height is its font size whichever side it is on: the measure for a gap between words and for a row
+  const height = (b: LabelBox) => b.y1 - b.y0;
+  const centre = (b: LabelBox) => (box(b)[along[0]] + box(b)[along[1]]) / 2;
+  const beside = labels.filter((b) => {
+    const c = centre(b);
+    return c >= lo - 0.02 * span && c <= hi + 0.02 * span && out(b) >= -height(b) / 4;
+  });
+  if (beside.length === 0) return null;
+  // the row nearest the axis: an axis title further out is not a category
+  const sizes = beside.map(height).sort((a, b) => a - b);
+  const size = sizes[Math.floor(sizes.length / 2)]!;
+  const nearest = Math.min(...beside.map(out));
+  return { row: beside.filter((b) => out(b) <= nearest + 0.75 * size), size };
+}
+
+/**
+ * The box round the row of category labels (v2.7), with a margin of a quarter of a label's height: where the
+ * categories' names are read from after Calibrate, by the same reader as a box dragged round them by hand (the
+ * walk notes, "Automatic axis detection reads the category names too"). Null when no label stands beside the axis.
+ */
+export function categoryLabelRow(labels: readonly LabelBox[], frame: Frame, side: 'bottom' | 'left'): Frame | null {
+  const found = categoryRow(labels, frame, side);
+  if (!found) return null;
+  const m = found.size / 4;
+  const x0 = Math.min(...found.row.map((b) => b.x0)) - m;
+  const y0 = Math.min(...found.row.map((b) => b.y0)) - m;
+  const x1 = Math.max(...found.row.map((b) => b.x1)) + m;
+  const y1 = Math.max(...found.row.map((b) => b.y1)) + m;
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+
 /** What [Automatic axis detection] places on a bar-family figure: the value axis's two points with their numbers,
  * Cat 1 and Cat n on the first and last category's tick marks with the count, as the walk would place them. */
 export interface DetectedBarCalibration {
   value: { px: number; py: number; value: number }[];
   /** Cat 1 and Cat n, and how many categories, or null when fewer than two category labels were found. */
-  categories: { first: { px: number; py: number }; last: { px: number; py: number }; count: number } | null;
+  categories: {
+    first: { px: number; py: number };
+    last: { px: number; py: number };
+    count: number;
+    /** The box round the row of category labels, for their names to be read after Calibrate (v2.7). */
+    labelRow: Frame;
+  } | null;
   log: boolean;
   /** The numbers were read along the axis the categories should run on, and none along the value axis: the bars
    * look to run the other way from the Horizontal bars option, so nothing was placed. */
@@ -127,9 +159,10 @@ export function barCalibrationFromLabels(
   if (frame) {
     const side = horizontal ? 'left' : 'bottom';
     const centres = categoryCentresFromLabels(categoryLabels, frame, side);
-    if (centres.length >= 2) {
+    const labelRow = categoryLabelRow(categoryLabels, frame, side);
+    if (centres.length >= 2 && labelRow) {
       const at = (c: number) => (horizontal ? { px: frame.x, py: c } : { px: c, py: frame.y + frame.height });
-      categories = { first: at(centres[0]!), last: at(centres[centres.length - 1]!), count: centres.length };
+      categories = { first: at(centres[0]!), last: at(centres[centres.length - 1]!), count: centres.length, labelRow };
     }
   }
   if (value.length === 0 && !categories) return null;

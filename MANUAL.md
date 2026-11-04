@@ -92,8 +92,13 @@ printed there (on a bar chart, Cat 1 and Cat n where the first and last category
 labels are centred, with the count). A drawn PDF figure is read from its own text
 and drawing; a picture by a chart-element detector and the OCR, offline. Check the
 points, move any of them or retype a number, place a missing one by clicking its
-chip and then the figure, and press **Calibrate**. If nothing could be read, the
-bottom bar says no calibration points could be fixed, with the warning triangle.
+chip and then the figure, and press **Calibrate**. On a bar chart, Calibrate then
+reads the category names from the same labels and offers them: each appears greyed
+under its own tick mark, and a line under the card's header says how many were read,
+with **Use them** and **Check…**. **Use them** writes them all in one Undo step, and
+they leave the figure for the table; **Check…** opens the review card to correct
+them first. Nothing is written until you do. If nothing could be read, the bottom
+bar says no calibration points could be fixed, with the warning triangle.
 
 You can click any point's chip and then the figure at any time to place or move
 it. **Any change to the calibration loses it** - a moved point, even a one-pixel

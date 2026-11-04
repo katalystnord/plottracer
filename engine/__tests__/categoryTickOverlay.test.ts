@@ -277,3 +277,24 @@ describe('the weight of a tick handle', () => {
  * figure - a real fix for a real clipping problem, on marks that no longer
  * exist. The two ends are calibration steps now, drawn and named by the walk.
  */
+
+describe('the names detection read, offered on the figure (v2.7)', () => {
+  // docs/v2.7-workflow-walk.md, "Automatic axis detection reads the category names too"
+  const ticks = [{ x: 150, y: 500 }, { x: 350, y: 500 }, { x: 550, y: 500 }];
+  it('given names offered for three categories, each tick mark carries its own name, greyed', () => {
+    const m = categoryTickMarkers({ edges: H, tickPoints: ticks, offeredNames: ['Flax', 'Hemp', 'Jute'] });
+    expect(m.map((x) => x.label)).toEqual(['Flax', 'Hemp', 'Jute']);
+    expect(m.every((x) => x.labelMuted === true)).toBe(true);
+  });
+
+  it('given no names offered (none read, or used and now in the table), the tick marks carry no text', () => {
+    const m = categoryTickMarkers({ edges: H, tickPoints: ticks });
+    expect(m.map((x) => x.label)).toEqual(['', '', '']);
+    expect(m.some((x) => x.labelMuted)).toBe(false);
+  });
+
+  it('given a name not read for one category, that tick mark carries none and the others keep theirs', () => {
+    const m = categoryTickMarkers({ edges: H, tickPoints: ticks, offeredNames: ['Flax', null, 'Jute'] });
+    expect(m.map((x) => x.label)).toEqual(['Flax', '', 'Jute']);
+  });
+});

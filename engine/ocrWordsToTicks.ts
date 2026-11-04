@@ -91,6 +91,32 @@ function bandForAnchor(at: number, bands: readonly { from: number; to: number }[
   return at - last.to <= (last.to - last.from) / 2 ? bands.length - 1 : null;
 }
 
+/** A word filed under its category, with where it sits in the straightened frame. */
+interface Placed {
+  text: string;
+  conf: number;
+  mid: number;
+  height: number;
+  left: number;
+}
+
+/**
+ * The words of one label in reading order: down its lines, then across each line (v2.7). Two words are on one line
+ * when their middles are less than half a word's height apart. ⚑ Ordering by the top of each box was wrong: the "3"
+ * of "Day 3" starts a pixel higher than "Day" and read first, so the table said "3 Day" (David, 2026-11-04).
+ */
+function inReadingOrder(words: readonly Placed[]): Placed[] {
+  const byMid = [...words].sort((a, b) => a.mid - b.mid);
+  const lines: Placed[][] = [];
+  for (const w of byMid) {
+    const line = lines[lines.length - 1];
+    const first = line?.[0];
+    if (line && first && w.mid - first.mid < Math.max(first.height, w.height) / 2) line.push(w);
+    else lines.push([w]);
+  }
+  return lines.flatMap((line) => line.sort((a, b) => a.left - b.left));
+}
+
 export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
   const { words, toSource, dividers, along, axisAt } = input;
   if (dividers.length < 2) return [];
@@ -101,7 +127,7 @@ export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
     bands.push({ from: Math.min(a, b), to: Math.max(a, b) });
   }
 
-  const perCategory = new Map<number, { text: string; conf: number; order: number }[]>();
+  const perCategory = new Map<number, Placed[]>();
   for (const word of words) {
     const clean = word.text.trim();
     if (clean === '') continue;
@@ -138,14 +164,21 @@ export function wordsToTicks(input: WordsToTicksInput): TickReading[] {
     const index = bandForAnchor(at, bands);
     if (index === null) continue;
     const list = perCategory.get(index) ?? [];
-    // ⚑ Reading order within a category: down the lines first, then across.
-    list.push({ text: clean, conf: word.confidence, order: anchor.y * 100000 + anchor.x });
+    // ⚑ Reading order within a category is taken in the STRAIGHTENED frame the label was read in, where its lines
+    // run across: the middle of the word's box for its line, its left edge for across.
+    list.push({
+      text: clean,
+      conf: word.confidence,
+      mid: (word.bbox.y0 + word.bbox.y1) / 2,
+      height: word.bbox.y1 - word.bbox.y0,
+      left: word.bbox.x0,
+    });
     perCategory.set(index, list);
   }
 
   const out: TickReading[] = [];
   for (const [categoryIndex, list] of [...perCategory.entries()].sort((a, b) => a[0] - b[0])) {
-    const sorted = keptWords(list).sort((a, b) => a.order - b.order);
+    const sorted = inReadingOrder(keptWords(list));
     if (sorted.length === 0) continue;
     out.push({
       categoryIndex,
@@ -200,9 +233,7 @@ const STRONG_ENOUGH = 50;
  */
 const OUTLIER_FRACTION = 0.3;
 
-function keptWords(
-  list: readonly { text: string; conf: number; order: number }[]
-): { text: string; conf: number; order: number }[] {
+function keptWords<W extends { conf: number }>(list: readonly W[]): W[] {
   const best = Math.max(...list.map((w) => w.conf));
   if (best < STRONG_ENOUGH) return [...list];
   return list.filter((w) => w.conf >= best * OUTLIER_FRACTION);

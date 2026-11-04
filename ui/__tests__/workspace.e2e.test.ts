@@ -3215,6 +3215,62 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await expect.poll(() => textOf('category-ticks-summary')).toBe('Categories - 4 categories');
   }, 90000);
 
+  // ⚑ The category names (v2.7; the walk notes, "Automatic axis detection reads the category names too"): read from the
+  // row of labels detection found, once Calibrate has built the category axis, and OFFERED - greyed on the figure and
+  // one line under the card's header - never popped up (David, 2026-11-04).
+  async function detectAndCalibrateBars() {
+    await resetWorkspace('bar');
+    await stubOpenProjectDialog(path.join(__dirname, '../../samples/bar-grouped-viability.png'));
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(async () => (await textOf('calib-chip-c2')).replace(/\s/g, ''), { timeout: 60000 }).toMatch(/^Catn4/);
+    // nothing is offered before Calibrate: there are no categories yet to name
+    expect(await page.getByTestId('name-offer').count()).toBe(0);
+    await page.getByTestId('run-calibration').click();
+    await page.getByTestId('name-offer').waitFor({ timeout: 60000 });
+  }
+
+  it('the category names detection read: Calibrate offers them in one line under the card\'s header, with no card popping up; Use them writes them, the line goes, and a bar on the first category is named Day 3', async () => {
+    await detectAndCalibrateBars();
+    expect(await page.getByTestId('ocr-review-card').count()).toBe(0);
+    expect(await textOf('name-offer')).toMatch(/^4 names read from the labels\s*Use them\s*Check…$/);
+    await page.getByTestId('name-offer-use').click();
+    expect(await page.getByTestId('name-offer').count()).toBe(0);
+    // a bar dragged up from the axis inside the first category (its tick mark at x 175, samples' truth file)
+    await pickTool('place-point');
+    const from = await imagePoint(150, 660), to = await imagePoint(150, 420);
+    await refreshCanvasBox();
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    await expect.poll(() => textOf('bar-category-name-0')).toBe('Day 3');
+  }, 120000);
+
+  it('the category names detection read: Check… opens the review card with them, Day 3 to Day 21, and its Cancel withdraws the offer', async () => {
+    await detectAndCalibrateBars();
+    await page.getByTestId('name-offer-check').click();
+    await page.getByTestId('ocr-review-card').waitFor();
+    const names = await page.locator('[data-testid^="ocr-text-"]').evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
+    expect(names).toEqual(['Day 3', 'Day 7', 'Day 14', 'Day 21']);
+    await page.getByTestId('ocr-cancel').click();
+    expect(await page.getByTestId('ocr-review-card').count()).toBe(0);
+    expect(await page.getByTestId('name-offer').count()).toBe(0);
+  }, 120000);
+
+  it('given Cat 1 and Cat n clicked by hand, Calibrate offers no names and opens no review card', async () => {
+    await resetWorkspace('bar');
+    await markDataArea(100, 100, 500, 400);
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickCategoryTicks([100, 400], [500, 400], 4);
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(500);
+    expect(await page.getByTestId('ocr-review-card').count()).toBe(0);
+    expect(await page.getByTestId('name-offer').count()).toBe(0);
+  });
+
   // ⚑⚑ The data area (v2.7; David 2026-11-01, docs/v2.7-workflow-walk.md, "The data area, apart from the
   // calibration"): a rectangle of its own, where the automatic tools search. The calibration card asks for it first.
   it('the calibration card asks for the data area first: a drag round the plot marks it, and the walk moves on to X1', async () => {

@@ -96,6 +96,11 @@ export interface CanvasMarker {
    * marker.
    */
   labelBelow?: boolean;
+  /**
+   * Draw the label greyed: something OFFERED, not recorded (v2.7, the category names [Automatic axis detection]
+   * read, each under its own tick mark until it is used; docs/v2.7-workflow-walk.md). Presentational only.
+   */
+  labelMuted?: boolean;
   /** Override the data-dot radius (checkpoint 120): interpolation-assist draws
    * anchors big and derived samples small. Defaults to 5. */
   radius?: number;

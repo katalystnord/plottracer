@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { barCalibrationFromLabels, categoryCentresFromLabels } from '../axisDetection.js';
+import { barCalibrationFromLabels, categoryCentresFromLabels, categoryLabelRow } from '../axisDetection.js';
 import type { AxesFromLabels } from '../labelCalibration.js';
 
 /**
@@ -48,13 +48,33 @@ const yRead = (pairs: [number, number][]): AxesFromLabels['y'] => ({
 });
 const notRead: AxesFromLabels['x'] = { axis: 'x', ok: false, reason: 'no label sits at a tick mark', pairs: [], unused: [] };
 
+describe('the row of category labels, for the names to be read from (v2.7)', () => {
+  it('given four category labels under an upright bar chart and an axis title further out, the row is the box round the four labels with a margin of a quarter label height, and leaves the title out', () => {
+    const labels = [label(150, 365), label(250, 365), label(350, 365), label(450, 365), label(300, 395, 120)];
+    expect(categoryLabelRow(labels, FRAME, 'bottom')).toEqual({ x: 132, y: 356, width: 336, height: 18 });
+  });
+
+  it('given horizontal bars, the row is the column of labels left of the plot', () => {
+    const labels = [label(70, 100), label(70, 200), label(70, 300), label(300, 365)];
+    expect(categoryLabelRow(labels, FRAME, 'left')).toEqual({ x: 52, y: 91, width: 36, height: 218 });
+  });
+
+  it('given no labels beside the category axis, there is no row', () => {
+    expect(categoryLabelRow([label(80, 200)], FRAME, 'bottom')).toBeNull();
+  });
+});
+
 describe('what the button places on a bar chart', () => {
   it('given the value labels 0 to 30 and four categories, P1 and P2 sit on 0 and 30, and Cat 1 and Cat n on the first and last category, on the axis line, with the count 4', () => {
     const read: AxesFromLabels = { x: notRead, y: yRead([[350, 0], [250, 10], [150, 20], [50, 30]]), points: null };
     const labels = [label(150, 365), label(250, 365), label(350, 365), label(450, 365)];
     const got = barCalibrationFromLabels(read, labels, FRAME, false)!;
     expect(got.value).toEqual([{ px: 100, py: 350, value: 0 }, { px: 100, py: 50, value: 30 }]);
-    expect(got.categories).toEqual({ first: { px: 150, py: 350 }, last: { px: 450, py: 350 }, count: 4 });
+    expect(got.categories).toEqual({
+      first: { px: 150, py: 350 }, last: { px: 450, py: 350 }, count: 4,
+      // and the row the labels stand in, for their names to be read after Calibrate
+      labelRow: { x: 132, y: 356, width: 336, height: 18 },
+    });
   });
 
   it('given no value labels read, the categories are still placed', () => {

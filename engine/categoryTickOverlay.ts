@@ -83,6 +83,13 @@ export interface CategoryOverlayInput {
   tickId?: (index: number) => string;
   /** Overrides the violet, for a caller whose marks mean something else. */
   color?: string;
+  /**
+   * The names OFFERED for the categories, tick by tick (v2.7: read from the labels [Automatic axis detection] found),
+   * drawn greyed under each tick mark until they are used or withdrawn. Null for a category with no name read.
+   * ⚑ Gone once used: the names are in the output table then, and the figure is not cluttered twice (David,
+   * 2026-11-04).
+   */
+  offeredNames?: readonly (string | null)[];
 }
 
 /**
@@ -181,6 +188,7 @@ export function categoryTickMarkers({
   tickPoints,
   tickId = (i) => `categoryTick${i}`,
   color = CATEGORY_TICK_COLOR,
+  offeredNames,
 }: CategoryOverlayInput): CanvasMarker[] {
   if (!edges) return [];
   // ⚑ The two EDGES get a visible, LABELLED, non-draggable mark. Drawing them
@@ -224,7 +232,8 @@ export function categoryTickMarkers({
     id: tickId(i),
     x: p.x + stand.x * TICK_LENGTH,
     y: p.y + stand.y * TICK_LENGTH,
-    label: '',
+    label: offeredNames?.[i] ?? '',
+    ...(offeredNames?.[i] ? { labelMuted: true } : {}),
     color,
     draggable: true,
     // ⚑⚑ AND THE DRAG IS BOUND TO THE AXIS ON SCREEN, not only in the record.
