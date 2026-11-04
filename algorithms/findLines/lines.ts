@@ -29,6 +29,7 @@
  * can join them. Nothing is guessed silently.
  */
 import { dilateCross, distanceTransform, label, skeletonize } from './raster.js';
+import { chainDots, chainToLine, findDots } from './dots.js';
 import { inkCoverage, paperOf, lineMask, ridgeChains, ridgePoints, type Box, type RGB } from './ink.js';
 import { skeletonGraph, type GraphEdge, type YX } from './graph.js';
 import {
@@ -269,6 +270,40 @@ export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: nu
     unresolved: res.unresolved.map((q) => q.map(back)),
     places: res.places.map((pl) => ({ ...pl, at: back(pl.at) })),
     lineWidth: res.lineWidth,
+  };
+}
+
+/**
+ * Does a dot stand on paper? A dot of a dotted line is drawn on the plot's background; a fleck of this ink's colour
+ * against ANOTHER ink is that ink's anti-aliased edge (the dark blue line's rim read as purple on
+ * xy-multiseries-modulus). The paper is the crop's commonest colour; another ink is a pixel outside this colour's
+ * mask and far from the paper.
+ */
+function onPaper(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, mask: Uint8Array): (pix: readonly number[]) => boolean {
+  const hist = new Map<number, number>();
+  for (let i = 0; i < w * h; i += 3) {
+    const k = ((rgba[i * 4]! >> 3) << 10) | ((rgba[i * 4 + 1]! >> 3) << 5) | (rgba[i * 4 + 2]! >> 3);
+    hist.set(k, (hist.get(k) ?? 0) + 1);
+  }
+  let top = 0, best = -1;
+  for (const [k, n] of hist) if (n > best) { best = n; top = k; }
+  const paper = [((top >> 10) & 31) * 8 + 4, ((top >> 5) & 31) * 8 + 4, (top & 31) * 8 + 4];
+  return (pix) => {
+    let foreign = 0;
+    const seen = new Set<number>();
+    for (const i of pix) {
+      const x = i % w, y = (i - x) / w;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+        const j = yy * w + xx;
+        if (mask[j] || seen.has(j)) continue;
+        seen.add(j);
+        const d = Math.max(Math.abs(rgba[j * 4]! - paper[0]!), Math.abs(rgba[j * 4 + 1]! - paper[1]!), Math.abs(rgba[j * 4 + 2]! - paper[2]!));
+        if (d > 80) foreign++;
+      }
+    }
+    return foreign < 3;
   };
 }
 
@@ -928,6 +963,58 @@ function findLinesInCrop(rgba: Uint8ClampedArray | Uint8Array, w: number, h: num
       }
     }
     lines.push({ points: pts, roles, closed, gaps: lineGaps });
+  }
+
+  // --- DOTTED LINES (v2.7): rows of dots, each too small to have a direction, chained by their spacing. A curve's
+  // only: a contour plot's labels and their dots are read by the label stage. A line or label ink made of nothing but
+  // chained dots gives way to the row it is part of.
+  if (!contour) {
+    const inPlot = (p: Pt): boolean =>
+      p[0] >= box.x0 && p[0] <= box.x1 && p[1] >= box.y0 && p[1] <= box.y1 &&
+      !masks.some((m) => p[0] >= m.x0 && p[0] <= m.x1 && p[1] >= m.y0 && p[1] <= m.y1);
+    const dots = findDots(mask, w, h, lw, inPlot, onPaper(rgba, w, h, mask));
+    const chains = dots.length >= 6 ? chainDots(dots, lw) : [];
+    if (chains.length) {
+      const near = new Uint8Array(w * h);
+      for (const ch of chains) {
+        for (const k of ch) {
+          for (const i of dots[k]!.pix) {
+            const x = i % w, y = (i - x) / w;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+              const xx = x + dx, yy = y + dy;
+              if (xx >= 0 && yy >= 0 && xx < w && yy < h) near[yy * w + xx] = 1;
+            }
+          }
+        }
+      }
+      const onlyDots = (pts: readonly Pt[]): boolean => pts.every(([x, y]) => {
+        const qx = Math.round(x), qy = Math.round(y);
+        return qx >= 0 && qy >= 0 && qx < w && qy < h && near[qy * w + qx] === 1;
+      });
+      for (let i = lines.length - 1; i >= 0; i--) if (onlyDots(lines[i]!.points)) lines.splice(i, 1);
+      for (let i = labelInk.length - 1; i >= 0; i--) if (onlyDots(labelInk[i]!)) labelInk.splice(i, 1);
+      const rows = chains.map((ch) => chainToLine(ch, dots));
+      // dots that touched in pairs are too big for a dot and came back as short lines of their own, lying ON a row:
+      // the same ink twice. A line every point of which lies on a row is part of that row.
+      const onRow = new Uint8Array(w * h);
+      const r = Math.ceil(lw / 2 + 1.5);
+      for (const row of rows) {
+        for (const [x, y] of row.points) {
+          const qx = Math.round(x), qy = Math.round(y);
+          for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+            const xx = qx + dx, yy = qy + dy;
+            if (xx >= 0 && yy >= 0 && xx < w && yy < h) onRow[yy * w + xx] = 1;
+          }
+        }
+      }
+      const alongRow = (pts: readonly Pt[]): boolean => pts.every(([x, y]) => {
+        const qx = Math.round(x), qy = Math.round(y);
+        return qx >= 0 && qy >= 0 && qx < w && qy < h && onRow[qy * w + qx] === 1;
+      });
+      for (let i = lines.length - 1; i >= 0; i--) if (alongRow(lines[i]!.points)) lines.splice(i, 1);
+      for (let i = labelInk.length - 1; i >= 0; i--) if (alongRow(labelInk[i]!)) labelInk.splice(i, 1);
+      lines.push(...rows);
+    }
   }
 
   // N1: short fragments wholly inside a crowded band are UNRESOLVED ink
