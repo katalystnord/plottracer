@@ -598,9 +598,15 @@ describe('guidanceTip - the slot-aim suffix', () => {
       ...over,
     });
 
+  it('given the Eraser on any graph type, the tips bar says a box erases everything inside it and a selected point the whole selection (v2.7)', () => {
+    const tip = guidanceTip(withSlots({ mode: 'eraser' }));
+    expect(tip).toMatch(/drag a box: every point inside it is removed/);
+    expect(tip).toMatch(/A click on a selected point removes the whole selection/);
+  });
+
   it('appends the count where the sentence does NOT already name the slot', () => {
     const tip = guidanceTip(withSlots({ mode: 'eraser' }));
-    expect(tip).toContain('Eraser - click a data point to remove it.');
+    expect(tip).toContain('Eraser - click a data point to remove it, or drag a box: every point inside it is removed. A click on a selected point removes the whole selection.');
     expect(tip).toContain('- Median - box 2 (3 of 5 filled)');
     expect(tip).not.toContain('Next: '); // the prefix is stripped, not repeated
   });

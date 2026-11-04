@@ -565,8 +565,8 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
     }
     if (mode === 'eraser')
       return config.id === 'xy' || config.id === 'contour'
-        ? 'Eraser - click a data point to remove it, or drag a box over wrong bits: every point of every line inside it is removed.'
-        : 'Eraser - click a data point to remove it.';
+        ? 'Eraser - click a data point to remove it, or drag a box over wrong bits: every point of every line inside it is removed. A click on a selected point removes the whole selection.'
+        : 'Eraser - click a data point to remove it, or drag a box: every point inside it is removed. A click on a selected point removes the whole selection.';
     if (mode === 'extract')
       return 'Data extraction - pick a tool in the card. A click on the figure adds nothing until one is picked.';
     if (mode === 'cut') return 'Cut - click a line where it should be cut: it becomes two lines there. A closed line opens at the cut.';

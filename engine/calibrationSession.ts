@@ -4057,6 +4057,38 @@ export class CalibrationSession<A extends CalibratedAxes> {
       p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height);
   }
 
+  /**
+   * THE ERASER'S BOX, ON EVERY GRAPH TYPE (v2.7; David, 2026-10-31: a dragged box erases everything inside it, on
+   * every graph type). A plain series loses exactly the points inside and a found line is split at the hole
+   * (`eraseLinesInRect`); a series whose points are not independent - a bar's corners, a box's members, a datum
+   * with its error bar, an error series - goes through `removeDataPoints`, the same removal a click with the Eraser
+   * makes, so a bar or a box goes whole and no error cap is left behind. A Guide-points line is still left alone
+   * (audit A1: it is edited through its guide points). Returns how many points went.
+   */
+  eraseInRect(rect: { x: number; y: number; width: number; height: number }): number {
+    const inside = (p: { x: number; y: number }) =>
+      p.x >= rect.x && p.x <= rect.x + rect.width && p.y >= rect.y && p.y <= rect.y + rect.height;
+    const total = () => this.datasetEntries.reduce((n, e) => n + e.dataset.getCount(), 0);
+    const before = total();
+    const linked = (ds: Dataset) =>
+      ds.hasSlots() || (!!this.axes && (!!getErrorRelation(ds) || hasErrorSeries(this.getDatasets(), ds.name)));
+    const keepActive = this.activeEntry;
+    // the linked series first, one at a time, re-read each time: a cascade may already have taken an error series
+    for (const entry of [...this.datasetEntries]) {
+      const index = this.datasetEntries.indexOf(entry);
+      if (index < 0 || !linked(entry.dataset) || this.isGuidePointLine(index)) continue;
+      const hits = entry.dataset.getAllPixels().flatMap((p, i) => (inside(p) ? [i] : []));
+      if (!hits.length) continue;
+      this.switchActiveDataset(index);
+      this.removeDataPoints(hits);
+    }
+    const ai = this.datasetEntries.indexOf(keepActive);
+    this.switchActiveDataset(ai >= 0 ? ai : Math.min(this.activeDatasetIndex, this.datasetEntries.length - 1));
+    const plain = new Set(this.datasetEntries.filter((e) => !linked(e.dataset)).map((e) => e.dataset));
+    this.removeLinePointsWhere((_, __, p) => inside(p), plain);
+    return before - total();
+  }
+
   /** Remove the given points from the lines they belong to - a selection that
    * spans several lines (v2.6), removed in one go, each line split where a
    * stretch was cut out of its middle. */
@@ -4065,7 +4097,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return this.removeLinePointsWhere((index, point) => pick.has(`${index}:${point}`));
   }
 
-  private removeLinePointsWhere(remove: (index: number, point: number, p: LinePoint) => boolean): number {
+  private removeLinePointsWhere(remove: (index: number, point: number, p: LinePoint) => boolean, only?: ReadonlySet<Dataset>): number {
     let removed = 0;
     const origIndex = new Map(this.datasetEntries.map((e, i) => [e, i] as const));
     const keepActive = this.datasetEntries[this.activeDatasetIndex]!.dataset;
@@ -4073,6 +4105,7 @@ export class CalibrationSession<A extends CalibratedAxes> {
     for (const entry of [...this.datasetEntries]) {
       const index = this.datasetEntries.indexOf(entry);
       const orig = origIndex.get(entry)!;
+      if (only && !only.has(entry.dataset)) continue;
       if (this.isGuidePointLine(index)) continue; // edited through its guide points (A1)
       const pts = this.getLinePoints(index);
       if (!pts) continue;

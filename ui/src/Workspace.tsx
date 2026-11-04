@@ -35,7 +35,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, readPictureAxes, readRegionWords } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, readPictureAxes, readRegionWords, suggestFigureType } from './ocrClient.js';
 import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
 import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter } from '../../engine/autoExtract.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
@@ -978,6 +978,16 @@ export function Workspace() {
   // document's figure-of-record has been established -- the user framed the whole
   // figure and captured it as the working image. Reset with the document.
   const [figureCaptured, setFigureCaptured] = useState(false);
+  // The graph type suggestion (v2.7; docs/v2.7-workflow-walk.md, The graph type suggestion): the type the captured
+  // figure's classifier suggests, or null, and how many captures it has answered for. A suggestion belongs to the
+  // figure captured, so leaving that figure drops it, and the token stops a late answer landing on the next one.
+  const [graphTypeSuggestion, setGraphTypeSuggestion] = useState<string | null>(null);
+  const [suggestionAnswered, setSuggestionAnswered] = useState(0);
+  const suggestionTokenRef = useRef(0);
+  const dropGraphTypeSuggestion = useCallback(() => {
+    suggestionTokenRef.current++;
+    setGraphTypeSuggestion(null);
+  }, []);
   // Multi-figure session (checkpoint 110, design §1/§8). `figuresRef` holds every
   // figure IN ORDER when there is more than one; it stays empty while there is a
   // single figure (the live refs simply ARE it), so a single-figure session is
@@ -2242,9 +2252,11 @@ export function Workspace() {
     // don't re-crop or record a provenance entry (nothing was actually cropped).
     // Only a sub-region capture crops the source and records where it came from.
     const isWholeImage = clamped.x === 0 && clamped.y === 0 && clamped.width === img.width && clamped.height === img.height;
+    let captured: { data: Uint8ClampedArray; width: number; height: number } = img;
     if (!isWholeImage) {
       const result = cropImage(img.data, img.width, img.height, rect);
       if (!result) return;
+      captured = result;
       // Provenance before the transform (see applyCrop), so capture's history-
       // reset baseline records where the figure was cropped from. Capture is the
       // start of the session (its figureCaptured gate is React state, not in the
@@ -2254,6 +2266,15 @@ export function Workspace() {
       applyPixelTransform(result, true, false);
     }
     setFigureCaptured(true);
+    // The graph type suggestion, from the figure just captured, in the background (v2.7). It only ever highlights a
+    // card in the picker: the type in use is the user's to change.
+    const token = ++suggestionTokenRef.current;
+    setGraphTypeSuggestion(null);
+    void suggestFigureType(captured).then((type) => {
+      if (token !== suggestionTokenRef.current) return;
+      setGraphTypeSuggestion(type);
+      setSuggestionAnswered((n) => n + 1);
+    });
     // Hand off to the now-unlocked next step (v1.0 audit B3): if the user prepped
     // the source in Image-edit mode, capturing there would otherwise strand them in
     // it with tips still saying "rotate / flip", not "now calibrate". Advancing to
@@ -3390,6 +3411,7 @@ export function Workspace() {
   const resetPerFigureUI = useCallback(
     (s: CalibrationSession<CalibratedAxes>) => {
       setAxesTypeId(s.getConfig().id);
+      dropGraphTypeSuggestion(); // the suggestion was about the figure we are leaving
       // A pending figure-rename belongs to the figure we are leaving.
       setFigureNameDraft(null);
       setFigureNameNotice(null);
@@ -3497,7 +3519,7 @@ export function Workspace() {
       setMode(calibrated ? 'pan' : 'calibrate');
       setCalibExpanded(!calibrated); // calibrated -> folded; not -> show the steps
     },
-    [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale, setOcrProposals, setOcrError, setOcrBand, setOcrAngleNotice, setCalibExpanded]
+    [closeFigurePicker, restoreHeatmapGrid, setPending, setScaleDraftPx, setSettingScale, setOcrProposals, setOcrError, setOcrBand, setOcrAngleNotice, setCalibExpanded, dropGraphTypeSuggestion]
   );
 
   const restoreDoc = useCallback(
@@ -3611,6 +3633,54 @@ export function Workspace() {
       commit();
     },
     [session, commit]
+  );
+
+  // Delete the whole selection in one undo: Del in Select or the Eraser, and the Eraser's click on a selected point
+  // (v2.7). A selection across several lines goes from all of them, split where needed.
+  const deleteSelection = useCallback(() => {
+    if (lineSelection.length) session.removeLinePoints(lineSelection);
+    else session.removeDataPoints(selectedPointIndices);
+    setSelectedPointIndices([]); setLineSelection([]);
+    setActivePointIndex(null);
+    commit();
+  }, [session, lineSelection, selectedPointIndices, commit]);
+
+  /**
+   * Erase something that is not the selection while keeping the selection (v2.7, the Eraser: a click on any other
+   * point erases just that point). Erasing renumbers points and may split a line, so the selection is carried
+   * across by PLACE: the points still standing where selected points stood are selected afterwards.
+   */
+  const withSelectionKept = useCallback(
+    (erase: () => void) => {
+      const key = (x: number, y: number) => `${x},${y}`;
+      const across = lineSelection.length > 0;
+      const keys = new Set<string>();
+      if (across) {
+        for (const sel of lineSelection) {
+          const p = session.getLinePoints(sel.index)?.[sel.point];
+          if (p) keys.add(key(p.x, p.y));
+        }
+      } else {
+        const pts = session.getDataPoints();
+        for (const i of selectedPointIndices) if (pts[i]) keys.add(key(pts[i]!.px, pts[i]!.py));
+      }
+      erase();
+      if (!keys.size) return;
+      if (across) {
+        const sel: { index: number; point: number }[] = [];
+        for (const info of session.getDatasetInfos()) {
+          (session.getLinePoints(info.index) ?? []).forEach((p, k) => {
+            if (keys.has(key(p.x, p.y))) sel.push({ index: info.index, point: k });
+          });
+        }
+        const active = session.getActiveDatasetIndex();
+        setLineSelection(sel);
+        setSelectedPointIndices(sel.filter((x) => x.index === active).map((x) => x.point));
+      } else {
+        setSelectedPointIndices(session.getDataPoints().flatMap((p, i) => (keys.has(key(p.px, p.py)) ? [i] : [])));
+      }
+    },
+    [session, lineSelection, selectedPointIndices]
   );
 
   // --- Canvas context-menu targeting (mouse model) ---------------------------
@@ -3743,12 +3813,7 @@ export function Workspace() {
           return;
         }
         case 'delete-selection':
-          // a selection across several lines goes from all of them, split where needed
-          if (lineSelection.length) session.removeLinePoints(lineSelection);
-          else session.removeDataPoints(selectedPointIndices);
-          setSelectedPointIndices([]); setLineSelection([]);
-          setActivePointIndex(null);
-          commit();
+          deleteSelection();
           return;
         case 'delete-point': removeActivePoint(); return;
         case 'delete-measurement':
@@ -3791,7 +3856,7 @@ export function Workspace() {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleDataExtraction, toggleLegend, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, selectedPointIndices, lineSelection, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
+  }, [axes, session, undo, redo, toggleMeasure, toggleImageEdit, toggleErrorBars, toggleDataExtraction, toggleLegend, figureCaptured, canvasHasImage, mode, measureTool, finishArea, activePointIndex, activeHandleKey, activeMeasure, applyMeasurements, canvasScale, bump, commit, removeActivePoint, deleteSelection, selectedPointIndices, lineSelection, cropRect, cropMode, applyCrop, cancelCrop, settingScale, pendingMeasure, setPending, ctxMenu, setActiveMeasure, setMeasureError, setScaleDraftPx, setSettingScale, marksHidden]);
 
   // Shared internals of swapping to a fresh session under config `id` and
   // clearing every per-figure panel. Does NOT touch history or the dirty flag --
@@ -3886,6 +3951,7 @@ export function Workspace() {
       clearMeasurements();
       applyProvenance({}); // a new figure has its own (empty) origin
       setFigureCaptured(false); // a new document's figure-of-record isn't captured yet (ckpt 102)
+      dropGraphTypeSuggestion(); // ...so nothing has been suggested for it either
       applyPdfState(null); // a genuinely new document is not a live PDF page (openPdf re-sets it after)
       swapSession(id, new CalibrationSession(ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id) ?? XY_AXES_CONFIG));
       setMode('calibrate');
@@ -3894,7 +3960,7 @@ export function Workspace() {
       markClean();
       bump();
     },
-    [history, bump, markClean, clearMeasurements, captureDoc, swapSession, applyProvenance, applyPdfState, setCalibExpanded]
+    [history, bump, markClean, clearMeasurements, captureDoc, swapSession, applyProvenance, applyPdfState, setCalibExpanded, dropGraphTypeSuggestion]
   );
 
   const resetForNewImage = useCallback(() => {
@@ -4417,7 +4483,14 @@ export function Workspace() {
       if (mode === 'eraser') {
         // Eraser tool (David 2026-07-22): clicking a data point removes it. Reuses
         // the same per-point delete as Del / the right-click menu; Del still works.
-        removeDataPointByIndex(idx);
+        // ⚑ v2.7 (David, 2026-10-31): a selection counts as one thing, so a click on
+        // a selected point erases the whole selection in one undo; a click on any
+        // other point erases just that point and the selection stays.
+        const inSelection = lineSelection.length
+          ? lineSelection.some((x) => x.index === session.getActiveDatasetIndex() && x.point === idx)
+          : selectedPointIndices.includes(idx);
+        if (inSelection) deleteSelection();
+        else withSelectionKept(() => removeDataPointByIndex(idx));
         return;
       }
       if (mode === 'select') {
@@ -4455,7 +4528,7 @@ export function Workspace() {
       setActiveHandleKey(id);
       setActivePointIndex(null);
     }
-  }, [mode, removeDataPointByIndex, selectSubMode, session, handleImageClick]);
+  }, [mode, removeDataPointByIndex, deleteSelection, withSelectionKept, lineSelection, selectedPointIndices, selectSubMode, session, handleImageClick]);
 
   /** A calibration chip pressed: the next click places that point (David, 2026-10-31). */
   // A picked Data area chip asks for its drag only while the user stays where they picked it: leaving Calibrate or
@@ -8426,7 +8499,8 @@ export function Workspace() {
   // changed. Same family as the activeHandleKey/activeMeasure guards above, and the
   // reason all three exist: a selection must be cleared at EVERY entrance, not one.
   useEffect(() => {
-    if (mode !== 'select' && (selectedPointIndices.length || lineSelection.length)) {
+    // ⚑ The Eraser keeps it (v2.7): a click on a selected point erases the whole selection.
+    if (mode !== 'select' && mode !== 'eraser' && (selectedPointIndices.length || lineSelection.length)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedPointIndices([]);
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -9167,6 +9241,8 @@ export function Workspace() {
           <GraphTypeCardPicker
             options={ALL_AXES_TYPE_CONFIGS}
             value={axesTypeId}
+            suggested={graphTypeSuggestion}
+            suggestionAnswered={suggestionAnswered}
             onChange={(id) => {
               if (id !== axesTypeId && confirmDiscardIfDirty()) changeAxesType(id);
             }}
@@ -10423,7 +10499,7 @@ export function Workspace() {
           <IconButton
             testId="mode-eraser"
             icon={<EraseIcon />}
-            label={findLinesKind(config.id) ? 'Erase - click a point, or drag a box over wrong bits to remove them from every line' : 'Erase a point - click a point to remove it'}
+            label={findLinesKind(config.id) ? 'Erase - click a point, or drag a box over wrong bits to remove them from every line' : 'Erase - click a point, or drag a box to remove every point inside it'}
             pressed={mode === 'eraser'}
             // its box erases on EVERY line, so any points anywhere enable it (audit D7)
             disabled={toolDisabled('eraser', dataPoints.length === 0 && !datasetInfos.some((d) => d.pointCount > 0))}
@@ -10739,21 +10815,25 @@ export function Workspace() {
             setCropRect(r);
           }}
           cropRect={mode === 'image-edit' ? cropRect : null}
-          // The Eraser's box over wrong bits of found lines. (Colour trace's own box went in v2.7: the data area is the
-          // only search box, David 2026-11-02.)
-          regionMode={!legendMarking && mode === 'eraser' && !!findLinesKind(config.id) && eyedropper === null}
+          // The Eraser's box, on every graph type since v2.7 (David, 2026-10-31). (Colour trace's own box went in
+          // v2.7: the data area is the only search box, David 2026-11-02.)
+          regionMode={!legendMarking && mode === 'eraser' && eyedropper === null}
           // v2.0 pre-launch audit: the click-vs-drag guard (a zero-area region
           // would match nothing) is now ImageCanvas.tsx's own job, consolidated
           // with crop/select's identical guard -- see its endDrag comment.
           onRegionRect={(r) => {
-            // a box over wrong bits: every line's points inside it go, in one undo
-            if (session.eraseLinesInRect(r) > 0) commit();
+            // everything inside the box goes, in every series, in one undo; the selection stays on what is left
+            let erased = 0;
+            withSelectionKept(() => {
+              erased = session.eraseInRect(r);
+            });
+            if (erased > 0) commit();
             else bump();
           }}
           // a selection across lines: the points selected on lines other than the
           // active one, ringed exactly as a selected point of the active line is
           extraSelected={
-            mode === 'select' && lineSelection.length
+            (mode === 'select' || mode === 'eraser') && lineSelection.length
               ? lineSelection
                   .filter((x) => x.index !== activeDatasetIndex)
                   .map((x) => session.getLinePoints(x.index)?.[x.point])

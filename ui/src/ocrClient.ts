@@ -5,6 +5,7 @@ import type { CropRect } from '../../engine/imageEdit.js';
 import { deskewBand, findBandAngle } from '../../engine/ocrDeskew.js';
 import { wordsToTicks } from '../../engine/ocrWordsToTicks.js';
 import { whitenColour } from '../../engine/legendRead.js';
+import { suggestGraphType } from '../../engine/figureType.js';
 import { work } from './work.js';
 
 /**
@@ -242,6 +243,26 @@ export async function readRegionWords(
     text: w.text,
     bbox: { x0: rect.x + w.bbox.x0 * sx, y0: rect.y + w.bbox.y0 * sy, x1: rect.x + w.bbox.x1 * sx, y1: rect.y + w.bbox.y1 * sy },
   }));
+}
+
+/**
+ * The graph type suggestion for a captured figure (v2.7; docs/v2.7-workflow-walk.md, The graph type suggestion):
+ * the graph type id to highlight, or null for none. The two classifiers run in the OCR's worker, offline;
+ * engine/figureType.ts fuses them. ⚑ NOT tracked: it runs in the background, and the status ring is for work the
+ * user is waiting on. Any refusal is null too, because the suggestion is only an offer.
+ */
+export async function suggestFigureType(img: { data: Uint8ClampedArray; width: number; height: number }): Promise<string | null> {
+  const api = window.electronAPI;
+  if (!api?.classifyFigure) return null;
+  const png = encodeCrop(img);
+  if (!png) return null;
+  try {
+    const r = await api.classifyFigure(png.base64);
+    if (r.error !== undefined || !r.own || !r.docling) return null;
+    return suggestGraphType(r.own, r.docling).type;
+  } catch {
+    return null;
+  }
 }
 
 /**

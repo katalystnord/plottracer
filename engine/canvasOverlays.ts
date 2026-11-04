@@ -548,9 +548,10 @@ export function buildCanvasMarkers(input: CanvasMarkerInput): CanvasMarker[] {
     const role = dataPointRoles[i];
     const isInterp = role === 'interpolated';
     const isAnchor = role === 'anchor';
-    // In the Select tool, every marquee-selected point is highlighted; otherwise
-    // it's the single active point (Place Point's selection).
-    const selected = mode === 'select' ? selectedPointIndices.includes(i) : i === activePointIndex;
+    // In the Select tool, every marquee-selected point is highlighted, and in the
+    // Eraser too, which keeps the selection (v2.7: a click on a selected point
+    // erases all of it); otherwise it's the single active point (Place Point's).
+    const selected = mode === 'select' || mode === 'eraser' ? selectedPointIndices.includes(i) : i === activePointIndex;
     // On a dense connected plain series the LINE carries the shape (checkpoint
     // 131/132): draw NO per-point dot -- even tiny ones mush into a furry band
     // -- except the SELECTED one, kept visible and grabbable so you can still

@@ -340,6 +340,10 @@ export function resolveKeyDown(e: KeyPress, s: KeyboardState): ResolvedKey | nul
     }
     if (isDelete(e.key)) return { action: { type: 'delete-selection' }, preventDefault: true };
   }
+  // ...and the Eraser keeps the selection (v2.7), so Del deletes it there too ("Del still deletes a selection").
+  if (s.mode === 'eraser' && s.selectedPointCount > 0 && isDelete(e.key)) {
+    return { action: { type: 'delete-selection' }, preventDefault: true };
+  }
 
   // Data-point arrow-nudge and Del are gated to the modes where you actually
   // EDIT data points -- Place Point and Interpolate -- and only there does the

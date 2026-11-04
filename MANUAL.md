@@ -46,6 +46,12 @@ by reading two similar names. The types are **XY** (linear/log/date),
 **Pie / Donut**, **Heatmap**, **Ternary**, **Map**, **Circular chart recorder**,
 **Histogram**, **Box plot**, **Candlestick**, or **Line** (categorical X).
 
+After **Capture figure**, PlotTracer reads the captured figure in the background and
+may **suggest** a graph type: that type's card in the picker is outlined green with
+**Suggested** under its name. It is only a suggestion; the graph type does not change
+until you pick one. It can suggest XY, Bar, Box plot, Pie, Map and Heatmap, and says
+nothing when it is not sure or when the figure is of a type it cannot name.
+
 The picker is grouped by what the data **is**, not by what the chart looks like:
 Bar, Span chart and Stacked bar share a row because all three measure an extent
 against a baseline, while the box plot and the candlestick sit under them because
@@ -349,7 +355,13 @@ next. A reading you placed by hand is never overwritten.
   reading: on a spider it slides along that axis's own ray, on a heatmap it moves
   along the colour key, so the marker and the number can never disagree. A value
   you typed reads in `[square brackets]` wherever it appears.
-- **Erase one reading** with the eraser (rail) or right-click ▸ Delete point. On a
+- **The Eraser** (rail) erases what it touches. Click a point to erase it; drag a
+  box to erase every point inside it, in every series, on every graph type (a bar,
+  a box or an error bar goes whole). A selection made with Select counts as one
+  thing: it stays selected when you pick the Eraser, a click on any selected point
+  erases the whole selection in one Undo, and `Del` deletes it there too. A click
+  on a point that is not selected erases just that point.
+- **Erase one reading** with the Eraser or right-click ▸ Delete point. On a
   spider that removes exactly that axis's reading and leaves the rest of the
   profile standing - the other five axes are separate measurements, not parts of
   one shape.

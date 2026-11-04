@@ -257,6 +257,13 @@ describe('arrow nudges - which selection the arrows act on', () => {
 });
 
 describe('Delete - only ever the thing you are actually pointing at', () => {
+  it('given a selection kept into the Eraser, Del deletes it there too, and does nothing with no selection (v2.7)', () => {
+    expect(act(press('Delete'), state({ mode: 'eraser', selectedPointCount: 2 }))).toEqual({ type: 'delete-selection' });
+    expect(act(press('Delete'), state({ mode: 'eraser', selectedPointCount: 0 }))?.type).not.toBe('delete-selection');
+    // arrows do not nudge a selection from the Eraser: it erases, it does not move
+    expect(act(press('ArrowUp'), state({ mode: 'eraser', selectedPointCount: 2 }))?.type).not.toBe('nudge-selection');
+  });
+
   it('removes the whole marquee as one step, in Select', () => {
     expect(act(press('Delete'), state({ mode: 'select', selectedPointCount: 2 }))).toEqual({ type: 'delete-selection' });
     expect(act(press('Backspace'), state({ mode: 'select', selectedPointCount: 2 }))).toEqual({ type: 'delete-selection' });

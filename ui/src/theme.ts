@@ -83,6 +83,11 @@ export const theme = {
       active: '#525252',
     },
     error: '#f40724',
+    /**
+     * A SUGGESTION, offered and not taken (v2.7): the graph type card the captured figure's classifier suggests.
+     * The same green as the data area's outline (Workspace.tsx DATA_AREA_COLOR), the app's one green.
+     */
+    suggested: '#2e7d32',
     /** Marker/box-glyph outline + label fill, and a placed-but-unconfirmed
      * calibration point's ("?") fill, on the canvas overlay -- see header
      * comment for why these are dark/light rather than following the page

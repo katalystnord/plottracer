@@ -13887,3 +13887,149 @@ describe('Workspace: Settings (v2.7)', () => {
   }, 150000);
 
 });
+
+describe('the graph type suggestion (v2.7)', () => {
+  // docs/v2.7-workflow-walk.md, "The graph type suggestion": the cases written there, in order.
+  const sample = (n: string) => path.join(__dirname, '../../samples', `${n}.png`);
+  async function openAndCapture(file: string) {
+    await resetWorkspace('xy', { capture: false });
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+    }, file);
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await capture();
+  }
+  /** The cards the picker shows as suggested, read with the picker open, then closed again. */
+  async function suggestedCards(): Promise<string[]> {
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-xy').waitFor();
+    const ids = await page.locator('[data-suggested="true"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid') ?? ''));
+    await page.keyboard.press('Escape');
+    return ids;
+  }
+  /** How many captures the suggestion has answered for (the picker's row says), so a wait cannot read the last one. */
+  async function answered(): Promise<number> {
+    return Number(await page.getByTestId('axes-type-row').getAttribute('data-suggestion-answered'));
+  }
+  /** Capture figure, then wait for the classifier's answer to this capture. */
+  async function capture(): Promise<void> {
+    const before = await answered();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForFunction(
+      (n) => Number(document.querySelector('[data-testid="axes-type-row"]')?.getAttribute('data-suggestion-answered')) > n,
+      before,
+      { timeout: 30000 }
+    );
+  }
+
+  it('given a bar chart captured, the picker shows the Bar card outlined green with "Suggested" under its name, and the type in use does not change', async () => {
+    await openAndCapture(sample('bar-tensile-strength'));
+    expect(await suggestedCards()).toEqual(['axes-option-bar']);
+    await page.getByTestId('axes-type-trigger').click();
+    const bar = page.getByTestId('axes-option-bar');
+    expect(await bar.innerText()).toContain('Suggested');
+    expect(await bar.evaluate((e) => getComputedStyle(e).borderColor)).toBe('rgb(46, 125, 50)');
+    expect(await page.getByTestId('axes-option-xy').getAttribute('aria-pressed')).toBe('true');
+    await page.keyboard.press('Escape');
+  });
+
+  it('given a figure of a type the classifier cannot name (a spider chart), no card is green', async () => {
+    await openAndCapture(sample('spider-material-profile'));
+    expect(await suggestedCards()).toEqual([]);
+  });
+
+  it('given a suggested type and a new image opened, the suggestion is gone until the next Capture figure', async () => {
+    await openAndCapture(sample('bar-tensile-strength'));
+    expect(await suggestedCards()).toEqual(['axes-option-bar']);
+    await app.evaluate(({ dialog }, p) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+    }, sample('pie-filler-composition'));
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    expect(await suggestedCards()).toEqual([]);
+    await capture();
+    expect(await suggestedCards()).toEqual(['axes-option-pie']);
+  });
+});
+
+describe('the Eraser (v2.7)', () => {
+  // docs/v2.7-workflow-walk.md, the Eraser's cases (David, 2026-10-31, "yes!": the Eraser erases what it touches,
+  // and a selection counts as one thing).
+  const rows = () => page.locator('[data-testid^="point-row-"]').count();
+  async function placeFourPoints() {
+    await resetWorkspace('xy');
+    await calibrateXYStandard();
+    for (const [x, y] of [[200, 200], [250, 180], [320, 300], [360, 320]] as const) await clickAt(x, y);
+    expect(await rows()).toBe(4);
+  }
+  async function drag(fromLx: number, fromLy: number, toLx: number, toLy: number) {
+    await refreshCanvasBox();
+    await page.mouse.move(canvasBox.x + fromLx, canvasBox.y + fromLy);
+    await page.mouse.down();
+    await page.mouse.move(canvasBox.x + toLx, canvasBox.y + toLy, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(50);
+  }
+  /** Select the first two points with a box, as the Select tool's tips say, then pick the Eraser. */
+  async function selectTwoThenEraser() {
+    await page.getByTestId('mode-select').click();
+    await drag(170, 150, 285, 230);
+    expect(await textOf('tips-bar')).toMatch(/2 points selected/);
+    await page.getByTestId('mode-eraser').click();
+  }
+
+  it('given points selected and the Eraser picked, nothing is erased and the tips bar says a click on a selected point erases the whole selection', async () => {
+    await placeFourPoints();
+    await selectTwoThenEraser();
+    expect(await rows()).toBe(4);
+    expect(await textOf('tips-bar')).toMatch(/A click on a selected point removes the whole selection/);
+  });
+
+  it('given that, a click on a selected point erases every selected point, and one Undo brings them all back', async () => {
+    await placeFourPoints();
+    await selectTwoThenEraser();
+    await clickAt(200, 200);
+    await expect.poll(rows).toBe(2);
+    await page.keyboard.press('Control+z');
+    await expect.poll(rows).toBe(4);
+  });
+
+  it('given that, a click on a point that is not selected erases only it, and the selection stays (Del then deletes it)', async () => {
+    await placeFourPoints();
+    await selectTwoThenEraser();
+    await clickAt(360, 320);
+    await expect.poll(rows).toBe(3);
+    await page.keyboard.press('Delete');
+    await expect.poll(rows).toBe(1);
+  });
+
+  it('given the Eraser picked with nothing selected, a click off every point and a box over nothing erase nothing', async () => {
+    await placeFourPoints();
+    await page.getByTestId('mode-eraser').click();
+    await clickAt(300, 120);
+    await drag(420, 120, 470, 160);
+    expect(await rows()).toBe(4);
+  });
+
+  it('given a bar chart and a box dragged with the Eraser over one bar\'s top, that bar is gone and the other stays', async () => {
+    await resetWorkspace('bar');
+    await markDataArea(100, 100, 500, 400);
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickCategoryTicks([100, 400], [500, 400], 4);
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+    await pickTool('place-point');
+    await dragMarker(200, 400, 200, 250);
+    await dragMarker(400, 400, 400, 200);
+    const bars = () => page.locator('[data-testid^="tuple-derived-"]').count();
+    expect(await bars()).toBe(2);
+    await page.getByTestId('mode-eraser').click();
+    expect(await textOf('tips-bar')).toMatch(/drag a box: every point inside it is removed/);
+    await drag(180, 230, 220, 270);
+    await expect.poll(bars).toBe(1);
+  });
+});

@@ -33,6 +33,13 @@ export interface GraphTypeCardPickerProps {
   options: readonly GraphTypeOption[];
   value: string;
   onChange: (id: string) => void;
+  /**
+   * The graph type the captured figure's classifier suggests (v2.7), or null. Its card is outlined green with
+   * "Suggested" under its name; nothing is selected by it (docs/v2.7-workflow-walk.md, The graph type suggestion).
+   */
+  suggested?: string | null;
+  /** How many captures the suggestion has answered for; on the row for the e2e tests to wait on. */
+  suggestionAnswered?: number;
 }
 
 const LabelledRow = styled('div')({
@@ -56,14 +63,17 @@ const Grid = styled('div')({
   width: 340,
 });
 
-const Card = styled('button')<{ active: boolean }>(({ active }) => ({
+const Card = styled('button')<{ active: boolean; suggested: boolean }>(({ active, suggested }) => ({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   gap: 4,
-  padding: '8px 4px',
   borderRadius: theme.border.radius.regular,
-  border: `1px solid ${active ? theme.color.primary.main : theme.color.border.regular}`,
+  border: suggested
+    ? `2px solid ${theme.color.suggested}`
+    : `1px solid ${active ? theme.color.primary.main : theme.color.border.regular}`,
+  // the 2px outline takes its extra pixel from the padding, so a suggested card is the size of the others
+  padding: suggested ? '7px 3px' : '8px 4px',
   background: active ? theme.color.primary.clicked : theme.color.background.primary,
   color: active ? theme.color.background.primary : theme.color.text.primary,
   cursor: 'pointer',
@@ -73,15 +83,21 @@ const Card = styled('button')<{ active: boolean }>(({ active }) => ({
   textAlign: 'center',
   '& svg': { width: 22, height: 22 },
   ':hover': {
-    borderColor: theme.color.primary.main,
+    borderColor: suggested ? theme.color.suggested : theme.color.primary.main,
   },
 }));
 
-export function GraphTypeCardPicker({ options, value, onChange }: GraphTypeCardPickerProps) {
+const SuggestedNote = styled('span')<{ active: boolean }>(({ active }) => ({
+  fontSize: 10,
+  fontWeight: 600,
+  color: active ? theme.color.background.primary : theme.color.suggested,
+}));
+
+export function GraphTypeCardPicker({ options, value, onChange, suggested = null, suggestionAnswered = 0 }: GraphTypeCardPickerProps) {
   const active = options.find((o) => o.id === value);
   const ActiveIcon = active ? GRAPH_TYPE_ICONS[active.id] : undefined;
   return (
-    <LabelledRow>
+    <LabelledRow data-testid="axes-type-row" data-suggestion-answered={suggestionAnswered}>
       <FieldLabel id="axes-type-label" data-testid="axes-type-label">
         Graph type
       </FieldLabel>
@@ -94,14 +110,17 @@ export function GraphTypeCardPicker({ options, value, onChange }: GraphTypeCardP
           <Grid role="listbox" aria-labelledby="axes-type-label">
             {options.map((opt) => {
               const Icon = GRAPH_TYPE_ICONS[opt.id];
+              const isSuggested = opt.id === suggested;
               return (
                 <Card
                   key={opt.id}
                   type="button"
                   data-testid={`axes-option-${opt.id}`}
                   active={opt.id === value}
+                  suggested={isSuggested}
+                  data-suggested={isSuggested ? 'true' : undefined}
                   aria-pressed={opt.id === value}
-                  title={opt.label}
+                  title={isSuggested ? `${opt.label}: suggested from the captured figure` : opt.label}
                   onClick={() => {
                     onChange(opt.id);
                     close();
@@ -109,6 +128,7 @@ export function GraphTypeCardPicker({ options, value, onChange }: GraphTypeCardP
                 >
                   {Icon && <Icon />}
                   <span>{opt.label}</span>
+                  {isSuggested && <SuggestedNote active={opt.id === value}>Suggested</SuggestedNote>}
                 </Card>
               );
             })}
