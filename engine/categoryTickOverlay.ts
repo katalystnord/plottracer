@@ -233,7 +233,9 @@ export function categoryTickMarkers({
     x: p.x + stand.x * TICK_LENGTH,
     y: p.y + stand.y * TICK_LENGTH,
     label: offeredNames?.[i] ?? '',
-    ...(offeredNames?.[i] ? { labelMuted: true } : {}),
+    // An offered name is drawn in the tick mark's own colour (David, 2026-11-04: grey "looks like it is part of the
+    // graph itself"): it belongs to the mark it sits under, and it must read as ours, not the figure's print.
+    ...(offeredNames?.[i] ? { labelMuted: true, labelColor: color } : {}),
     color,
     draggable: true,
     // ⚑⚑ AND THE DRAG IS BOUND TO THE AXIS ON SCREEN, not only in the record.

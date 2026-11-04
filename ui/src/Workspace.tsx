@@ -9602,22 +9602,6 @@ export function Workspace() {
             </button>
           </div>
           )}
-          {/* ⚑ The category names [Automatic axis detection] read (v2.7), OFFERED in one line under the header, folded or
-              not: nothing is written until Use them, and Check… opens the review card for correcting them (David,
-              2026-11-04: no popup). */}
-          {figureCaptured && axes && nameOffer && nameOffer.length > 0 && (
-            <div data-testid="name-offer" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
-              <span>
-                {nameOffer.length} {nameOffer.length === 1 ? 'name' : 'names'} read from the labels
-              </span>
-              <button type="button" data-testid="name-offer-use" onClick={() => applyOcrNames(nameOffer)} style={{ fontSize: 12 }}>
-                Use them
-              </button>
-              <button type="button" data-testid="name-offer-check" onClick={() => setOcrProposals(nameOffer)} style={{ fontSize: 12 }}>
-                Check…
-              </button>
-            </div>
-          )}
           {/* Point matrix: laid out as a grid with 2 columns, so an XY graph
               reads as one row per axis (X1 X2 / Y1 Y2). Values are entered right
               here in the card, not the right panel -- the active point (after
@@ -10006,7 +9990,8 @@ export function Workspace() {
                           // keystone-persona failure this project keeps finding.
                           'This figure was calibrated before the category axis was part of the walk. Press Reset calibration to place it - the values will need re-reading.'
                     }
-                    style={endsCardButton(categoryStage.hasGeometry)}
+                    // ⚑ At the row's right edge, as Calibrate and Reset calibration stand on the Calibration heading.
+                    style={{ marginLeft: 'auto', ...endsCardButton(categoryStage.hasGeometry) }}
                   >
                     {cardModel.ending}
                   </button>
@@ -10036,6 +10021,17 @@ export function Workspace() {
                     setOcrArmed((armed) => !armed);
                   }}
                   readingArmed={ocrArmed}
+                  // ⚑ The names [Automatic axis detection] read (v2.7), offered on the Names row: nothing is written
+                  // until Use them, and Check… opens the review card for correcting them (David, 2026-11-04).
+                  nameOffer={
+                    figureCaptured && axes && nameOffer && nameOffer.length > 0
+                      ? {
+                          count: nameOffer.length,
+                          onUse: () => applyOcrNames(nameOffer),
+                          onCheck: () => setOcrProposals(nameOffer),
+                        }
+                      : null
+                  }
                 />
               )}
             </div>
@@ -10193,7 +10189,7 @@ export function Workspace() {
                       ? 'Read every cell through the colour key - the cells appear in the Cells panel'
                       : 'Detect the grid first, or overlay an even one - there are no cells to read yet'
                   }
-                  style={endsCardButton(!!heatmapShownGrid)}
+                  style={{ marginLeft: 'auto', ...endsCardButton(!!heatmapShownGrid) }}
                 >
                   {cardModel.ending}
                 </button>

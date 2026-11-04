@@ -1,5 +1,6 @@
 import { theme } from '../theme.js';
 import { WarningLine } from './WarningLine.js';
+import { StageRow } from './StageRow.js';
 import { heatmapGridLine } from '../../../engine/heatmapRun.js';
 
 /**
@@ -141,7 +142,7 @@ export function HeatmapCard({
         <span data-testid="heatmap-declared-grid" style={{ color: theme.color.text.secondary }}>
           {heatmapGridLine(gridSize, declared)}
         </span>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <StageRow name="Grid" testId="heatmap-grid-row">
           <button type="button" data-testid="heatmap-detect" onClick={onDetect} disabled={!canRead}>
             Detect grid
           </button>
@@ -163,7 +164,7 @@ export function HeatmapCard({
           >
             Overlay even grid
           </button>
-        </div>
+        </StageRow>
         {/* ⚑⚑ READ CELLS IS NOT HERE ANY MORE - it lives on the Grid summary
             line, outside this fold-out, and there is only ONE of it.
             ⚑ It moved out because the flow had no visible next step: everything
@@ -192,7 +193,7 @@ export function HeatmapCard({
             one surface where clicks mean nothing else. */}
         {gridSize && (
           <>
-            <div style={{ display: 'flex', gap: 6 }}>
+            <StageRow name="Boundaries" testId="heatmap-boundaries-row">
               <button
                 type="button"
                 data-testid="heatmap-add-column"
@@ -209,7 +210,7 @@ export function HeatmapCard({
               >
                 + Row boundary
               </button>
-            </div>
+            </StageRow>
             {selectedBoundary && (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span data-testid="heatmap-selected-boundary" style={{ color: theme.color.text.secondary }}>
@@ -264,14 +265,13 @@ export function HeatmapCard({
                 ⚑ One button per axis, because a figure names its columns and
                 its rows in two different places and a single box could not say
                 which one it was about to read. */}
-            <div style={{ display: 'flex', gap: 6 }}>
+            <StageRow name="Names" testId="heatmap-names-row">
               <button
                 type="button"
                 data-testid="heatmap-read-x-names"
                 onClick={() => onReadNames?.('x')}
                 disabled={!onReadNames || !xIsNamed}
                 title={xIsNamed ? undefined : 'The X axis is a value axis - its columns are identified by their coordinates'}
-                style={{ flex: 1 }}
               >
                 {readingNames === 'x' ? 'Drag a box round the column labels...' : 'Read column names'}
               </button>
@@ -281,11 +281,10 @@ export function HeatmapCard({
                 onClick={() => onReadNames?.('y')}
                 disabled={!onReadNames || !yIsNamed}
                 title={yIsNamed ? undefined : 'The Y axis is a value axis - its rows are identified by their coordinates'}
-                style={{ flex: 1 }}
               >
                 {readingNames === 'y' ? 'Drag a box round the row labels...' : 'Read row names'}
               </button>
-            </div>
+            </StageRow>
             <span style={{ color: theme.color.text.secondary }}>
               {xIsNamed || yIsNamed
                 ? 'Or click a name in the Cells table to type it.'

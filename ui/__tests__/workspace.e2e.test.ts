@@ -1354,7 +1354,8 @@ describe('Workspace: Bar axes', () => {
 
     // The stage is named, and it reports the count the CALIBRATION declared.
     expect(await textOf('category-ticks-summary')).toBe('Categories - 4 categories');
-    expect(await textOf('category-declared')).toContain('4 categories, from the calibration');
+    // ...and says the count only there (the walk notes, "The Categories stage laid out in rows").
+    expect(await page.getByTestId('category-declared').count()).toBe(0);
   });
 
   it('⚑⚑ E2: the ending marks the categories, and the finished card is ONE row', async () => {
@@ -3232,12 +3233,14 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.getByTestId('name-offer').waitFor({ timeout: 60000 });
   }
 
-  it('the category names detection read: Calibrate offers them in one line under the card\'s header, with no card popping up; Use them writes them, the line goes, and a bar on the first category is named Day 3', async () => {
+  it('the category names detection read: Calibrate offers them on the Names row, with no card popping up; Use them writes them, the row goes back to Read labels, and a bar on the first category is named Day 3', async () => {
     await detectAndCalibrateBars();
     expect(await page.getByTestId('ocr-review-card').count()).toBe(0);
-    expect(await textOf('name-offer')).toMatch(/^4 names read from the labels\s*Use them\s*Check…$/);
+    expect(await textOf('category-names-row')).toMatch(/^Names\s*4 read from the labels\s*Use them\s*Check…$/);
+    expect(await page.getByTestId('ocr-read-labels').count()).toBe(0);
     await page.getByTestId('name-offer-use').click();
     expect(await page.getByTestId('name-offer').count()).toBe(0);
+    expect(await textOf('category-names-row')).toMatch(/^Names\s*Read labels from the figure$/);
     // a bar dragged up from the axis inside the first category (its tick mark at x 175, samples' truth file)
     await pickTool('place-point');
     const from = await imagePoint(150, 660), to = await imagePoint(150, 420);
@@ -3269,7 +3272,24 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await page.waitForTimeout(500);
     expect(await page.getByTestId('ocr-review-card').count()).toBe(0);
     expect(await page.getByTestId('name-offer').count()).toBe(0);
+    expect(await textOf('category-names-row')).toMatch(/^Names\s*Read labels from the figure$/);
   });
+
+  // ⚑ The walk notes, "The Categories stage laid out in rows" (David, 2026-11-04: "Try that").
+  it('the Categories stage in rows: the count said once on the heading, Mark categories at its right edge, then Ticks at, Names and # Series', async () => {
+    await detectAndCalibrateBars();
+    expect(await textOf('category-ticks-summary')).toBe('Categories - 4 categories');
+    expect(await page.getByTestId('category-declared').count()).toBe(0);
+    const card = await page.getByTestId('category-ticks-panel').boundingBox();
+    const ending = await page.getByTestId('category-read').boundingBox();
+    expect(Math.abs(card!.x + card!.width - (ending!.x + ending!.width))).toBeLessThanOrEqual(2);
+    expect(await textOf('category-ticks-row')).toMatch(/^Ticks at\s*Boundaries\s*Centres\s*Find the figure's own ticks$/);
+    expect(await textOf('category-names-row')).toMatch(/^Names\s*4 read from the labels/);
+    const order = await Promise.all(
+      ['category-ticks-row', 'category-names-row', 'category-series-count'].map(async (id) => (await page.getByTestId(id).boundingBox())!.y)
+    );
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  }, 120000);
 
   // ⚑⚑ The data area (v2.7; David 2026-11-01, docs/v2.7-workflow-walk.md, "The data area, apart from the
   // calibration"): a rectangle of its own, where the automatic tools search. The calibration card asks for it first.
@@ -10852,6 +10872,20 @@ describe('heatmap capture (v2.2)', () => {
     await page.waitForTimeout(200);
     await openHeatmapGrid();
   }
+
+  // ⚑ The walk notes, "The Categories stage laid out in rows": the heatmap's stage mirrors the Categories stage.
+  it('the heatmap Grid stage in rows: Read cells at the heading\'s right edge, then Grid, Boundaries and Names', async () => {
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    await page.getByTestId('heatmap-detect').click();
+    await page.waitForTimeout(250);
+    const panel = await page.getByTestId('heatmap-grid-panel').boundingBox();
+    const ending = await page.getByTestId('heatmap-read').boundingBox();
+    expect(Math.abs(panel!.x + panel!.width - (ending!.x + ending!.width))).toBeLessThanOrEqual(2);
+    expect(await textOf('heatmap-grid-row')).toMatch(/^Grid\s*Detect grid\s*Overlay even grid$/);
+    expect(await textOf('heatmap-boundaries-row')).toMatch(/^Boundaries\s*\+ Column boundary\s*\+ Row boundary$/);
+    expect(await textOf('heatmap-names-row')).toMatch(/^Names\s*Read column names\s*Read row names$/);
+  });
 
   /** Local copies: the export helpers live inside another describe's scope. */
   function heatmapTempFile(extension: string): string {

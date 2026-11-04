@@ -2,6 +2,8 @@ import { theme } from '../theme.js';
 import { WarningLine } from './WarningLine.js';
 import { CATEGORY_TICK_DRAG_HINT, CONVENTION_LABELS } from '../../../engine/categoryTickOverlay.js';
 import type { TickConvention } from '../../../core/categoryAxis.js';
+import { namesRow } from '../../../engine/categoryStageRows.js';
+import { StageRow } from './StageRow.js';
 
 /**
  * The categorical stage - stage 2 of the calibration card, for Bar, Box Plot and
@@ -90,6 +92,8 @@ export interface CategoriesCardProps {
   /** What the last look found, in one sentence, and whether it failed (then it carries the warning
    * triangle, as every message that something could not be done does), or null before one was made. */
   detectNotice?: { text: string; failed: boolean } | null;
+  /** The names [Automatic axis detection] read, offered on the Names row until used or withdrawn (v2.7), or null. */
+  nameOffer?: { count: number; onUse: () => void; onCheck: () => void } | null;
 }
 
 export function CategoriesCard({
@@ -103,40 +107,27 @@ export function CategoriesCard({
   readingArmed = false,
   onDetectTicks,
   detectNotice = null,
+  nameOffer = null,
 }: CategoriesCardProps) {
+  const names = namesRow({ offered: nameOffer?.count ?? null, readingArmed });
   return (
     <div
       data-testid="categories-card"
       style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: theme.font.size.small }}
     >
-      {/* ⚑⚑ NO COUNT BOX. How many categories the figure has is declared ONCE,
-          on the second category click in the walk, and shown here. Two fields
-          for one fact is how a heatmap's 5 met a typo'd 6 and detection refused
-          the whole grid - and how this card came to print `axis marked, no count
-          yet` beside a box reading 17. Correct it where it was declared: the
-          calibration values are editable in place, above. */}
-      {/* ⚑⚑ AND IT DOES NOT SAY `0 categories` WHEN NOBODY HAS SAID ANY. The
-          count arrives on the second category click, so a figure whose walk is
-          unfinished has none - and a zero presented as the figure's own count is
-          the fabricated-count defect this card had once already, arriving
-          through a door that did not exist when it was fixed. */}
-      <span data-testid="category-declared" style={{ color: theme.color.text.secondary }}>
-        {declared === null
-          ? 'The calibration has not placed the category axis yet - its last two clicks are the axis ends.'
-          : `${declared === 1 ? '1 category' : `${declared} categories`}, from the calibration`}
-      </span>
-      {/* ⚑⚑ THE HEATMAP'S OWN WORDS, not a second vocabulary for one fact. This
-          control used to say `Under each category` / `Between categories` while
-          the heatmap said `Centres` / `Boundaries` for the identical
-          `TickConvention` - so the user had to be told that the two were the
-          same question. David: *"we should be CONSISTENT and use the same
-          mechanism / drawing in all places so that users can recognize them
-          easily."*
-          ⚑ Two RADIOS, not a select: both readings have to be visible without a
-          click, because the user is being asked which one their figure prints,
-          and flipping it moves the marks on screen, which is the whole answer. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ minWidth: 84 }}>ticks at</span>
+      {/* ⚑⚑ NO COUNT BOX, AND THE COUNT SAID ONCE. How many categories the figure has is declared on the second
+          category click in the walk and shown on the stage's heading ("Categories - 6 categories"); a line here
+          repeating it was the same fact twice (David, 2026-11-04: "things in many different places on the card").
+          Only an undeclared axis gets a line, because then there is something to say: where the count comes from. */}
+      {declared === null && (
+        <span data-testid="category-declared" style={{ color: theme.color.text.secondary }}>
+          The calibration has not placed the category axis yet - its last two clicks are the axis ends.
+        </span>
+      )}
+      {/* ⚑ TICKS AT: the convention and the button that replaces its even guess with the figure's own ticks, on one
+          row, because they answer the same question. Two RADIOS, not a select: both readings stay visible, and
+          flipping one moves the marks on screen, which is the whole answer. The words are the heatmap's own. */}
+      <StageRow name="Ticks at" testId="category-ticks-row">
         <fieldset
           style={{ border: 'none', margin: 0, padding: 0, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}
         >
@@ -148,18 +139,64 @@ export function CategoriesCard({
                 data-testid={`category-convention-${c}`}
                 checked={convention === c}
                 onChange={() => onConventionChange(c)}
-                /* ⚑ THE DRAG SENTENCE IS THE TOOLTIP HERE (E6), exactly as the
-                   heatmap's moved onto its boundary buttons. The convention is
-                   what GENERATES evenly spaced ticks, so "they may not be evenly
-                   spaced - drag them" belongs on the control that made them. */
                 title={CATEGORY_TICK_DRAG_HINT}
               />
               <span style={{ whiteSpace: 'nowrap' }}>{CONVENTION_LABELS[c]}</span>
             </label>
           ))}
         </fieldset>
-      </div>
-      <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        {onDetectTicks && declared !== null && (
+          <button
+            type="button"
+            data-testid="detect-ticks"
+            onClick={onDetectTicks}
+            style={{ fontSize: 12 }}
+            title="Look just outside the axis for the tick marks the figure draws, and move the ticks onto them"
+          >
+            Find the figure&apos;s own ticks
+          </button>
+        )}
+      </StageRow>
+      {detectNotice &&
+        (detectNotice.failed ? (
+          <WarningLine id="detect-ticks-notice" text={detectNotice.text} />
+        ) : (
+          <span data-testid="detect-ticks-notice" style={{ color: theme.color.text.secondary }}>
+            {detectNotice.text}
+          </span>
+        ))}
+      {/* ⚑⚑ NAMES: ONE ROW FOR WHATEVER WRITES THEM. The names detection read are offered here, and with no offer the
+          row holds the reader's button; both fill the same Category column, so they share one place on the card
+          (David, 2026-11-04) instead of an offer under the header and a button at the foot. */}
+      {declared !== null && (onReadLabels || names.kind === 'offer') && (
+        <StageRow name="Names" testId="category-names-row">
+          {names.kind === 'offer' && nameOffer ? (
+            <span data-testid="name-offer" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span>{names.text}</span>
+              <button type="button" data-testid="name-offer-use" onClick={nameOffer.onUse} style={{ fontSize: 12 }}>
+                Use them
+              </button>
+              <button type="button" data-testid="name-offer-check" onClick={nameOffer.onCheck} style={{ fontSize: 12 }}>
+                Check…
+              </button>
+            </span>
+          ) : (
+            onReadLabels && (
+              <button
+                type="button"
+                data-testid="ocr-read-labels"
+                onClick={onReadLabels}
+                style={{ fontSize: 12 }}
+                title="Read the category names off the figure instead of typing them"
+              >
+                {names.kind === 'read' ? names.label : ''}
+              </button>
+            )
+          )}
+        </StageRow>
+      )}
+      {/* ⛔ `# Series (optional)` IS PARKED AND UNTOUCHED, by standing order: only its place in a row is new. */}
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <span style={{ minWidth: 84 }}># Series (optional)</span>
         <input
           id="category-series-input"
@@ -171,45 +208,6 @@ export function CategoriesCard({
           style={{ width: 56 }}
         />
       </label>
-      {/* ⚑⚑ THE BIG WIN, AND IT HAS TO BE VISIBLE TO BE ONE (v2.4). Typing
-          twelve category names is the tedious half of a bar chart, and a
-          capability nobody can see does not exist - so the offer is a plain
-          button on the card that describes the axis, and its own label says what
-          the gesture will be. */}
-      {onReadLabels && declared !== null && (
-        <button
-          type="button"
-          data-testid="ocr-read-labels"
-          onClick={onReadLabels}
-          style={{ alignSelf: 'flex-start' }}
-          title="Read the category names off the figure instead of typing them"
-        >
-          {readingArmed ? 'Drag a box round the labels...' : 'Read labels from the figure'}
-        </button>
-      )}
-      {/* ⚑ BESIDE THE CONVENTION IT CORRECTS. The radios above generate ticks
-          EVENLY from the two clicked ends; this is how you replace that guess
-          with the positions the figure actually prints, so the two controls
-          belong next to each other and in that order. */}
-      {onDetectTicks && declared !== null && (
-        <button
-          type="button"
-          data-testid="detect-ticks"
-          onClick={onDetectTicks}
-          style={{ alignSelf: 'flex-start' }}
-          title="Look just outside the axis for the tick marks the figure draws, and move the ticks onto them"
-        >
-          Find the figure&apos;s own ticks
-        </button>
-      )}
-      {detectNotice &&
-        (detectNotice.failed ? (
-          <WarningLine id="detect-ticks-notice" text={detectNotice.text} />
-        ) : (
-          <span data-testid="detect-ticks-notice" style={{ color: theme.color.text.secondary }}>
-            {detectNotice.text}
-          </span>
-        ))}
       {regenerateWarning && (
         <span data-testid="category-regenerate-warning" style={{ color: theme.color.text.secondary }}>
           {regenerateWarning}

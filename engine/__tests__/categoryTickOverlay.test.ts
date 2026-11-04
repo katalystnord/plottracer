@@ -297,4 +297,12 @@ describe('the names detection read, offered on the figure (v2.7)', () => {
     const m = categoryTickMarkers({ edges: H, tickPoints: ticks, offeredNames: ['Flax', null, 'Jute'] });
     expect(m.map((x) => x.label)).toEqual(['Flax', '', 'Jute']);
   });
+
+  // docs/v2.7-workflow-walk.md, "The Categories stage laid out in rows"
+  it("given names offered, they are drawn in the tick marks' own colour, not a grey the figure could have printed", () => {
+    const m = categoryTickMarkers({ edges: H, tickPoints: ticks, offeredNames: ['Flax', 'Hemp', 'Jute'] });
+    expect(m.every((x) => x.labelColor === CATEGORY_TICK_COLOR)).toBe(true);
+    const own = categoryTickMarkers({ edges: H, tickPoints: ticks, offeredNames: ['Flax', 'Hemp', 'Jute'], color: '#123456' });
+    expect(own.every((x) => x.labelColor === '#123456')).toBe(true);
+  });
 });

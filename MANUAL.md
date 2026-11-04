@@ -83,7 +83,12 @@ does, then how many categories the figure has (the bars' baseline is measured at
 that line). In the **Categories** stage after Calibrate you say whether the
 figure draws its ticks at the categories' centres (the default) or between them;
 the tick marks move on screen to show which, and Cat 1 and Cat n stay where you
-clicked them.
+clicked them. The stage says the count once, on its heading, with **Mark categories**
+at the heading's right edge, and lays its controls out in rows: **Ticks at** (the
+two conventions and **Find the figure's own ticks**), **Names** (whatever writes
+the category names: names offered by detection, or **Read labels from the
+figure**) and **# Series (optional)**. A heatmap's Grid stage has the same rows:
+**Grid**, **Boundaries** and **Names**.
 
 **[Automatic axis detection]**, just under the card's header, does the same walk
 for you on XY, Contour and the bar family: it sets the data area to the plot's
@@ -93,9 +98,10 @@ labels are centred, with the count). A drawn PDF figure is read from its own tex
 and drawing; a picture by a chart-element detector and the OCR, offline. Check the
 points, move any of them or retype a number, place a missing one by clicking its
 chip and then the figure, and press **Calibrate**. On a bar chart, Calibrate then
-reads the category names from the same labels and offers them: each appears greyed
-under its own tick mark, and a line under the card's header says how many were read,
-with **Use them** and **Check…**. **Use them** writes them all in one Undo step, and
+reads the category names from the same labels and offers them: each appears in
+italic under its own tick mark, in the tick marks' purple so it is not mistaken for
+the figure's own print, and the Categories stage's **Names** row says how many were
+read, with **Use them** and **Check…**. **Use them** writes them all in one Undo step, and
 they leave the figure for the table; **Check…** opens the review card to correct
 them first. Nothing is written until you do. If nothing could be read, the bottom
 bar says no calibration points could be fixed, with the warning triangle.
