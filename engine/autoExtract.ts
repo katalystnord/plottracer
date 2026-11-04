@@ -25,7 +25,11 @@ export type AutoExtractStep =
       tool: AutoExtractTool;
       /** The series it is read into: an existing one by its index (emptied first), or a new one. */
       into: number | 'new';
+      /** Other entries in the same ink, read by this step and told apart by their line style (v2.7). */
+      shares?: number[];
     }
+  /** An entry read by another entry's step, which shares its ink (`shares`). */
+  | { entry: number; name: string; readWith: number }
   | { entry: number; name: string; skip: string };
 
 /** The tools Auto-extract can use on a graph type; none means the button is greyed in its place. */
@@ -57,9 +61,9 @@ export function planAutoExtract(
   if (!tools.length) return [];
   const names = entries.map((e) => e.name.trim());
   const claimed = new Set<number>();
-  const readBy: { colour: RGB; name: string }[] = [];
+  const readBy: { colour: RGB; name: string; entry: number; tool: AutoExtractTool }[] = [];
   let unnamed = 0;
-  return entries.map((e, i) => {
+  const steps = entries.map((e, i): AutoExtractStep => {
     const name = names[i] || `Series ${series.length + ++unnamed}`;
     if (!e.colour) {
       return { entry: i, name, skip: `No colour was found beside “${name}” in the legend, so it was not read. Pick its colour from the figure with Find lines or Colour trace.` };
@@ -68,31 +72,46 @@ export function planAutoExtract(
     // would come back twice. Which is which is the user's to say.
     const c = e.colour;
     const first = readBy.find((q) => Math.hypot(q.colour[0] - c[0], q.colour[1] - c[1], q.colour[2] - c[2]) < SAME_INK);
+    // ⚑ BUT LINES IN ONE INK ARE TOLD APART BY THEIR STYLE (v2.7; docs/v2.7-workflow-walk.md, "Series told apart by
+    // their line style"): the first entry's step reads the ink once, for all of them.
+    const tool = toolFor(tools, e.sample);
+    if (first && first.tool === 'lines' && tool === 'lines') return { entry: i, name, readWith: first.entry };
     if (first) {
       return { entry: i, name, skip: `Same colour as ${first.name}, so colour cannot tell them apart: its data was all read into ${first.name}. Move each to its own series in the series list.` };
     }
-    readBy.push({ colour: c, name });
+    readBy.push({ colour: c, name, entry: i, tool });
     // the series of that name (read again, it is replaced); else an empty series no entry names; else a new one
     const byName = series.find((s) => !claimed.has(s.index) && s.name.trim() === name);
     const empty = series.find((s) => !claimed.has(s.index) && s.pointCount === 0 && !names.includes(s.name.trim()));
     const into = byName?.index ?? empty?.index ?? 'new';
     if (into !== 'new') claimed.add(into);
-    return { entry: i, name, colour: c, tool: toolFor(tools, e.sample), into };
+    return { entry: i, name, colour: c, tool, into };
   });
+  // the step that reads an ink says which other entries it reads for
+  for (const st of steps) {
+    if (!('readWith' in st)) continue;
+    const reader = steps[st.readWith]!;
+    if ('tool' in reader) reader.shares = [...(reader.shares ?? []), st.entry];
+  }
+  return steps;
 }
 
 const counted = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** One series' line in the Auto-extract report (David, 2026-11-02): its name and what was read, a count of nothing
- * left out. The tool's own sentence is for a series that read nothing, where it says why. */
-export function autoExtractLine(name: string, read: { points: number; lines?: number; gaps?: number; places?: number }): string {
+ * left out. ⚑ No places: a problem is said once, in Places to check (David, 2026-11-04). */
+export function autoExtractLine(name: string, read: { points: number; lines?: number; gaps?: number }): string {
   const parts = [
     ...(read.lines !== undefined ? [counted(read.lines, 'line', 'lines')] : []),
     counted(read.points, 'point', 'points'),
     ...(read.gaps ? [`${counted(read.gaps, 'gap', 'gaps')} bridged`] : []),
-    ...(read.places ? [`${counted(read.places, 'place', 'places')} to check`] : []),
   ];
   return `${name}: ${parts.join(', ')}`;
+}
+
+/** A series that could not be read: a few words, the reason being one entry in Places to check (David, 2026-11-04). */
+export function autoExtractNotRead(name: string): string {
+  return `${name}: not read, see Places to check`;
 }
 
 /** Said once under every series' line: where the places to check are, when there are some, and the undo. */

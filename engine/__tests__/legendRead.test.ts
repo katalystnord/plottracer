@@ -96,3 +96,27 @@ describe('Read legend on a picture: the samples are not read as text', () => {
     expect([...rgba]).toEqual([255, 255, 255, 255, 255, 255, 255, 255, 20, 20, 20, 255, 128, 128, 128, 255]);
   });
 });
+
+// docs/v2.7-workflow-walk.md, "Series told apart by their line style": measured in the app on the bundled
+// dash-coded figure, whose four legend samples are black lines (solid, dashed, dash-dot, dotted)
+describe('Read legend on a picture of thin and dotted sample lines', () => {
+  const img = readPng('samples/xy-dashed-release.png');
+  const box: Box = { x0: 716, y0: 538, x1: 872, y1: 634 };
+  // the words PaddleOCR returned there, boxes as read
+  const words = [
+    { text: 'Formulation A', bbox: { x0: 769.5, y0: 544, x1: 860.1, y1: 561 } },
+    { text: 'Formulation B', bbox: { x0: 769.0, y0: 566, x1: 858.3, y1: 580 } },
+    { text: 'Formulation C', bbox: { x0: 767.7, y0: 586, x1: 858.3, y1: 603 } },
+    { text: 'Formulation D', bbox: { x0: 767.7, y0: 607, x1: 858.3, y1: 624 } },
+  ];
+  it("given thin sample lines, each one's colour is the curves' own ink, not the grey of the sample's anti-aliased edge", () => {
+    const got = readLegendFromPixels(words, img.data, img.width, img.height, box);
+    // the curves are drawn in (17, 17, 17), measured in the plot; Auto-extract takes inks within 40 as one colour.
+    // What the strip's commonest colour gave: [59, 59, 59] for three, and [215, 215, 215] for the dotted one.
+    for (const e of got) expect(Math.hypot(e.colour![0] - 17, e.colour![1] - 17, e.colour![2] - 17), `${e.name} ${e.colour}`).toBeLessThan(40);
+  });
+  it("given a word read inside another entry's sample, on its row (the dotted sample read as \"na\"), it is the sample, not a name", () => {
+    const got = readLegendFromPixels([...words, { text: 'na', bbox: { x0: 735.1, y0: 612, x1: 743.3, y1: 619 } }], img.data, img.width, img.height, box);
+    expect(got.map((e) => e.name)).toEqual(['Formulation A', 'Formulation B', 'Formulation C', 'Formulation D']);
+  });
+});

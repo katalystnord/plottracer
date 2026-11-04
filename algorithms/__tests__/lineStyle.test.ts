@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { findLines } from '../findLines/lines.js';
-import { assignStyles, inkTest, styleAlong, styleOfRuns, styleOfSample } from '../lineStyle.js';
+import { assignStyles, inkTest, styleAlong, styleOfRuns, styleOfSample, type LineStyle } from '../lineStyle.js';
 import { dashFigures, seriesOf } from './helpers/dashCorpus.js';
 
 describe('a style from the runs of ink along a path', () => {
@@ -52,5 +52,24 @@ describe('the found lines given to the legend entries by style, on the dash-code
   });
   it('given the whole corpus, at least 90% of the length of the lines that follow a series is given to that series', () => {
     expect(right / (right + none)).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
+// measured in the app on the bundled dash-coded figure: its dotted curve came back as a long line (period 8, 121
+// marks) and a shorter piece (period 7, 22 marks), and the long one was given to no entry
+describe('one style measured twice', () => {
+  const solid: LineStyle = { solid: true, twoKinds: false, period: null, duty: null, marks: 1 };
+  const dashedE: LineStyle = { solid: false, twoKinds: null, period: 14, duty: 0.71, marks: 2 };
+  const dashdotE: LineStyle = { solid: false, twoKinds: true, period: 27, duty: 0.78, marks: 2 };
+  const dottedE: LineStyle = { solid: false, twoKinds: false, period: 7, duty: 0.43, marks: 4 };
+  it('given a dotted line measured at period 8 and a dotted piece at period 7, both are the dotted entry', () => {
+    const lines: LineStyle[] = [
+      solid,
+      { solid: false, twoKinds: false, period: 14, duty: 0.71, marks: 42 },
+      { solid: false, twoKinds: true, period: 26, duty: 0.77, marks: 65 },
+      { solid: false, twoKinds: false, period: 7, duty: 0.57, marks: 22 },
+      { solid: false, twoKinds: false, period: 8, duty: 0.5, marks: 121 },
+    ];
+    expect(assignStyles(lines, [solid, dashedE, dashdotE, dottedE])).toEqual([0, 1, 2, 3, 3]);
   });
 });

@@ -37,7 +37,9 @@ import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
 import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, readPictureAxes, readRegionWords, suggestFigureType } from './ocrClient.js';
 import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
-import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter } from '../../engine/autoExtract.js';
+import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
+import { inkTest, paperColour, styleAlong, styleOfSample } from '../../algorithms/lineStyle.js';
+import { planStyleSeries } from '../../engine/styleSeries.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -7326,10 +7328,22 @@ export function Workspace() {
       }
       const plan = planAutoExtract(s.getConfig(), entries, s.getDatasetInfos());
       if (!plan.length) return say('No series could be read from the legend - check the legend is marked round its entries, or use the tools below one series at a time.');
-      const said: string[] = [];
+      // one short line per series, in the legend's order (David, 2026-11-02); every problem one entry in Places to
+      // check, never written out on the card as well (David, 2026-11-04)
+      const saidBy: (string | undefined)[] = entries.map(() => undefined);
+      const extraPlaces: LinePlace[] = [];
       let readAny = false;
       let linesRead = false;
       let anyPlaces = false;
+      const centreOf = (b: { x0: number; y0: number; x1: number; y1: number }): [number, number] => [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
+      // a problem with an entry as a whole is placed at the entry, in the legend
+      const atEntry = (entry: number, text: string): void => {
+        extraPlaces.push({ id: 0, kind: 'legend', at: centreOf(entries[entry]!.textBox), text });
+      };
+      const notRead = (entry: number, why: string): void => {
+        saidBy[entry] = autoExtractNotRead(entries[entry]!.name.trim() || plan[entry]!.name);
+        atEntry(entry, why);
+      };
       // ⚑ Each series is followed by its dataset, not its index: a Find lines step removes the lines a press before
       // found, and every index after them moves.
       const datasets = s.getDatasets();
@@ -7337,6 +7351,13 @@ export function Workspace() {
       const indexOf = (ds: Dataset) => s.getDatasets().indexOf(ds);
       // the points now in a series and in the further lines of its colour
       const pointsIn = (indices: number[]) => indices.reduce((n, i) => n + (s.getDatasetInfos()[i]?.pointCount ?? 0), 0);
+      // a free "Series N" for a line given to no entry: the name every found line has until it is named
+      const freeName = (): string => {
+        const taken = new Set(s.getDatasetInfos().map((d) => d.name));
+        let k = 1;
+        while (taken.has(`Series ${k}`)) k++;
+        return `Series ${k}`;
+      };
       holdCommitsRef.current = s;
       try {
         for (const [n, step] of plan.entries()) {
@@ -7346,12 +7367,17 @@ export function Workspace() {
             return;
           }
           if ('skip' in step) {
-            said.push(`${step.name}: ${step.skip}`);
+            notRead(step.entry, `${step.name}: ${step.skip}`);
             continue;
           }
-          // read again, a colour's further lines from the press before go with it, as its series is emptied
+          // read by the step that reads its ink, and told apart there by its line style
+          if ('readWith' in step) continue;
+          const sharedNames = (step.shares ?? []).map((e) => plan[e]!.name);
+          // read again, a colour's further lines from the press before go with it, as its series is emptied; and so
+          // do the series of the entries that share its ink, which this read makes again
           if (step.tool === 'lines') {
-            const mine = (name: string) => name.startsWith(`${step.name} `) && /^\d+$/.test(name.slice(step.name.length + 1));
+            const mine = (name: string) =>
+              [step.name, ...sharedNames].some((nm) => name === nm ? nm !== step.name : name.startsWith(`${nm} `) && /^\d+$/.test(name.slice(nm.length + 1)));
             for (let i = s.getDatasetInfos().length - 1; i >= 0; i--) {
               if (mine(s.getDatasetInfos()[i]!.name) && s.foundLineId(i) !== null) s.removeDataset(i);
             }
@@ -7376,24 +7402,106 @@ export function Workspace() {
             // the places of the first lines read replace those listed; each after adds to them
             const res = await findLinesWith(hex, { addPlaces: linesRead, otherInks });
             into = indexOf(intoDs);
-            // further lines of the same colour are named after it, and all keep the legend's colour
             const extras = (res.found?.created ?? []).filter((i) => i !== into);
-            extras.forEach((i, n) => {
-              s.renameDataset(i, `${step.name} ${n + 2}`);
-              s.setDatasetColor(i, step.colour);
+            if (res.error || !res.found) {
+              notRead(step.entry, `${step.name}: ${res.summary ?? res.text}`);
+              for (const e of step.shares ?? []) notRead(e, `${plan[e]!.name}: ${res.summary ?? res.text}`);
+              continue;
+            }
+            readAny = linesRead = true;
+            if (res.found.places) anyPlaces = true;
+            const group = [step.entry, ...(step.shares ?? [])];
+            const lineSets = [intoDs, ...extras.map((i) => s.getDatasets()[i]!)];
+            // ⚑⚑ ONE INK, TOLD APART BY LINE STYLE (v2.7; docs/v2.7-workflow-walk.md, "Series told apart by their
+            // line style"): each line goes to the entry whose legend sample it matches, an entry's pieces are joined
+            // into one line, and what cannot be said with confidence is a place to check.
+            const stylePlan = group.length > 1 ? (() => {
+              const paper = paperColour(img.data, img.width, img.height);
+              const ink = inkTest(img.data, img.width, img.height, step.colour, paper);
+              const entryStyles = group.map((e) => (entries[e]!.sampleBox ? styleOfSample(entries[e]!.sampleBox!, ink) : null));
+              const styled = lineSets.map((ds) => {
+                const pts = (s.getLinePoints(indexOf(ds)) ?? []).map((p) => [p.x, p.y] as [number, number]);
+                const xs = pts.map((p) => p[0]);
+                return { style: styleAlong(pts, ink), xMin: Math.min(...xs), xMax: Math.max(...xs), mid: pts[Math.floor(pts.length / 2)] ?? [0, 0] as [number, number] };
+              });
+              const planned2 = planStyleSeries(styled, entryStyles);
+              return planned2 ? { planned: planned2, styled } : null;
+            })() : null;
+            if (!stylePlan) {
+              // one entry, or entries the style cannot tell apart: every line of the ink is the first entry's, as
+              // before, and the others are said to be in it
+              extras.forEach((i, k) => {
+                s.renameDataset(i, `${step.name} ${k + 2}`);
+                s.setDatasetColor(i, step.colour);
+              });
+              s.renameDataset(into, step.name);
+              s.setDatasetColor(into, step.colour);
+              saidBy[step.entry] = autoExtractLine(step.name, { ...res.found, points: pointsIn([into, ...extras]) });
+              for (const e of step.shares ?? []) {
+                notRead(e, `${plan[e]!.name}: the same colour and the same line style as ${step.name}, so neither can tell them apart: its data was all read into ${step.name}. Move each to its own series in the series list.`);
+              }
+              continue;
+            }
+            const { planned: sp, styled } = stylePlan;
+            const idOf = (ds: Dataset): number[] => {
+              const id = s.foundLineId(indexOf(ds));
+              return id === null ? [] : [id];
+            };
+            const namesNow = (ids: readonly number[]): string => ids.flatMap((id) => s.seriesNamesForLine(id)).join(', ');
+            // first the lines no entry takes, so the entries' joins below cannot remove them from under the places
+            const leftIds = new Set<number>();
+            for (const lf of sp.left) {
+              const ds = lineSets[lf.line]!;
+              s.renameDataset(indexOf(ds), freeName());
+              s.setDatasetColor(indexOf(ds), step.colour);
+              const owner = lf.why === 'overlaps' ? plan[group[lf.entry]!]!.name : null;
+              const say = owner
+                ? (names: string) => `${names || 'This line'} has the line style of ${owner} but runs alongside ${owner}’s line, so it was not joined to it. If it is part of ${owner}, pick ${owner} in the series list and choose this line in Join with; if not, Delete it.`
+                : (names: string) => `${names || 'This line'}: its line style matches no legend entry closely enough, so it was given to none. If it belongs to a series, pick that series in the series list and choose this line in Join with.`;
+              const ids = idOf(ds);
+              ids.forEach((id) => leftIds.add(id));
+              extraPlaces.push({ id: 0, kind: 'style', at: styled[lf.line]!.mid, lineIds: ids, say, text: say(namesNow(ids)) });
+            }
+            group.forEach((e, gi) => {
+              const name = plan[e]!.name;
+              const mine = sp.perEntry[gi]!.map((k) => lineSets[k]!);
+              if (!mine.length) {
+                notRead(e, `${name}: no line of this colour has its line style, so it was not read. Pick its colour with Find lines and give the line it finds the name ${name}.`);
+                return;
+              }
+              // the pieces joined end to end, in order along x, as Join with joins them; the lower-numbered survives
+              let series = mine[0]!;
+              for (const piece of mine.slice(1)) {
+                const a = indexOf(series), b = indexOf(piece);
+                if (a < 0 || b < 0) continue;
+                const keep = a < b ? series : piece;
+                if (s.joinLines(a, b) === null) series = keep;
+              }
+              const at = indexOf(series);
+              const refused = s.renameDataset(at, name);
+              s.setDatasetColor(at, step.colour);
+              if (refused) atEntry(e, `${name}: its line was read, but ${refused} It is in ${s.getDatasetInfos()[at]!.name}.`);
+              saidBy[e] = autoExtractLine(name, { lines: 1, points: pointsIn([at]) });
             });
-            s.renameDataset(into, step.name);
-            s.setDatasetColor(into, step.colour);
-            // one short line per series (David, 2026-11-02); the tool's own sentence when it read nothing, to say why
-            said.push(res.found && !res.error ? autoExtractLine(step.name, { ...res.found, points: pointsIn([into, ...extras]) }) : `${step.name}: ${res.summary ?? res.text}`);
-            if (res.found?.places) anyPlaces = true;
-            if (!res.error) readAny = linesRead = true;
+            // a piece's end that a join has closed is not a place where a line stops any more
+            const ends = s.getDatasetInfos().flatMap((d) => {
+              const p = s.getLinePoints(d.index) ?? [];
+              return p.length ? [p[0]!, p[p.length - 1]!] : [];
+            });
+            // and a piece given to no entry is ONE place, the one that says so, not that place and its two ends
+            setLinePlaces((prev) => prev.filter((pl) => {
+              if (pl.kind !== 'end') return true;
+              if (pl.lineIds?.length && pl.lineIds.every((id) => leftIds.has(id))) return false;
+              return ends.some((q) => Math.hypot(q.x - pl.at[0], q.y - pl.at[1]) < 12);
+            }));
           } else {
             colorTraceSaidRef.current = '';
             colorTraceWith(hex, step.tool === 'points' ? 'scatter' : 'curve');
             const points = pointsIn([into]);
-            said.push(points > 0 ? autoExtractLine(step.name, { points }) : `${step.name}: ${colorTraceSaidRef.current}`);
-            if (points > 0) readAny = true;
+            if (points > 0) {
+              saidBy[step.entry] = autoExtractLine(step.name, { points });
+              readAny = true;
+            } else notRead(step.entry, `${step.name}: ${colorTraceSaidRef.current}`);
           }
         }
       } finally {
@@ -7404,12 +7512,14 @@ export function Workspace() {
         return;
       }
       commit();
-      setAutoExtractReport({ on: s, lines: [...said, autoExtractFooter(anyPlaces)] });
+      if (extraPlaces.length) setLinePlaces((prev) => [...prev, ...extraPlaces.map((pl, k) => ({ ...pl, id: prev.length + k }))]);
+      const said = saidBy.filter((t): t is string => t !== undefined);
+      setAutoExtractReport({ on: s, lines: [...said, autoExtractFooter(anyPlaces || extraPlaces.length > 0)] });
       if (!readAny) setOcrError('No series could be read: none of the legend’s colours was found inside the data area.');
     } finally {
       setAutoExtractBusy(false);
     }
-  }, [findLinesWith, colorTraceWith, commit]);
+  }, [findLinesWith, colorTraceWith, commit, setLinePlaces]);
 
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as

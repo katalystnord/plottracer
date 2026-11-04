@@ -50,6 +50,18 @@ export function inkTest(rgba: Uint8ClampedArray | Uint8Array, w: number, h: numb
   return (x, y) => at(Math.round(x), Math.round(y));
 }
 
+/** The paper a figure is drawn on: its commonest colour (in steps of 8). */
+export function paperColour(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number): RGB {
+  const hist = new Map<number, number>();
+  for (let i = 0; i < w * h; i += 3) {
+    const k = ((rgba[i * 4]! >> 3) << 10) | ((rgba[i * 4 + 1]! >> 3) << 5) | (rgba[i * 4 + 2]! >> 3);
+    hist.set(k, (hist.get(k) ?? 0) + 1);
+  }
+  let top = 0, best = -1;
+  for (const [k, n] of hist) if (n > best) { best = n; top = k; }
+  return [((top >> 10) & 31) * 8 + 4, ((top >> 5) & 31) * 8 + 4, (top & 31) * 8 + 4];
+}
+
 /** The ink and gap runs along a path, in px of arc length, the first and last left out (they are cut by the path's
  * ends). */
 export function runsAlong(path: readonly Pt[], ink: (x: number, y: number) => boolean): { on: number[]; off: number[]; startsOn: boolean; allOn: number[]; length: number } {
@@ -175,7 +187,9 @@ export function styleDistance(a: LineStyle, b: LineStyle): number {
 
 /** How many marks a line needs before its own style is trusted as a reference for others. */
 const WELL_MEASURED = 8;
-/** Lines this alike are one style. */
+/** Lines this alike are one style. Kept tight: 1.5 merged ggplot2's dashed and dot-dash at 0.8 pt, which measure
+ * close on so thin a line. A style measured twice into two groups (a dotted curve at period 8 and a piece of it at
+ * 7) is put back together after the pairing, by the group left over going to the entry it is clearly nearest. */
 const SAME_STYLE = 1.0;
 /** The furthest a legend sample may be from the style it is given: samples are short, so this is loose. */
 const ENTRY_REACH = 4.0;
@@ -232,8 +246,19 @@ export function assignStyles(lines: readonly LineStyle[], entries: readonly (Lin
     search(g + 1, total + ENTRY_REACH);
   };
   if (G <= 9 && E <= 9) search(0, 0);
+  // a group the pairing left over is a style measured twice when it is clearly nearest one entry: it is that entry's
+  // too (the dotted curve of the release figure came back as a long line at period 8 and a piece at period 7)
+  const pickOf = best.pick.map((e, gi) => {
+    if (e !== null && e !== undefined) return e;
+    const d = entries.map((ent) => (ent ? styleDistance(groups[gi]!.rep, ent) : Infinity));
+    const order = [...d.keys()].sort((a, b) => d[a]! - d[b]!);
+    const first = order[0];
+    if (first === undefined || d[first]! > ENTRY_REACH) return null;
+    if (order.length > 1 && d[order[1]!]! - d[first]! < SAME_STYLE) return null;
+    return first;
+  });
   groups.forEach((g, gi) => {
-    const e = best.pick[gi];
+    const e = pickOf[gi];
     if (e !== null && e !== undefined) for (const i of g.members) out[i] = e;
   });
   // 3. the short pieces, to the group whose style they share
@@ -244,7 +269,7 @@ export function assignStyles(lines: readonly LineStyle[], entries: readonly (Lin
     const first = order[0];
     if (first === undefined || d[first]! > SHORT_REACH) return;
     if (order.length > 1 && d[order[1]!]! - d[first]! < SAME_STYLE) return;
-    const e = best.pick[first];
+    const e = pickOf[first];
     if (e !== null && e !== undefined) out[i] = e;
   });
   return out;

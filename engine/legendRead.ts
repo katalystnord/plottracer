@@ -27,6 +27,9 @@ export interface LegendEntry {
   /** What the sample is, when the drawing says; null on a picture. */
   sample: 'swatch' | 'line' | 'marker' | null;
   textBox: Box;
+  /** Where the sample is: the drawn shape, or on a picture the strip just left of the text its colour is taken from.
+   * Its line style is measured there (v2.7, series told apart by their line style). */
+  sampleBox: Box | null;
 }
 export interface OcrWord { text: string; bbox: Box }
 
@@ -62,7 +65,7 @@ export function readLegendFromDrawing(d: PlacedDrawing, text: readonly PlacedTex
   const out: LegendEntry[] = [];
   for (const l of lines) {
     const h = l.size;
-    let best: { gap: number; colour: RGB; sample: 'swatch' | 'line' | 'marker' } | null = null;
+    let best: { gap: number; colour: RGB; sample: 'swatch' | 'line' | 'marker'; box: Box } | null = null;
     for (const s of d.shapes) {
       for (const sp of s.subs) {
         if (sp.length < 2) continue;
@@ -81,40 +84,68 @@ export function readLegendFromDrawing(d: PlacedDrawing, text: readonly PlacedTex
         const colour = (s.filled && closed ? s.fill : s.stroke) as RGB;
         // a line sample wins over a marker drawn on it, as the series is the line
         const better = !best || (sample === 'line' && best.sample === 'marker') || (!(best.sample === 'line' && sample === 'marker') && gap < best.gap);
-        if (better) best = { gap, colour: [...colour] as RGB, sample };
+        if (better) best = { gap, colour: [...colour] as RGB, sample, box: b };
       }
     }
-    if (best) out.push({ name: l.text, colour: best.colour, sample: best.sample, textBox: l.box });
+    if (best) out.push({ name: l.text, colour: best.colour, sample: best.sample, textBox: l.box, sampleBox: best.box });
   }
   return out;
 }
 
 export function readLegendFromPixels(words: readonly OcrWord[], rgba: Uint8ClampedArray | Uint8Array, width: number, height: number, box: Box): LegendEntry[] {
   // a "word" with no letter or digit is a sample read as text ("=", "-"), not a name
-  const lines = linesOf(words.filter((w) => inside(w.bbox, box) && /[\p{L}\p{N}]/u.test(w.text)).map((w) => ({ text: w.text, box: w.bbox, size: w.bbox.y1 - w.bbox.y0 })));
+  const all = linesOf(words.filter((w) => inside(w.bbox, box) && /[\p{L}\p{N}]/u.test(w.text)).map((w) => ({ text: w.text, box: w.bbox, size: w.bbox.y1 - w.bbox.y0 })));
+  const stripOf = (l: TextLine): Box => {
+    const h = l.box.y1 - l.box.y0;
+    return {
+      x0: Math.max(Math.floor(box.x0), Math.floor(l.box.x0 - 4 * h)),
+      // ⚑ well short of the text (v2.7): a read word's box starts a pixel or two right of its first glyph, so a strip
+      // up to it took the first letter's stroke as one more mark of the sample. matplotlib leaves 0.8 em between them.
+      x1: Math.min(Math.ceil(l.box.x0 - 0.5 * h), width - 1),
+      y0: Math.max(Math.floor(l.box.y0), 0),
+      y1: Math.min(Math.ceil(l.box.y1), height - 1),
+    };
+  };
+  // ⚑ and a word read INSIDE another entry's sample strip, on its row, is that sample (a dotted line read as "na",
+  // v2.7): the strip left of a name is where its sample is drawn, never another name
+  const lines = all.filter((l) => !all.some((o) => {
+    if (o === l) return false;
+    const st = stripOf(o);
+    const cy = (l.box.y0 + l.box.y1) / 2;
+    return l.box.x0 >= st.x0 - 1 && l.box.x1 <= o.box.x0 && cy >= o.box.y0 && cy <= o.box.y1;
+  }));
   const out: LegendEntry[] = [];
   for (const l of lines) {
-    const h = l.box.y1 - l.box.y0;
-    const x0 = Math.max(Math.floor(box.x0), Math.floor(l.box.x0 - 4 * h)), x1 = Math.min(Math.ceil(l.box.x0 - 0.15 * h), width - 1);
-    const y0 = Math.max(Math.floor(l.box.y0), 0), y1 = Math.min(Math.ceil(l.box.y1), height - 1);
-    // the most common colour in the strip, the background left out
-    const buckets = new Map<number, { n: number; r: number; g: number; b: number }>();
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const i = (y * width + x) * 4;
-        const r = rgba[i]!, g = rgba[i + 1]!, b = rgba[i + 2]!;
-        if (r > 225 && g > 225 && b > 225) continue; // the background
-        const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
-        const k = buckets.get(key) ?? { n: 0, r: 0, g: 0, b: 0 };
-        k.n++; k.r += r; k.g += g; k.b += b;
-        buckets.set(key, k);
-      }
-    }
-    const top = [...buckets.values()].sort((a, b) => b.n - a.n)[0];
-    const colour: RGB | null = top && top.n >= 6 ? [Math.round(top.r / top.n), Math.round(top.g / top.n), Math.round(top.b / top.n)] : null;
-    out.push({ name: l.text, colour, sample: null, textBox: l.box });
+    const { x0, x1, y0, y1 } = stripOf(l);
+    const colour = sampleInk(rgba, width, height, { x0, y0, x1, y1 });
+    out.push({ name: l.text, colour, sample: null, textBox: l.box, sampleBox: { x0, y0, x1, y1 } });
   }
   return out;
+}
+
+/**
+ * A legend sample's ink: its strongest pixels, the 15% furthest from the paper, averaged; null with too few to say.
+ *
+ * ⚑⚑ NOT THE COMMONEST COLOUR (v2.7). That was the answer, and on a thin or dotted sample line it is the grey of the
+ * anti-aliased edge, not the ink: the dash-coded figure's black samples read as [59, 59, 59] and the dotted one as
+ * [215, 215, 215], which made it another ink. The pixels furthest from the paper are the ink itself, on a swatch (all
+ * of it) as on a hairline.
+ */
+export function sampleInk(rgba: Uint8ClampedArray | Uint8Array, width: number, height: number, b: Box): RGB | null {
+  const px: { r: number; g: number; b: number; d: number }[] = [];
+  for (let y = Math.max(0, Math.floor(b.y0)); y <= Math.min(height - 1, Math.ceil(b.y1)); y++) {
+    for (let x = Math.max(0, Math.floor(b.x0)); x <= Math.min(width - 1, Math.ceil(b.x1)); x++) {
+      const i = (y * width + x) * 4;
+      const r = rgba[i]!, g = rgba[i + 1]!, bl = rgba[i + 2]!;
+      if (r > 225 && g > 225 && bl > 225) continue; // the background
+      px.push({ r, g, b: bl, d: 765 - r - g - bl + (Math.max(r, g, bl) - Math.min(r, g, bl)) * 2 });
+    }
+  }
+  if (px.length < 6) return null;
+  px.sort((p, q) => q.d - p.d);
+  const top = px.slice(0, Math.max(3, Math.ceil(px.length * 0.15)));
+  const mean = (k: 'r' | 'g' | 'b') => Math.round(top.reduce((s2, p) => s2 + p[k], 0) / top.length);
+  return [mean('r'), mean('g'), mean('b')];
 }
 
 /** Before the text reader sees a legend on a picture: strongly COLOURED pixels

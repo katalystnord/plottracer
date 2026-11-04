@@ -226,15 +226,23 @@ the graph type is greyed).
 - **Auto-extract all series** reads every series the legend names, each with the
   tool that suits it, into a series of that name: a line in the legend with Find
   lines, a marker with Colour trace's Scattered points, a bar with the type's own
-  shapes. A short report says what each series' read found; one **Undo** takes the
-  whole read back. Pressed again, it replaces what it found before.
+  shapes. Series drawn in **one ink** are told apart by their **line style**: the
+  ink is read once, each line's pattern of dashes and gaps is measured and matched
+  to the legend sample it looks like (solid, dashed, dash-dot, dotted, or any other
+  pattern), and the pieces of each series are joined into one line. A short report
+  says what each series' read found, one line each; every problem (a line no
+  sample matches, a piece that runs alongside its series' line, an entry whose
+  style no line has, entries whose styles cannot be told apart) is listed once,
+  under **Places to check**. One **Undo** takes the whole read back. Pressed again,
+  it replaces what it found before.
 - **Find individual series**: the **Series** row picks the series to read into
   (rename it in place, or **+ Add** one). Then:
   - **Find lines** (XY and Contour) - every line of the picked colour becomes its
     **own** line, even where same-colour lines cross, touch, run together or are
     cut by their own labels, and each gets its own colour on screen. A gap the
     figure drew no ink in (a label, a dash, a crossing) is filled by a fair
-    interpolation between the line's ends, marked **bridged**; a stretch two curves
+    interpolation between the line's ends, marked **bridged**; a **dotted** line is
+    read as a line, its dots measured and the spaces between them bridged; a stretch two curves
     share is recorded in **both**, marked **shared**; a spectrum's narrow peaks are
     read through their tips. Where it is unsure it does **not** guess: it leaves
     the pieces apart and lists the place under **Places to check**, including a

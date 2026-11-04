@@ -13060,8 +13060,8 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const said = await autoExtractDrawn('lines-legend-colour');
     // one short line per series, then the places and the undo said once (David, 2026-11-02)
     expect(said).toHaveLength(3);
-    expect(said[0]).toMatch(/^Control: 1 line, 80 points(, \d+ places? to check)?$/);
-    expect(said[1]).toMatch(/^Treated: 1 line, 80 points(, \d+ places? to check)?$/);
+    expect(said[0]).toMatch(/^Control: 1 line, 80 points$/);
+    expect(said[1]).toMatch(/^Treated: 1 line, 80 points$/);
     expect(said[2]).toMatch(/^(Places to check are listed on the right\. )?Undo takes the whole read back\.$/);
     const series = await page.getByTestId('series-select').locator('option').allTextContents();
     expect(series).toEqual(['Control (80)', 'Treated (80)']);
@@ -13074,10 +13074,13 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(async () => (await page.getByTestId('series-select').locator('option').allTextContents()).join(' | '), { timeout: 60000 }).toBe('Control (80) | Treated (80)');
   }, 180000);
 
-  it('Auto-extract all series, two series in ONE ink: the colour is read once, and the second says colour cannot tell them apart', async () => {
+  // ⚑ The walk notes, "Series told apart by their line style": two SOLID series in one ink cannot be told apart by
+  // style either, so the read is as before, and the reason is a place to check, not a sentence on the card.
+  it('Auto-extract all series, two solid series in ONE ink: the colour is read once into the first, and the second is not read, with the reason in Places to check', async () => {
     const said = await autoExtractDrawn('lines-legend');
-    expect(said[0]).toMatch(/^series 1: 2 lines, 160 points(, \d+ places? to check)?$/);
-    expect(said[1]).toBe('series 2: Same colour as series 1, so colour cannot tell them apart: its data was all read into series 1. Move each to its own series in the series list.');
+    expect(said[0]).toMatch(/^series 1: 2 lines, 160 points$/);
+    expect(said[1]).toBe('series 2: not read, see Places to check');
+    expect(await textOf('places-to-check')).toMatch(/series 2: the same colour and the same line style as series 1, so neither can tell them apart/);
     const series = await page.getByTestId('series-select').locator('option').allTextContents();
     // the two drawn lines, once each
     expect(series.filter((t) => /\(80\)/.test(t))).toHaveLength(2);
@@ -13419,6 +13422,74 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await page.keyboard.press('Delete');
     await expect.poll(total, { timeout: 5000 }).toBe(beforeDel - sel);
   }, 120000);
+
+  // ⚑⚑ The walk notes, "Series told apart by their line style" (David, 2026-11-04, on this figure: "Very, very close!").
+  it('Auto-extract all series on the dash-coded figure: four series in one ink are told apart by their line style, each read into its own name and lying on its own curve', async () => {
+    const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
+      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+      series: { name: string; points: { x: number; y: number }[] }[];
+    };
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-dashed').waitFor({ state: 'visible' });
+    await page.getByTestId('example-dashed').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = t.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py);
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    // the legend, with the Legend card's Mark legend, round its entries
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-mark').click();
+    const p0 = await imageToLocal(716, 538);
+    const p1 = await imageToLocal(872, 634);
+    await dragMarker(p0.lx, p0.ly, p1.lx, p1.ly);
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('auto-extract-all').click();
+    await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+    const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+    // one short line per series, and nothing about a colour that cannot tell them apart
+    for (const [i, name] of ['Formulation A', 'Formulation B', 'Formulation C', 'Formulation D'].entries()) {
+      expect(said[i]?.startsWith(`${name}: `), JSON.stringify(said)).toBe(true);
+      expect(said[i]?.slice(name.length + 2), JSON.stringify(said)).toMatch(/^1 line, \d+ points$/);
+    }
+    expect(said.join(' ')).not.toMatch(/Same colour|cannot tell them apart/);
+    // a problem is said once, in Places to check: a piece given to no series is one place, not that and its ends
+    const places = await page.getByTestId('places-to-check').locator('li').allInnerTexts();
+    for (const name of new Set(places.flatMap((p) => /^(Series \d+): its line style matches no legend entry/.exec(p)?.[1] ?? []))) {
+      expect(places.filter((p) => p.startsWith(`${name} stops here`)), name).toEqual([]);
+    }
+    // every series lies on its own curve: the table's values against the figure's own truth
+    const table = await page.getByTestId('points-table').evaluate((el) => ({
+      heads: [...el.querySelectorAll('thead tr:first-child th')].map((th) => (th as HTMLElement).innerText.trim()).filter((x) => x && x !== '#'),
+      rows: [...el.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].slice(1).map((td) => (td as HTMLElement).innerText.trim())),
+    }));
+    for (const s of t.series) {
+      const k = table.heads.indexOf(s.name);
+      expect(k, `${s.name} in ${JSON.stringify(table.heads)}`).toBeGreaterThanOrEqual(0);
+      const pts = table.rows.map((r) => [Number(r[2 * k]), Number(r[2 * k + 1])]).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)) as [number, number][];
+      expect(pts.length, s.name).toBeGreaterThan(40);
+      const yAt = (x: number) => {
+        const P = s.points;
+        for (let i = 1; i < P.length; i++) if (P[i]!.x >= x) return P[i - 1]!.y + ((x - P[i - 1]!.x) / (P[i]!.x - P[i - 1]!.x)) * (P[i]!.y - P[i - 1]!.y);
+        return P[P.length - 1]!.y;
+      };
+      const on = pts.filter(([x, y]) => Math.abs(y - yAt(x)) < 2.5).length;
+      expect(on / pts.length, `${s.name}: ${on} of ${pts.length} on its curve`).toBeGreaterThanOrEqual(0.9);
+      // and it runs most of the way across the plot (12 h)
+      const xs = pts.map(([x]) => x);
+      expect(Math.max(...xs) - Math.min(...xs), s.name).toBeGreaterThan(9);
+    }
+  }, 240000);
 
   it('Find this line: a click on a curve adds that one line, a click off a line adds nothing, and the next click adds the next (role-play 2026-10-12)', async () => {
     const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
