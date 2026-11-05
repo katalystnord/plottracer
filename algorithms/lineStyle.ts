@@ -218,9 +218,10 @@ export function assignStyles(lines: readonly LineStyle[], entries: readonly (Lin
   }
   // 2. pair groups with entries: the least total difference, a group or an entry left over costing ENTRY_REACH
   const E = entries.length, G = groups.length;
+  // an entry whose sample could not be measured takes no group: nothing says a line is its
   const cost = (g: number, e: number): number => {
     const ent = entries[e];
-    return ent ? styleDistance(groups[g]!.rep, ent) : ENTRY_REACH;
+    return ent ? styleDistance(groups[g]!.rep, ent) : Infinity;
   };
   let best: { total: number; pick: (number | null)[] } = { total: Infinity, pick: [] };
   const pick: (number | null)[] = Array(G).fill(null);
@@ -246,6 +247,17 @@ export function assignStyles(lines: readonly LineStyle[], entries: readonly (Lin
     search(g + 1, total + ENTRY_REACH);
   };
   if (G <= 9 && E <= 9) search(0, 0);
+  else {
+    // too many to try every pairing: the nearest pairs first, each group and entry once
+    const pairs = groups.flatMap((_, g) => entries.map((__, e) => ({ g, e, c: cost(g, e) }))).filter((p) => p.c <= ENTRY_REACH).sort((a, b) => a.c - b.c);
+    const taken = new Array<boolean>(E).fill(false);
+    best = { total: 0, pick: Array(G).fill(null) };
+    for (const { g, e } of pairs) {
+      if (best.pick[g] !== null || taken[e]) continue;
+      best.pick[g] = e;
+      taken[e] = true;
+    }
+  }
   // a group the pairing left over is a style measured twice when it is clearly nearest one entry: it is that entry's
   // too (the dotted curve of the release figure came back as a long line at period 8 and a piece at period 7)
   const pickOf = best.pick.map((e, gi) => {

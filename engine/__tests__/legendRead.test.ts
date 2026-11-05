@@ -120,3 +120,24 @@ describe('Read legend on a picture of thin and dotted sample lines', () => {
     expect(got.map((e) => e.name)).toEqual(['Formulation A', 'Formulation B', 'Formulation C', 'Formulation D']);
   });
 });
+
+// the code review of 8816f1e..666ea46 (2026-11-05): a legend in one row, its keys drawn close
+describe('Read legend on a picture: a legend in one row', () => {
+  it("given a short name close enough to lie in the next entry's sample strip, it is still a name: its ink is letters, not a sample line", () => {
+    const w = 120, h = 30;
+    const rgba = new Uint8ClampedArray(w * h * 4).fill(255);
+    const ink = (x0: number, y0: number, x1: number, y1: number) => {
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) rgba.set([0, 0, 0, 255], (y * w + x) * 4);
+    };
+    ink(10, 15, 30, 16); // A's key, a line
+    ink(38, 10, 44, 20); // the letter A
+    ink(52, 15, 72, 16); // B's key
+    ink(79, 10, 85, 20); // the letter B
+    const words = [
+      { text: 'A', bbox: { x0: 39, y0: 10, x1: 45, y1: 20 } },
+      { text: 'B', bbox: { x0: 80, y0: 10, x1: 86, y1: 20 } },
+    ];
+    const got = readLegendFromPixels(words, rgba, w, h, { x0: 0, y0: 0, x1: w - 1, y1: h - 1 });
+    expect(got.map((e) => e.name)).toEqual(['A', 'B']);
+  });
+});

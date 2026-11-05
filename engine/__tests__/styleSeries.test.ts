@@ -14,7 +14,7 @@ const line = (style: LineStyle, xMin: number, xMax: number): StyledLine => ({ st
 describe('which found lines make each entry series', () => {
   it('given a solid, a dashed and a dotted line and the three entries, each entry gets its own line', () => {
     const p = planStyleSeries([line(dotted, 0, 500), line(solid, 0, 500), line(dashed, 0, 500)], [solid, dashed, dotted]);
-    expect(p).toEqual({ perEntry: [[1], [2], [0]], left: [], empty: [] });
+    expect(p).toEqual({ perEntry: [[1], [2], [0]], left: [], empty: [], sameStyleAs: [] });
   });
 
   it('given an entry whose line came in two pieces end to end, both are its, in order along x, to be joined', () => {
@@ -47,5 +47,15 @@ describe('which found lines make each entry series', () => {
     const p = planStyleSeries([line(solid, 0, 500), line(dashed, 0, 500)], [solid, null, dashed]);
     expect(p!.perEntry).toEqual([[0], [], [1]]);
     expect(p!.empty).toEqual([1]);
+  });
+});
+
+// the code review of 8816f1e..666ea46 (2026-11-05)
+describe('entries of which only some share a style', () => {
+  it('given two solid entries and a dashed one, the dashed line is still its own entry; the second solid entry is said to share the first one\'s style', () => {
+    const p = planStyleSeries([line(solid, 0, 500), line(dashed, 0, 500)], [solid, solid, dashed]);
+    expect(p!.perEntry).toEqual([[0], [], [1]]);
+    expect(p!.sameStyleAs).toEqual([{ entry: 1, as: 0 }]);
+    expect(p!.empty).toEqual([]);
   });
 });

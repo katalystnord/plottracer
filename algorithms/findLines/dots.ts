@@ -33,6 +33,9 @@ export function findDots(mask: Uint8Array, w: number, h: number, lw: number, inB
   const minX = new Float64Array(count + 1).fill(Infinity), maxX = new Float64Array(count + 1).fill(-Infinity);
   const minY = new Float64Array(count + 1).fill(Infinity), maxY = new Float64Array(count + 1).fill(-Infinity);
   const pix: number[][] = Array.from({ length: count + 1 }, () => []);
+  const most = 1.6 * lw + 3;
+  // ⚑ every pixel a dot can have: a blob with more has a side longer than `most`, so it is no dot and is dropped below
+  const cap = Math.floor(most) ** 2 + 1;
   for (let i = 0; i < w * h; i++) {
     const l = labels[i]!;
     if (!l) continue;
@@ -41,9 +44,8 @@ export function findDots(mask: Uint8Array, w: number, h: number, lw: number, inB
     if (x > maxX[l]!) maxX[l] = x;
     if (y < minY[l]!) minY[l] = y;
     if (y > maxY[l]!) maxY[l] = y;
-    if (pix[l]!.length < 64) pix[l]!.push(i);
+    if (pix[l]!.length < cap) pix[l]!.push(i);
   }
-  const most = 1.6 * lw + 3;
   const out: Dot[] = [];
   for (let l = 1; l <= count; l++) {
     const wd = maxX[l]! - minX[l]! + 1, ht = maxY[l]! - minY[l]! + 1;

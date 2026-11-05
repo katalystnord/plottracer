@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { findLines } from '../findLines/lines.js';
+import { findDots } from '../findLines/dots.js';
 import { coverage, dashFigures, isDotted, styleName } from './helpers/dashCorpus.js';
 
 const figures = dashFigures();
@@ -44,4 +45,18 @@ describe('reading dots takes nothing from the other lines', () => {
       });
     }
   }
+});
+
+// the code review of 8816f1e..666ea46 (2026-11-05)
+describe('a thick dot', () => {
+  it('given a dot of a line 8 px wide (12 x 12 px), its centre is the middle of the dot, not of its top rows', () => {
+    const w = 40, h = 40;
+    const mask = new Uint8Array(w * h);
+    for (let y = 10; y < 22; y++) for (let x = 10; x < 22; x++) mask[y * w + x] = 1;
+    const dots = findDots(mask, w, h, 8, () => true);
+    expect(dots).toHaveLength(1);
+    expect(dots[0]!.c[0]).toBeCloseTo(15.5, 5);
+    expect(dots[0]!.c[1]).toBeCloseTo(15.5, 5);
+    expect(dots[0]!.pix).toHaveLength(144);
+  });
 });

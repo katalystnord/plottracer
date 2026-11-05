@@ -3237,6 +3237,19 @@ export class CalibrationSession<A extends CalibratedAxes> {
     return null;
   }
 
+  /** Give the series at `index` a name PlotTracer chooses again ("Series N", kept up to date as the list
+   * changes), as though no one had named it: Auto-extract names a found line for a legend entry before it knows
+   * whose the line is, and takes the name back when the line turns out to be another entry's or none's. */
+  giveBackName(index: number): void {
+    const entry = this.datasetEntries[index];
+    if (!entry) return;
+    const oldName = entry.dataset.name;
+    entry.dataset.name = freeSeriesNumberName(index + 1, this.otherDatasetNames(index));
+    entry.dataset.setMetadata({ ...entry.dataset.getMetadata(), [TYPED_NAME_KEY]: false });
+    retargetErrorRelations(this.getDatasets(), oldName, entry.dataset.name);
+    this.renumberGivenNames();
+  }
+
   // ⚑ `readonly`, because it does not mutate what it is given - and a caller
   // holding an `RGB` (which is readonly by definition) should not have to copy
   // a tuple to hand it over.

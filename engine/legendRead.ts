@@ -16,6 +16,7 @@
  */
 import type { PlacedDrawing } from '../algorithms/findLines/fromDrawing.js';
 import type { PlacedText } from './drawingPlacement.js';
+import { paperColour } from '../algorithms/lineStyle.js';
 
 type RGB = [number, number, number];
 type Box = { x0: number; y0: number; x1: number; y1: number };
@@ -106,13 +107,29 @@ export function readLegendFromPixels(words: readonly OcrWord[], rgba: Uint8Clamp
       y1: Math.min(Math.ceil(l.box.y1), height - 1),
     };
   };
-  // ⚑ and a word read INSIDE another entry's sample strip, on its row, is that sample (a dotted line read as "na",
-  // v2.7): the strip left of a name is where its sample is drawn, never another name
+  // ⚑ and a word read INSIDE another entry's sample strip, on its row, whose ink is a thin band, is that sample (a
+  // dotted line read as "na", v2.7: 3 rows of ink in a 7-row box). Letters fill their box's height, so a short name
+  // in a one-row legend that lies in the next entry's strip is still a name (the code review, 2026-11-05).
+  const paper = paperColour(rgba, width, height);
+  const inkRows = (b: Box): number => {
+    let n = 0;
+    for (let y = Math.max(0, Math.floor(b.y0)); y <= Math.min(height - 1, Math.ceil(b.y1)); y++) {
+      for (let x = Math.max(0, Math.floor(b.x0)); x <= Math.min(width - 1, Math.ceil(b.x1)); x++) {
+        const i = (y * width + x) * 4;
+        if (Math.max(Math.abs(rgba[i]! - paper[0]), Math.abs(rgba[i + 1]! - paper[1]), Math.abs(rgba[i + 2]! - paper[2])) > 80) {
+          n++;
+          break;
+        }
+      }
+    }
+    return n;
+  };
   const lines = all.filter((l) => !all.some((o) => {
     if (o === l) return false;
     const st = stripOf(o);
     const cy = (l.box.y0 + l.box.y1) / 2;
-    return l.box.x0 >= st.x0 - 1 && l.box.x1 <= o.box.x0 && cy >= o.box.y0 && cy <= o.box.y1;
+    const inStrip = l.box.x0 >= st.x0 - 1 && l.box.x1 <= o.box.x0 && cy >= o.box.y0 && cy <= o.box.y1;
+    return inStrip && inkRows(l.box) <= Math.max(2, 0.5 * (l.box.y1 - l.box.y0));
   }));
   const out: LegendEntry[] = [];
   for (const l of lines) {

@@ -13424,16 +13424,13 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
   }, 120000);
 
   // ⚑⚑ The walk notes, "Series told apart by their line style" (David, 2026-11-04, on this figure: "Very, very close!").
-  it('Auto-extract all series on the dash-coded figure: four series in one ink are told apart by their line style, each read into its own name and lying on its own curve', async () => {
-    const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
-      calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
-      series: { name: string; points: { x: number; y: number }[] }[];
-    };
-    await page.getByTestId('help-trigger').click();
-    await page.getByTestId('example-dashed').waitFor({ state: 'visible' });
-    await page.getByTestId('example-dashed').click();
-    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
-    await waitForImageFitted();
+  type DashTruth = {
+    calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };
+    series: { name: string; points: { x: number; y: number }[] }[];
+  };
+  /** Calibrate the figure open on screen, mark its legend, press Auto-extract all series and check what it read:
+   * one short line per series, every problem once in Places to check, each series on its own curve. */
+  async function autoExtractDashCoded(t: DashTruth, legend: [number, number, number, number]): Promise<void> {
     await page.getByTestId('capture-figure').click();
     await page.waitForTimeout(150);
     const a = t.calibration.anchors;
@@ -13450,29 +13447,46 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     // the legend, with the Legend card's Mark legend, round its entries
     await page.getByTestId('mode-legend').click();
     await page.getByTestId('legend-mark').click();
-    const p0 = await imageToLocal(716, 538);
-    const p1 = await imageToLocal(872, 634);
+    const p0 = await imageToLocal(legend[0], legend[1]);
+    const p1 = await imageToLocal(legend[2], legend[3]);
     await dragMarker(p0.lx, p0.ly, p1.lx, p1.ly);
     await page.getByTestId('mode-data-extraction').click();
-    await page.getByTestId('auto-extract-all').click();
-    await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
-    const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
-    // one short line per series, and nothing about a colour that cannot tell them apart
-    for (const [i, name] of ['Formulation A', 'Formulation B', 'Formulation C', 'Formulation D'].entries()) {
-      expect(said[i]?.startsWith(`${name}: `), JSON.stringify(said)).toBe(true);
-      expect(said[i]?.slice(name.length + 2), JSON.stringify(said)).toMatch(/^1 line, \d+ points$/);
-    }
-    expect(said.join(' ')).not.toMatch(/Same colour|cannot tell them apart/);
-    // a problem is said once, in Places to check: a piece given to no series is one place, not that and its ends
-    const places = await page.getByTestId('places-to-check').locator('li').allInnerTexts();
-    for (const name of new Set(places.flatMap((p) => /^(Series \d+): its line style matches no legend entry/.exec(p)?.[1] ?? []))) {
-      expect(places.filter((p) => p.startsWith(`${name} stops here`)), name).toEqual([]);
-    }
-    // every series lies on its own curve: the table's values against the figure's own truth
-    const table = await page.getByTestId('points-table').evaluate((el) => ({
+    const names = t.series.map((s) => s.name);
+    const tableOf = () => page.getByTestId('points-table').evaluate((el) => ({
       heads: [...el.querySelectorAll('thead tr:first-child th')].map((th) => (th as HTMLElement).innerText.trim()).filter((x) => x && x !== '#'),
       rows: [...el.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].slice(1).map((td) => (td as HTMLElement).innerText.trim())),
     }));
+    let firstHeads: string[] = [];
+    // ⚑ pressed twice: the second press replaces what the first found, and leaves nothing of it behind (the code review
+    // of 8816f1e..666ea46, 2026-11-05: a line given to no entry was kept and added to on every press)
+    for (const press of [1, 2]) {
+      await page.getByTestId('auto-extract-all').click();
+      // a press starts by clearing the last report, and is over when the button is pressable again
+      if (press === 2) await page.getByTestId('auto-extract-said').waitFor({ state: 'detached', timeout: 10000 });
+      await expect.poll(() => page.getByTestId('auto-extract-all').isEnabled(), { timeout: 120000 }).toBe(true);
+      await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+      const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+      // one short line per series, and nothing about a colour that cannot tell them apart
+      for (const [i, name] of names.entries()) {
+        expect(said[i]?.startsWith(`${name}: `), JSON.stringify(said)).toBe(true);
+        expect(said[i]?.slice(name.length + 2), JSON.stringify(said)).toMatch(/^1 line, \d+ points$/);
+      }
+      expect(said.join(' ')).not.toMatch(/Same colour|cannot tell them apart/);
+      // a problem is said once, in Places to check: a piece given to no series is one place, not that and its ends
+      const places = await page.getByTestId('places-to-check').locator('li').allInnerTexts();
+      for (const name of new Set(places.flatMap((p) => /^(Series \d+): its line style matches no legend entry/.exec(p)?.[1] ?? []))) {
+        expect(places.filter((p) => p.startsWith(`${name} stops here`)), name).toEqual([]);
+      }
+      // and each place is its own: Done on one takes that one only
+      const ids = await page.getByTestId('places-to-check').locator('li').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+      expect(new Set(ids).size, JSON.stringify(ids)).toBe(ids.length);
+      const heads = (await tableOf()).heads;
+      for (const name of names) expect(heads.filter((h) => h === name), `${name} in ${JSON.stringify(heads)}`).toHaveLength(1);
+      if (press === 1) firstHeads = heads;
+      else expect(heads, 'the second press leaves the same series').toEqual(firstHeads);
+    }
+    // every series lies on its own curve: the table's values against the figure's own truth
+    const table = await tableOf();
     for (const s of t.series) {
       const k = table.heads.indexOf(s.name);
       expect(k, `${s.name} in ${JSON.stringify(table.heads)}`).toBeGreaterThanOrEqual(0);
@@ -13489,7 +13503,35 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
       const xs = pts.map(([x]) => x);
       expect(Math.max(...xs) - Math.min(...xs), s.name).toBeGreaterThan(9);
     }
-  }, 240000);
+  }
+
+  it('Auto-extract all series on the dash-coded figure: four series in one ink are told apart by their line style, each read into its own name and lying on its own curve', async () => {
+    const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as DashTruth;
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('example-dashed').waitFor({ state: 'visible' });
+    await page.getByTestId('example-dashed').click();
+    await page.getByTestId('help-panel').waitFor({ state: 'detached' });
+    await waitForImageFitted();
+    await autoExtractDashCoded(t, [716, 538, 872, 634]);
+  }, 300000);
+
+  it('Auto-extract all series with the dotted line first in the legend: each series still gets its own name (the code review, 2026-11-05)', async () => {
+    const dir = path.join(__dirname, 'fixtures', 'autoExtract');
+    const t = JSON.parse(fs.readFileSync(path.join(dir, 'dashed-reversed.truth.json'), 'utf8')) as DashTruth & { legend: number[] };
+    try {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, path.join(dir, 'dashed-reversed.png'));
+      await page.getByTestId('open-image-button').click();
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+    }
+    await waitForImageFitted();
+    const L = t.legend;
+    await autoExtractDashCoded(t, [L[0]! - 4, L[1]! - 4, L[2]! + 4, L[3]! + 4]);
+  }, 300000);
 
   it('Find this line: a click on a curve adds that one line, a click off a line adds nothing, and the next click adds the next (role-play 2026-10-12)', async () => {
     const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {

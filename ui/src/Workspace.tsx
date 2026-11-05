@@ -7270,7 +7270,11 @@ export function Workspace() {
       }
     });
     const gaps = res.lines.reduce((n, L) => n + L.gaps.length, 0);
-    if (opts.addPlaces) setLinePlaces((prev) => [...prev, ...places.map((pl, k) => ({ ...pl, id: prev.length + k }))]);
+    // after the ids already used, not after the count: places may have been taken out of the list since
+    if (opts.addPlaces) setLinePlaces((prev) => {
+      const next = prev.reduce((m, pl) => Math.max(m, pl.id + 1), 0);
+      return [...prev, ...places.map((pl, k) => ({ ...pl, id: next + k }))];
+    });
     else setLinePlaces(places);
     setSelectedPointIndices([]); setLineSelection([]);
     const summary =
@@ -7352,12 +7356,6 @@ export function Workspace() {
       // the points now in a series and in the further lines of its colour
       const pointsIn = (indices: number[]) => indices.reduce((n, i) => n + (s.getDatasetInfos()[i]?.pointCount ?? 0), 0);
       // a free "Series N" for a line given to no entry: the name every found line has until it is named
-      const freeName = (): string => {
-        const taken = new Set(s.getDatasetInfos().map((d) => d.name));
-        let k = 1;
-        while (taken.has(`Series ${k}`)) k++;
-        return `Series ${k}`;
-      };
       holdCommitsRef.current = s;
       try {
         for (const [n, step] of plan.entries()) {
@@ -7425,8 +7423,9 @@ export function Workspace() {
                 return { style: styleAlong(pts, ink), xMin: Math.min(...xs), xMax: Math.max(...xs), mid: pts[Math.floor(pts.length / 2)] ?? [0, 0] as [number, number] };
               });
               const planned2 = planStyleSeries(styled, entryStyles);
-              return planned2 ? { planned: planned2, styled } : null;
+              return planned2 ? { planned: planned2, styled, entryStyles } : null;
             })() : null;
+            const measuredStyles = group.length > 1 ? group.filter((e) => entries[e]!.sampleBox).length : 0;
             if (!stylePlan) {
               // one entry, or entries the style cannot tell apart: every line of the ink is the first entry's, as
               // before, and the others are said to be in it
@@ -7438,11 +7437,16 @@ export function Workspace() {
               s.setDatasetColor(into, step.colour);
               saidBy[step.entry] = autoExtractLine(step.name, { ...res.found, points: pointsIn([into, ...extras]) });
               for (const e of step.shares ?? []) {
-                notRead(e, `${plan[e]!.name}: the same colour and the same line style as ${step.name}, so neither can tell them apart: its data was all read into ${step.name}. Move each to its own series in the series list.`);
+                notRead(e, measuredStyles < group.length
+                  ? `${plan[e]!.name}: the same colour as ${step.name}, and the line styles could not be measured in the legend, so they cannot be told apart: its data was all read into ${step.name}. Move each to its own series in the series list.`
+                  : `${plan[e]!.name}: the same colour and the same line style as ${step.name}, so neither can tell them apart: its data was all read into ${step.name}. Move each to its own series in the series list.`);
               }
               continue;
             }
-            const { planned: sp, styled } = stylePlan;
+            const { planned: sp, styled, entryStyles: styleOf } = stylePlan;
+            // ⚑ the first line was named for the first entry before anyone knew whose it is: it gives that name back, or
+            // the entry whose line it is not could not take it (the code review, 2026-11-05)
+            s.giveBackName(indexOf(intoDs));
             const idOf = (ds: Dataset): number[] => {
               const id = s.foundLineId(indexOf(ds));
               return id === null ? [] : [id];
@@ -7452,7 +7456,7 @@ export function Workspace() {
             const leftIds = new Set<number>();
             for (const lf of sp.left) {
               const ds = lineSets[lf.line]!;
-              s.renameDataset(indexOf(ds), freeName());
+              // its name stays one PlotTracer gave, so the next press replaces it as it replaces any found line
               s.setDatasetColor(indexOf(ds), step.colour);
               const owner = lf.why === 'overlaps' ? plan[group[lf.entry]!]!.name : null;
               const say = owner
@@ -7466,7 +7470,12 @@ export function Workspace() {
               const name = plan[e]!.name;
               const mine = sp.perEntry[gi]!.map((k) => lineSets[k]!);
               if (!mine.length) {
-                notRead(e, `${name}: no line of this colour has its line style, so it was not read. Pick its colour with Find lines and give the line it finds the name ${name}.`);
+                const same = sp.sameStyleAs.find((x) => x.entry === gi);
+                notRead(e, same
+                  ? `${name}: the same colour and the same line style as ${plan[group[same.as]!]!.name}, so the two cannot be told apart: what has that style was read into ${plan[group[same.as]!]!.name}. Move ${name}'s part to its own series in the series list.`
+                  : !entries[e]!.sampleBox || !styleOf[gi]
+                    ? `${name}: its line style could not be measured in the legend, so no line was given to it. Pick its colour with Find lines and give the line it finds the name ${name}.`
+                    : `${name}: no line of this colour has its line style, so it was not read. Pick its colour with Find lines and give the line it finds the name ${name}.`);
                 return;
               }
               // the pieces joined end to end, in order along x, as Join with joins them; the lower-numbered survives
@@ -7512,7 +7521,12 @@ export function Workspace() {
         return;
       }
       commit();
-      if (extraPlaces.length) setLinePlaces((prev) => [...prev, ...extraPlaces.map((pl, k) => ({ ...pl, id: prev.length + k }))]);
+      // ⚑ after the ids already used, not after the count: places have been taken out of the list (the code review,
+      // 2026-11-05: two places shared an id, and Done on one took both)
+      if (extraPlaces.length) setLinePlaces((prev) => {
+        const next = prev.reduce((m, pl) => Math.max(m, pl.id + 1), 0);
+        return [...prev, ...extraPlaces.map((pl, k) => ({ ...pl, id: next + k }))];
+      });
       const said = saidBy.filter((t): t is string => t !== undefined);
       setAutoExtractReport({ on: s, lines: [...said, autoExtractFooter(anyPlaces || extraPlaces.length > 0)] });
       if (!readAny) setOcrError('No series could be read: none of the legend’s colours was found inside the data area.');

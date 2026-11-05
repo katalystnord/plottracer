@@ -123,6 +123,20 @@ describe('bars in the same ink as the axis line and the frame along the data are
     const boxes = result.boxes.map((b) => [Math.min(b.start.x, b.end.x), Math.min(b.start.y, b.end.y), Math.max(b.start.x, b.end.x)]).sort((a, b) => a[0]! - b[0]!);
     expect(boxes).toEqual([[15, 20, 23], [35, 30, 43], [55, 12, 63]]);
   });
+  // the code review of 8816f1e..666ea46 (2026-11-05): matplotlib's default bars are 0.8 of their slot wide
+  it('given bars covering most of the axis line they stand on (matplotlib default width), in its ink, each is still read on its own', () => {
+    const w = 80, h = 60;
+    const img = whiteImage(w, h);
+    fillBlock(img, w, 10, 50, 61, 1, GREY);
+    fillBlock(img, w, 10, 5, 1, 46, GREY);
+    fillBlock(img, w, 12, 20, 16, 30, GREY);
+    fillBlock(img, w, 32, 30, 16, 20, GREY);
+    fillBlock(img, w, 52, 12, 16, 38, GREY);
+    const result = runBarDetect(img, w, h, GREY, 40, 'foreground', { x: 10, y: 5, width: 61, height: 46 });
+    if ('error' in result) throw new Error(result.error);
+    const boxes = result.boxes.map((b) => [Math.min(b.start.x, b.end.x), Math.min(b.start.y, b.end.y), Math.max(b.start.x, b.end.x)]).sort((a, b) => a[0]! - b[0]!);
+    expect(boxes).toEqual([[12, 20, 28], [32, 30, 48], [52, 12, 68]]);
+  });
   it('given touching bars (a histogram) covering the bottom edge, they keep their full height: they are bars, not a line along it', () => {
     const w = 80, h = 60;
     const img = whiteImage(w, h);

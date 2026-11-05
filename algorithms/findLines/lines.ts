@@ -30,6 +30,7 @@
  */
 import { dilateCross, distanceTransform, label, skeletonize } from './raster.js';
 import { chainDots, chainToLine, findDots } from './dots.js';
+import { paperColour } from '../lineStyle.js';
 import { inkCoverage, paperOf, lineMask, ridgeChains, ridgePoints, type Box, type RGB } from './ink.js';
 import { skeletonGraph, type GraphEdge, type YX } from './graph.js';
 import {
@@ -280,14 +281,8 @@ export function findLines(rgba: Uint8ClampedArray | Uint8Array, w: number, h: nu
  * mask and far from the paper.
  */
 function onPaper(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, mask: Uint8Array): (pix: readonly number[]) => boolean {
-  const hist = new Map<number, number>();
-  for (let i = 0; i < w * h; i += 3) {
-    const k = ((rgba[i * 4]! >> 3) << 10) | ((rgba[i * 4 + 1]! >> 3) << 5) | (rgba[i * 4 + 2]! >> 3);
-    hist.set(k, (hist.get(k) ?? 0) + 1);
-  }
-  let top = 0, best = -1;
-  for (const [k, n] of hist) if (n > best) { best = n; top = k; }
-  const paper = [((top >> 10) & 31) * 8 + 4, ((top >> 5) & 31) * 8 + 4, (top & 31) * 8 + 4];
+  // the paper is looked up once, and only when there is a dot to ask about
+  let paper: RGB | null = null;
   return (pix) => {
     let foreign = 0;
     const seen = new Set<number>();
@@ -299,6 +294,7 @@ function onPaper(rgba: Uint8ClampedArray | Uint8Array, w: number, h: number, mas
         const j = yy * w + xx;
         if (mask[j] || seen.has(j)) continue;
         seen.add(j);
+        paper ??= paperColour(rgba, w, h);
         const d = Math.max(Math.abs(rgba[j * 4]! - paper[0]!), Math.abs(rgba[j * 4 + 1]! - paper[1]!), Math.abs(rgba[j * 4 + 2]! - paper[2]!));
         if (d > 80) foreign++;
       }

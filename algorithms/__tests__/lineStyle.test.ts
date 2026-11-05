@@ -73,3 +73,17 @@ describe('one style measured twice', () => {
     expect(assignStyles(lines, [solid, dashedE, dashdotE, dottedE])).toEqual([0, 1, 2, 3, 3]);
   });
 });
+
+// the code review of 8816f1e..666ea46 (2026-11-05)
+describe('pairing styles with entries, at the edges', () => {
+  const broken = (period: number, marks = 20): LineStyle => ({ solid: false, twoKinds: false, period, duty: 0.5, marks });
+  it('given ten entries in one ink, each with its own dash period, each line still goes to its entry', () => {
+    const periods = Array.from({ length: 10 }, (_, k) => Math.round(4 * 1.4 ** k));
+    expect(assignStyles(periods.map((p) => broken(p)), periods.map((p) => broken(p, 2)))).toEqual(periods.map((_, k) => k));
+  });
+  it('given an entry whose sample could not be measured, a line near no measured entry is given to none, not to it', () => {
+    const solid: LineStyle = { solid: true, twoKinds: false, period: null, duty: null, marks: 1 };
+    const dashdot: LineStyle = { solid: false, twoKinds: true, period: 27, duty: 0.78, marks: 40 };
+    expect(assignStyles([broken(11, 40), dashdot, solid], [broken(11, 2), { ...dashdot, marks: 2 }, null])).toEqual([0, 1, null]);
+  });
+});

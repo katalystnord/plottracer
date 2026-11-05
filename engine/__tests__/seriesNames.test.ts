@@ -135,3 +135,19 @@ describe('CalibrationSession - the guards (checkpoint 75)', () => {
     expect(names(s)).toEqual(['Series 1', 'Series 2']);
   });
 });
+
+// the code review of 8816f1e..666ea46 (2026-11-05): Auto-extract names a found line for the first legend entry
+// before it knows whose the line is, and must be able to take that name back
+describe('a series given its name back', () => {
+  it('given a series renamed "Formulation A", giving it a name back makes it "Series N" again, kept up to date, and frees "Formulation A"', () => {
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    s.addDataset();
+    s.addDataset();
+    expect(s.renameDataset(1, 'Formulation A')).toBeNull();
+    s.giveBackName(1);
+    expect(s.getDatasetInfos().map((d) => d.name)).toEqual(['Series 1', 'Series 2', 'Series 3']);
+    expect(s.renameDataset(2, 'Formulation A')).toBeNull();
+    s.removeDataset(0);
+    expect(s.getDatasetInfos().map((d) => d.name)).toEqual(['Series 1', 'Formulation A']);
+  });
+});

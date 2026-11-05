@@ -289,10 +289,19 @@ function cutMakesASliver(
 const EDGE_REACH = 3;
 /** The share of an edge's length the ink must cover, along one row or column, to be a line along it. */
 const EDGE_LINE_COVER = 0.6;
+/** The share of that ink with paper a few pixels further in. Bars standing on a line cover the rest; matplotlib's
+ * default bars (0.8 of their slot) leave 23% of the line bare. Touching bars (a histogram) covering an edge leave none
+ * bare but where a bar is less than 8 px tall. */
+const EDGE_LINE_BARE = 0.15;
 
-/** Clear the rows and columns along the data area's edges that are LINES: the ink covers most of the edge, and most
- * of that ink has paper within a few pixels further in. Touching bars (a histogram) covering an edge are not a line -
- * they go on inside - and keep every row. In place. */
+/** Clear the rows and columns along the data area's edges that are LINES: the ink covers most of the edge, and at
+ * least `EDGE_LINE_BARE` of that ink has paper a few pixels further in. The whole row is cleared, under the bars too,
+ * or a tick mark hanging below the axis stays joined to the bars through it. Touching bars (a histogram) covering an
+ * edge go on inside, so they keep every row unless bars under 8 px tall make up that share of the edge. In place.
+ *
+ * ⚑ The code review of 8816f1e..666ea46 (2026-11-05): the share was a half, and an axis line under bars of
+ * matplotlib's default width was kept, the bars running together through it. Clearing only the bare stretches of
+ * the line was tried and measured worse on the benchmark: the tick marks below the axis joined the bars. */
 export function cutEdgeLines(mask: Uint8Array, width: number, height: number, region: { x: number; y: number; width: number; height: number }): void {
   const x0 = Math.max(0, Math.floor(region.x)), x1 = Math.min(width - 1, Math.ceil(region.x + region.width));
   const y0 = Math.max(0, Math.floor(region.y)), y1 = Math.min(height - 1, Math.ceil(region.y + region.height));
@@ -311,7 +320,7 @@ export function cutEdgeLines(mask: Uint8Array, width: number, height: number, re
         }
       }
     }
-    return ink >= EDGE_LINE_COVER * (b - a + 1) && thin >= ink / 2;
+    return ink >= EDGE_LINE_COVER * (b - a + 1) && thin >= EDGE_LINE_BARE * ink;
   };
   const cut: { fixed: number; horizontal: boolean }[] = [];
   for (const [edge, inward] of [[y0, 1], [y1, -1]] as const) {

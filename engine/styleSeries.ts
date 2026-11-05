@@ -23,16 +23,27 @@ export interface StyleSeriesPlan {
   left: ({ line: number; why: 'unmatched' } | { line: number; why: 'overlaps'; entry: number })[];
   /** Entries no line has the style of. */
   empty: number[];
+  /** Entries whose sample has the style of an earlier entry's, so no line can be told to be theirs: what has that
+   * style is the earlier entry's. */
+  sameStyleAs: { entry: number; as: number }[];
 }
 
 /** How far two pieces of one line may overlap along x where they meet, px: a join is end to end. */
 const END_TO_END = 4;
 
-/** Null when the entries cannot be told apart by style: then the read is as before, by colour alone. */
+/** Null when fewer than two styles can be told apart among the entries: then the read is as before, by colour alone.
+ * An entry with the style of an earlier one takes no part, and the plan says whose style it shares. */
 export function planStyleSeries(lines: readonly StyledLine[], entries: readonly (LineStyle | null)[]): StyleSeriesPlan | null {
-  const measured = entries.filter((e): e is LineStyle => e !== null);
-  if (measured.length < 2 || !stylesDistinct(measured)) return null;
-  const given = assignStyles(lines.map((l) => l.style), entries);
+  const sameStyleAs: StyleSeriesPlan['sameStyleAs'] = [];
+  const distinct = entries.map((st, e) => {
+    if (!st) return null;
+    const as = entries.findIndex((o, k) => k < e && o !== null && !sameStyleAs.some((x) => x.entry === k) && !stylesDistinct([o, st]));
+    if (as < 0) return st;
+    sameStyleAs.push({ entry: e, as });
+    return null;
+  });
+  if (distinct.filter((e) => e !== null).length < 2) return null;
+  const given = assignStyles(lines.map((l) => l.style), distinct);
   const perEntry: number[][] = entries.map(() => []);
   const left: StyleSeriesPlan['left'] = [];
   given.forEach((e, i) => {
@@ -52,6 +63,6 @@ export function planStyleSeries(lines: readonly StyledLine[], entries: readonly 
     perEntry[e] = kept.sort((a, b) => lines[a]!.xMin - lines[b]!.xMin);
   });
   left.sort((a, b) => a.line - b.line);
-  const empty = perEntry.map((l, e) => (l.length ? -1 : e)).filter((e) => e >= 0);
-  return { perEntry, left, empty };
+  const empty = perEntry.map((l, e) => (l.length || sameStyleAs.some((x) => x.entry === e) ? -1 : e)).filter((e) => e >= 0);
+  return { perEntry, left, empty, sameStyleAs };
 }
