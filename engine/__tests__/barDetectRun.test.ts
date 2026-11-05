@@ -97,3 +97,40 @@ describe('the bar reader searches the data area (v2.7, David 2026-11-02)', () =>
     expect(result.matched).toBe(180);
   });
 });
+
+// ⚑ Measured on the benchmark (docs/v2.7-workflow-walk.md, "The benchmarks at 2.7"): matched over the whole figure,
+// grey bars joined the axis line and frame they stand on, drawn in the same grey, into one blob, and PMC bar recall
+// fell from 76.4% to 74.5% (greyscale 70.4% to 66.5%). With the 2.6.0 clamp put back it was 76.6% and 76.3% again.
+describe('bars in the same ink as the axis line and the frame along the data area', () => {
+  const GREY: [number, number, number] = [60, 60, 60];
+  function framed(): Uint8ClampedArray {
+    const w = 80, h = 60;
+    const img = whiteImage(w, h);
+    // the frame round the data area x 10..70, y 5..50: one pixel lines, the bottom one is the axis the bars stand on
+    fillBlock(img, w, 10, 5, 61, 1, GREY);
+    fillBlock(img, w, 10, 50, 61, 1, GREY);
+    fillBlock(img, w, 10, 5, 1, 46, GREY);
+    fillBlock(img, w, 70, 5, 1, 46, GREY);
+    // three bars standing on the axis line
+    fillBlock(img, w, 15, 20, 8, 30, GREY);
+    fillBlock(img, w, 35, 30, 8, 20, GREY);
+    fillBlock(img, w, 55, 12, 8, 38, GREY);
+    return img;
+  }
+  it('given grey bars standing on a grey axis line with a grey frame on the data area, each bar is read on its own', () => {
+    const result = runBarDetect(framed(), 80, 60, GREY, 40, 'foreground', { x: 10, y: 5, width: 61, height: 46 });
+    if ('error' in result) throw new Error(result.error);
+    const boxes = result.boxes.map((b) => [Math.min(b.start.x, b.end.x), Math.min(b.start.y, b.end.y), Math.max(b.start.x, b.end.x)]).sort((a, b) => a[0]! - b[0]!);
+    expect(boxes).toEqual([[15, 20, 23], [35, 30, 43], [55, 12, 63]]);
+  });
+  it('given touching bars (a histogram) covering the bottom edge, they keep their full height: they are bars, not a line along it', () => {
+    const w = 80, h = 60;
+    const img = whiteImage(w, h);
+    fillBlock(img, w, 10, 30, 20, 20, GREY);
+    fillBlock(img, w, 30, 20, 20, 30, GREY);
+    fillBlock(img, w, 50, 35, 21, 15, GREY);
+    const result = runBarDetect(img, w, h, GREY, 40, 'foreground', { x: 10, y: 5, width: 61, height: 46 });
+    if ('error' in result) throw new Error(result.error);
+    expect(result.boxes.map((b) => Math.max(b.start.y, b.end.y))).toEqual(result.boxes.map(() => 50));
+  });
+});

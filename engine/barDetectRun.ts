@@ -284,6 +284,54 @@ function cutMakesASliver(
 }
 
 
+/** How far from a data area's edge a line along it is looked for, px: an axis line or frame drawn just outside or
+ * just inside the dragged rectangle. */
+const EDGE_REACH = 3;
+/** The share of an edge's length the ink must cover, along one row or column, to be a line along it. */
+const EDGE_LINE_COVER = 0.6;
+
+/** Clear the rows and columns along the data area's edges that are LINES: the ink covers most of the edge, and most
+ * of that ink has paper within a few pixels further in. Touching bars (a histogram) covering an edge are not a line -
+ * they go on inside - and keep every row. In place. */
+export function cutEdgeLines(mask: Uint8Array, width: number, height: number, region: { x: number; y: number; width: number; height: number }): void {
+  const x0 = Math.max(0, Math.floor(region.x)), x1 = Math.min(width - 1, Math.ceil(region.x + region.width));
+  const y0 = Math.max(0, Math.floor(region.y)), y1 = Math.min(height - 1, Math.ceil(region.y + region.height));
+  const at = (x: number, y: number) => x >= 0 && y >= 0 && x < width && y < height && mask[y * width + x] === 1;
+  /** Along one row (horizontal) or column, from `a` to `b`, with the data area lying `inward` (+1 / -1) across it. */
+  const line = (fixed: number, a: number, b: number, horizontal: boolean, inward: number): boolean => {
+    let ink = 0, thin = 0;
+    for (let t = a; t <= b; t++) {
+      if (!(horizontal ? at(t, fixed) : at(fixed, t))) continue;
+      ink++;
+      for (let k = 2; k <= 2 * EDGE_REACH + 2; k++) {
+        const v = fixed + inward * k;
+        if (!(horizontal ? at(t, v) : at(v, t))) {
+          thin++;
+          break;
+        }
+      }
+    }
+    return ink >= EDGE_LINE_COVER * (b - a + 1) && thin >= ink / 2;
+  };
+  const cut: { fixed: number; horizontal: boolean }[] = [];
+  for (const [edge, inward] of [[y0, 1], [y1, -1]] as const) {
+    for (let y = edge - EDGE_REACH; y <= edge + EDGE_REACH; y++) if (line(y, x0, x1, true, inward)) cut.push({ fixed: y, horizontal: true });
+  }
+  for (const [edge, inward] of [[x0, 1], [x1, -1]] as const) {
+    for (let x = edge - EDGE_REACH; x <= edge + EDGE_REACH; x++) if (line(x, y0, y1, false, inward)) cut.push({ fixed: x, horizontal: false });
+  }
+  // every line is found on the mask as matched, then all are cut
+  for (const { fixed, horizontal } of cut) {
+    if (horizontal) {
+      if (fixed < 0 || fixed >= height) continue;
+      for (let x = Math.max(0, x0 - EDGE_REACH); x <= Math.min(width - 1, x1 + EDGE_REACH); x++) mask[fixed * width + x] = 0;
+    } else {
+      if (fixed < 0 || fixed >= width) continue;
+      for (let y = Math.max(0, y0 - EDGE_REACH); y <= Math.min(height - 1, y1 + EDGE_REACH); y++) mask[y * width + fixed] = 0;
+    }
+  }
+}
+
 export function runBarDetect(
   data: Uint8ClampedArray | Uint8Array,
   width: number,
@@ -325,6 +373,12 @@ export function runBarDetect(
   if (count < MIN_MATCHED_PIXELS) {
     return { error: 'No pixels matched that colour. Repick the bar colour, or raise the tolerance.' };
   }
+  // ⚑⚑ THE DATA AREA'S EDGES ARE CUT WHERE A LINE RUNS ALONG THEM (v2.7). Matched over the whole figure, bars drawn in
+  // the ink of the axis line and the frame they stand on joined them into one blob, and were lost: PMC bar recall fell
+  // from 76.4% to 74.5%, greyscale from 70.4% to 66.5% (docs/v2.7-workflow-walk.md, "The benchmarks at 2.7"). A row or
+  // column within a few pixels of an edge that the ink covers along most of that edge is a LINE, not a bar - a bar
+  // crosses the edge, it does not run along it - so it is taken out of the match. A bar standing on it loses that row.
+  if (region) cutEdgeLines(mask, width, height, region);
   // Membership is only worth its memory when a run might actually be cut.
   const touches = (b: { bbox: { minX: number; minY: number; maxX: number; maxY: number } }) =>
     !region || (b.bbox.maxX > region.x && b.bbox.minX < region.x + region.width && b.bbox.maxY > region.y && b.bbox.minY < region.y + region.height);
