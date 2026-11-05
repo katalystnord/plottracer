@@ -42,6 +42,7 @@ import { InputParser } from '../inputParser.js';
 import type { Calibration } from '../calibration.js';
 import type { AxesMetadata } from './types.js';
 import { logPositiveEndpointsUsable } from './logScale.js';
+import { BASELINE_TOLERANCE_PX } from '../barInterval.js';
 
 export interface Orientation {
   axes: 'X' | 'Y';
@@ -298,14 +299,37 @@ export class BarAxes {
    * ⚑ The stored value survives as the fallback for a calibration with no
    * category axis - a file written before the axis was part of the walk, and
    * the load path that still reads `baselineValue` off such a file.
+   *
+   * ⚑⚑ CORRECTED 2026-11-05: WHERE THE VALUE AXIS HAS A 0, THE ORIGIN IS 0. A
+   * bar's datum is ONE point, its end away from 0; the bar is drawn down to 0
+   * only to make it easier to read (David: *"Just use the 0 value where there
+   * is a 0 value and that is it"*). Since v2.7 `Cat 1` goes on its tick mark,
+   * and the tick marks are drawn on the frame: on a figure with negative bars
+   * the frame is below 0, and with the frame as the origin each negative bar's
+   * 0 end was taken as its point (bars-grouped.pdf read 0 for -1.35 and -0.7).
+   * So the frame is used only where 0 is not on the axis: a log axis, and a
+   * linear axis whose frame cuts it off before 0 (0 beyond the frame, on the
+   * side away from the plot). Within `BASELINE_TOLERANCE_PX` of the frame, 0
+   * counts as on it. core/__tests__/barAxes.test.ts, "which end of a bar is its
+   * point", holds each case.
    */
   getBaselineValue(): number {
     const categoryStart = this.calibration?.getPoint(2);
     if (categoryStart) {
       const atAxis = this.pixelToData(categoryStart.px, categoryStart.py)[0];
-      if (atAxis !== undefined && Number.isFinite(atAxis)) return atAxis;
+      if (atAxis !== undefined && Number.isFinite(atAxis)) return this.zeroOnAxis(atAxis) ? 0 : atAxis;
     }
     return this._baselineValue;
+  }
+
+  /** Whether 0 is on the drawn value axis, given the value at its frame. */
+  private zeroOnAxis(atFrame: number): boolean {
+    if (this.isLogScale) return false;
+    const pxPerUnit = Math.hypot(this.x2 - this.x1, this.y2 - this.y1) / Math.abs(this.p2 - this.p1);
+    if (Math.abs(atFrame) * pxPerUnit <= BASELINE_TOLERANCE_PX) return true;
+    // the plot runs from the frame toward the calibrated values
+    const toward = Math.abs(this.p1 - atFrame) >= Math.abs(this.p2 - atFrame) ? this.p1 : this.p2;
+    return Math.sign(0 - atFrame) === Math.sign(toward - atFrame);
   }
 
   calculateOrientation(): Orientation {

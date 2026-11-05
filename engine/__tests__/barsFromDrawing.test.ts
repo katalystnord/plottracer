@@ -63,11 +63,11 @@ function session(name: string, stacked = false): CalibrationSession<CalibratedAx
     s.handleCalibrationClick(p[0], p[1]);
     s.confirmCalibrationValues([String(v)]);
   }
-  const from = f.at(t.category.from), to = f.at(t.category.to);
-  // the generator gives the category axis's outer edges; the walk clicks its first and last tick marks, here on the
-  // line the bars stand on. ⚠️ On bars-grouped (negative bars) that is the zero line, above the frame where the tick
-  // marks are drawn; clicked on the drawn tick marks instead, the baseline is the frame's value and the second series'
-  // second bar reads 1.35 off (measured 2026-11-03). Open for David: docs/v2.7-workflow-walk.md, "The category axis on two tick marks".
+  // the generator gives the category axis's outer edges; the walk clicks its first and last tick marks, which are
+  // drawn on the frame. On bars-grouped (negative bars) the bars stand on 0, above the frame: the frame is where the
+  // walk's prompt sends the click, and 0 on the value axis is still what each bar's one point is read against.
+  const edge = (p: Pt): Pt => (t.horizontal ? [t.box[0]!, p[1]] : [p[0], t.box[1]!]);
+  const from = f.at(edge(t.category.from)), to = f.at(edge(t.category.to));
   walkCategoryAxis(s, { ...tickMarksWithin({ x: from[0], y: from[1] }, { x: to[0], y: to[1] }, t.category.count), count: t.category.count });
   if (!s.runCalibration()) throw new Error(`${name}: calibration refused: ${s.getCalibrationError()}`);
   return s;

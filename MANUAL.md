@@ -79,8 +79,9 @@ origin** shares one point between X1 and Y1 when the corner where the axes meet 
 labelled on both. A **category axis** (Bar, Stacked bar, Line with categories, Box
 plot, Candlestick, Span chart) is calibrated on two tick marks too: **Cat 1** where
 the first category's tick mark meets the axis line, **Cat n** where the last one's
-does, then how many categories the figure has (the bars' baseline is measured at
-that line). In the **Categories** stage after Calibrate you say whether the
+does, then how many categories the figure has. A bar's value is its end away from 0
+on the value axis; only where that axis has no 0 (a log axis, or one that starts
+above 0) is the line the bars stand on measured at Cat 1. In the **Categories** stage after Calibrate you say whether the
 figure draws its ticks at the categories' centres (the default) or between them;
 the tick marks move on screen to show which, and Cat 1 and Cat n stay where you
 clicked them. The stage says the count once, on its heading, with **Mark categories**
@@ -229,7 +230,12 @@ the graph type is greyed).
   shapes. Series drawn in **one ink** are told apart by their **line style**: the
   ink is read once, each line's pattern of dashes and gaps is measured and matched
   to the legend sample it looks like (solid, dashed, dash-dot, dotted, or any other
-  pattern), and the pieces of each series are joined into one line. A short report
+  pattern), and the pieces of each series are joined into one line. Scatter series
+  in one ink are told apart by their **markers**: each marker goes to the entry
+  whose legend marker it looks like, markers drawn over each other are taken apart
+  into one point each, and an entry whose markers look nearly as much like another
+  entry's has one place to check saying how many (move any that are wrong with
+  **Move selected to**). A short report
   says what each series' read found, one line each; every problem (a line no
   sample matches, a piece that runs alongside its series' line, an entry whose
   style no line has, entries whose styles cannot be told apart) is listed once,
@@ -254,8 +260,9 @@ the graph type is greyed).
     set, and says so if the levels are uneven. Pressing Find lines again replaces
     the lines the last press found (a line you renamed is kept).
   - **Colour trace** - every pixel of the picked colour inside the data area, in
-    one pass; on XY and Contour it reads markers (one point per marker), where Find
-    lines reads the lines. On Polar, Ternary, Map and the circular chart recorder,
+    one pass; on XY and Contour it reads markers (one point per marker, and markers
+    drawn over each other taken apart into one point each), where Find lines reads
+    the lines. On Polar, Ternary, Map and the circular chart recorder,
     where Find lines does not run, its **Shape** choice reads a curve or scattered
     points. The series then **takes that colour**.
   - **Fill a region** - click one point on a solid curve; it spreads along the
@@ -272,9 +279,10 @@ beside a small crop of the figure where it was picked, with **Pick from image**.
 Every automatic tool shows you what it captured, and one Undo takes it back.
 
 **Bars are captured as a drag-box.** With **Place points** on a Bar chart you
-press at one corner of a bar and release at the opposite one: a bar's value is its
-*extent*, not a point on it, so those two corners **are** the measurement. Plain
-and grouped bars work this way, and a bar below the baseline reads negative. A bar that floats clear of the axis belongs on a **Span chart**
+press at one corner of a bar and release at the opposite one. A bar's value is one
+point, its end away from 0 on the value axis; the bar is drawn down to 0 only to be
+easier to read, and the two corners say which end that is. Plain and grouped bars
+work this way, and a bar below 0 reads negative. A bar that floats clear of the axis belongs on a **Span chart**
 instead: Bar means measured from a baseline, so a bar that never reaches one
 reports a note rather than a plain reading. A plain click places one corner and leaves the bar half-captured -
 its row shows a dash until you place the other.

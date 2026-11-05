@@ -52,9 +52,10 @@ describe('what the app hands the detector', () => {
 
   it('⚠️ and that is NOT its origin - the two were one number for a morning', () => {
     const s = floatingTemperature(SPAN_AXES_CONFIG);
-    // The category axis of this figure is at -15, which is the whole point: a
-    // join aimed there finds nothing to join.
-    expect(s.getAxes()!.getBaselineValue()).toBeCloseTo(-15, 1);
+    // The category axis of this figure is at -15: a join aimed there finds
+    // nothing to join. (The origin was that axis until 2026-11-05; it is 0
+    // wherever the value axis has a 0, see core/axes/bar.ts getBaselineValue.)
+    expect(s.getAxes()!.getBaselineValue()).toBe(0);
     // ⚑ And a span offers NO baseline at all now: that line answers the swatch
     // question - *"a bar is anchored at the baseline and a swatch floats"* - and
     // a span floats by definition, so there is nothing there to discriminate.

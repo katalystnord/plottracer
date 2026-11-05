@@ -295,3 +295,38 @@ describe('metadata is COPIED, not aliased', () => {
     expect(axes.getMetadata()).toEqual({ orientation: 'vertical' });
   });
 });
+
+/**
+ * A bar's datum is ONE point, its end away from 0 (David, 2026-11-05: "Just use the 0 value where there is a 0 value
+ * and that is it"; the bar is drawn down to 0 only to make it easier to read). The 0 on the value axis says which end
+ * of a drawn bar is the point; docs/v2.7-workflow-walk.md, "The category axis on two tick marks", the cases.
+ * P1 and P2 on the value axis at 40 px per unit when linear; Cat 1 clicked where the walk sends it, on the frame.
+ */
+function walked(v1: string, v2: string, catPy: number, isLog = false): BarAxes {
+  const cal = new Calibration(2);
+  cal.addPoint(100, 400, '0', v1);
+  cal.addPoint(100, 0, '0', v2);
+  cal.addPoint(150, catPy, '0', '0');
+  const axes = new BarAxes();
+  expect(axes.calibrate(cal, isLog, false)).toBe(true);
+  return axes;
+}
+
+describe('which end of a bar is its point: the end away from 0', () => {
+  it('given negative bars and Cat 1 on the frame below 0, the reference is 0, not the frame', () => {
+    expect(walked('-2', '8', 400).getBaselineValue()).toBe(0);
+  });
+  it('given bars hanging down from 0 at the top of the frame, the reference is 0', () => {
+    expect(walked('-10', '-2', 400).getBaselineValue()).toBe(0);
+  });
+  it('given an ordinary chart with Cat 1 clicked a pixel off the 0 line, the reference is still 0', () => {
+    expect(walked('0', '10', 399).getBaselineValue()).toBe(0);
+    expect(walked('0', '10', 401).getBaselineValue()).toBe(0);
+  });
+  it('given a linear axis with no 0 drawn on it (the frame at 50), the reference is the frame', () => {
+    expect(walked('50', '100', 400).getBaselineValue()).toBeCloseTo(50, 9);
+  });
+  it('given a log axis, which has no 0, the reference is the frame', () => {
+    expect(walked('10', '1000', 400, true).getBaselineValue()).toBeCloseTo(10, 9);
+  });
+});
