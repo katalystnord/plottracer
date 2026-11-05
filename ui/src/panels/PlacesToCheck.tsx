@@ -12,7 +12,7 @@ export interface LinePlace {
   id: number;
   /** legend: a series as a whole could not be read, placed at its legend entry; style: a line its line style could
    * not give to a series (v2.7, Auto-extract on one ink). */
-  kind: 'bridge' | 'split' | 'end' | 'unresolved' | 'overlap' | 'markers' | 'label' | 'errorbars' | 'legend' | 'style';
+  kind: 'bridge' | 'split' | 'end' | 'unresolved' | 'overlap' | 'markers' | 'label' | 'errorbars' | 'legend' | 'style' | 'shape';
   /** Image pixels. */
   at: [number, number];
   text: string;

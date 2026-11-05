@@ -141,3 +141,30 @@ describe('Read legend on a picture: a legend in one row', () => {
     expect(got.map((e) => e.name)).toEqual(['A', 'B']);
   });
 });
+
+// docs/v2.7-workflow-walk.md, "Series told apart by their markers": on a picture the drawing cannot say what a sample
+// is, so it is measured: a sample that runs across its strip is a line, one that stands alone in it a marker
+describe('Read legend on a picture: what each sample is', () => {
+  it('given marker samples (a filled circle, a filled square, an open triangle), each entry is a marker, its box round the marker', () => {
+    const t = JSON.parse(readFileSync('ui/__tests__/fixtures/autoExtract/markers-scatter.truth.json', 'utf8')) as { legend: number[]; entries: { name: string; text: number[] }[] };
+    const img = readPng('ui/__tests__/fixtures/autoExtract/markers-scatter.png');
+    const L = t.legend;
+    const words = t.entries.map((e) => ({ text: e.name, bbox: { x0: e.text[0]!, y0: e.text[1]!, x1: e.text[2]!, y1: e.text[3]! } }));
+    const got = readLegendFromPixels(words, img.data, img.width, img.height, { x0: L[0]! - 4, y0: L[1]! - 4, x1: L[2]! + 4, y1: L[3]! + 4 });
+    expect(got.map((e) => [e.name, e.sample])).toEqual([['Wild type', 'marker'], ['Mutant', 'marker'], ['Rescue', 'marker']]);
+    // the box is the marker's own, beside its name, not the whole strip
+    for (const e of got) expect(e.sampleBox!.x1 - e.sampleBox!.x0, e.name).toBeLessThan(16);
+  });
+
+  it('given line samples (solid, dashed, dash-dot, dotted), each entry is a line', () => {
+    const img = readPng('samples/xy-dashed-release.png');
+    const words = [
+      { text: 'Formulation A', bbox: { x0: 769.5, y0: 544, x1: 860.1, y1: 561 } },
+      { text: 'Formulation B', bbox: { x0: 769.0, y0: 566, x1: 858.3, y1: 580 } },
+      { text: 'Formulation C', bbox: { x0: 767.7, y0: 586, x1: 858.3, y1: 603 } },
+      { text: 'Formulation D', bbox: { x0: 767.7, y0: 607, x1: 858.3, y1: 624 } },
+    ];
+    const got = readLegendFromPixels(words, img.data, img.width, img.height, { x0: 716, y0: 538, x1: 872, y1: 634 });
+    expect(got.map((e) => e.sample)).toEqual(['line', 'line', 'line', 'line']);
+  });
+});

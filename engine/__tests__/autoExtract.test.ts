@@ -42,8 +42,23 @@ describe('Auto-extract all series: one step per series the legend names', () => 
     expect(plan[1]).toEqual({ entry: 1, name: 'series 2', readWith: 0 });
   });
 
-  it('two entries in one ink read as points: colour cannot tell them apart, so the second is not read', () => {
+  // docs/v2.7-workflow-walk.md, "Series told apart by their markers"
+  it('two entries in one ink read as points: the ink is read once, by the first, for both, to be told apart by marker', () => {
     const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('series 1', [0, 0, 0], 'marker'), entry('series 2', [10, 10, 10], 'marker')], one);
+    expect(plan[0]).toMatchObject({ entry: 0, name: 'series 1', tool: 'points', shares: [1] });
+    expect(plan[1]).toEqual({ entry: 1, name: 'series 2', readWith: 0 });
+  });
+
+  it('given marker entries in different inks, each is read on its own ink as before', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('series 1', BLUE, 'marker'), entry('series 2', RED, 'marker')], one);
+    expect(plan).toEqual([
+      { entry: 0, name: 'series 1', colour: BLUE, tool: 'points', into: 0 },
+      { entry: 1, name: 'series 2', colour: RED, tool: 'points', into: 'new' },
+    ]);
+  });
+
+  it('a line and a marker entry in one ink are read by different tools, so colour cannot tell them apart: the second is not read', () => {
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), [entry('series 1', [0, 0, 0], 'line'), entry('series 2', [10, 10, 10], 'marker')], one);
     expect(plan[1]).toEqual({
       entry: 1,
       name: 'series 2',

@@ -25,7 +25,7 @@ export type AutoExtractStep =
       tool: AutoExtractTool;
       /** The series it is read into: an existing one by its index (emptied first), or a new one. */
       into: number | 'new';
-      /** Other entries in the same ink, read by this step and told apart by their line style (v2.7). */
+      /** Other entries in the same ink, read by this step and told apart by their line style or marker (v2.7). */
       shares?: number[];
     }
   /** An entry read by another entry's step, which shares its ink (`shares`). */
@@ -72,10 +72,12 @@ export function planAutoExtract(
     // would come back twice. Which is which is the user's to say.
     const c = e.colour;
     const first = readBy.find((q) => Math.hypot(q.colour[0] - c[0], q.colour[1] - c[1], q.colour[2] - c[2]) < SAME_INK);
-    // ⚑ BUT LINES IN ONE INK ARE TOLD APART BY THEIR STYLE (v2.7; docs/v2.7-workflow-walk.md, "Series told apart by
-    // their line style"): the first entry's step reads the ink once, for all of them.
+    // ⚑ BUT LINES IN ONE INK ARE TOLD APART BY THEIR STYLE, AND MARKERS BY THEIR SHAPE (v2.7; docs/
+    // v2.7-workflow-walk.md, "Series told apart by their line style", "... by their markers"): the first entry's step
+    // reads the ink once, for all of them. A line and a marker in one ink are read by different tools, which would
+    // each read the other's ink too, so that stays as before.
     const tool = toolFor(tools, e.sample);
-    if (first && first.tool === 'lines' && tool === 'lines') return { entry: i, name, readWith: first.entry };
+    if (first && first.tool === tool && (tool === 'lines' || tool === 'points')) return { entry: i, name, readWith: first.entry };
     if (first) {
       return { entry: i, name, skip: `Same colour as ${first.name}, so colour cannot tell them apart: its data was all read into ${first.name}. Move each to its own series in the series list.` };
     }

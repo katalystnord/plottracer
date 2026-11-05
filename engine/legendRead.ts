@@ -135,9 +135,35 @@ export function readLegendFromPixels(words: readonly OcrWord[], rgba: Uint8Clamp
   for (const l of lines) {
     const { x0, x1, y0, y1 } = stripOf(l);
     const colour = sampleInk(rgba, width, height, { x0, y0, x1, y1 });
-    out.push({ name: l.text, colour, sample: null, textBox: l.box, sampleBox: { x0, y0, x1, y1 } });
+    const kind = colour ? sampleKind(rgba, width, { x0, y0, x1, y1 }, colour, l.box.y1 - l.box.y0) : null;
+    out.push({ name: l.text, colour, sample: kind?.sample ?? null, textBox: l.box, sampleBox: kind?.box ?? { x0, y0, x1, y1 } });
   }
   return out;
+}
+
+/**
+ * What a sample on a picture is, where the drawing cannot say (v2.7; docs/v2.7-workflow-walk.md, "Series told apart by
+ * their markers"): its ink (within 60 of the sample's colour) runs across the strip, at least 1.3 text heights, for a
+ * line (matplotlib draws a line's sample 2 em long), and stands within one text height each way for a marker, whose box
+ * is then the marker's own. Anything between is not said, and the type's first tool reads it, as before.
+ */
+function sampleKind(rgba: Uint8ClampedArray | Uint8Array, width: number, strip: Box, colour: RGB, textHeight: number): { sample: 'line' | 'marker'; box: Box } | null {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let y = strip.y0; y <= strip.y1; y++) {
+    for (let x = strip.x0; x <= strip.x1; x++) {
+      const i = (y * width + x) * 4;
+      if (Math.max(Math.abs(rgba[i]! - colour[0]), Math.abs(rgba[i + 1]! - colour[1]), Math.abs(rgba[i + 2]! - colour[2])) > 60) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < x0) return null;
+  const across = x1 - x0 + 1, tall = y1 - y0 + 1;
+  if (across >= 1.3 * textHeight) return { sample: 'line', box: strip };
+  if (across <= textHeight && tall <= textHeight) return { sample: 'marker', box: { x0: x0 - 1, y0: y0 - 1, x1: x1 + 1, y1: y1 + 1 } };
+  return null;
 }
 
 /**

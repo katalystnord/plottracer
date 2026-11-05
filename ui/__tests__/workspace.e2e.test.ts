@@ -13533,6 +13533,78 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await autoExtractDashCoded(t, [L[0]! - 4, L[1]! - 4, L[2]! + 4, L[3]! + 4]);
   }, 300000);
 
+  // docs/v2.7-workflow-walk.md, "Series told apart by their markers"
+  it('Auto-extract all series on the marker-coded scatter: three series in one ink are told apart by their markers, each read into its own name, on its own markers', async () => {
+    const dir = path.join(__dirname, 'fixtures', 'autoExtract');
+    const t = JSON.parse(fs.readFileSync(path.join(dir, 'markers-scatter.truth.json'), 'utf8')) as DashTruth & { legend: number[] };
+    try {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, path.join(dir, 'markers-scatter.png'));
+      await page.getByTestId('open-image-button').click();
+    } finally {
+      await app.evaluate(({ dialog }, p) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [p] });
+      }, SAMPLE_IMAGE);
+    }
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    const a = t.calibration.anchors;
+    await markDataAreaImage(a.x1.px, a.y2.py, a.x2.px, a.x1.py);
+    await clickImagePixel(a.x1.px, a.x1.py);
+    await confirmValue(String(a.x1.value));
+    await clickImagePixel(a.x2.px, a.x2.py);
+    await confirmValue(String(a.x2.value));
+    await confirmValue(String(a.y1.value));
+    await clickImagePixel(a.y2.px, a.y2.py);
+    await confirmValue(String(a.y2.value));
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-mark').click();
+    const L = t.legend;
+    const p0 = await imageToLocal(L[0]! - 4, L[1]! - 4);
+    const p1 = await imageToLocal(L[2]! + 4, L[3]! + 4);
+    await dragMarker(p0.lx, p0.ly, p1.lx, p1.ly);
+    await page.getByTestId('mode-data-extraction').click();
+    const names = t.series.map((s) => s.name);
+    const tableOf = () => page.getByTestId('points-table').evaluate((el) => ({
+      heads: [...el.querySelectorAll('thead tr:first-child th')].map((th) => (th as HTMLElement).innerText.trim()).filter((x) => x && x !== '#'),
+      rows: [...el.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('td')].slice(1).map((td) => (td as HTMLElement).innerText.trim())),
+    }));
+    let firstHeads: string[] = [];
+    // pressed twice: the second press replaces what the first read
+    for (const press of [1, 2]) {
+      await page.getByTestId('auto-extract-all').click();
+      if (press === 2) await page.getByTestId('auto-extract-said').waitFor({ state: 'detached', timeout: 10000 });
+      await expect.poll(() => page.getByTestId('auto-extract-all').isEnabled(), { timeout: 120000 }).toBe(true);
+      await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+      const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+      // one short line per series, and nothing about a colour that cannot tell them apart
+      for (const [i, name] of names.entries()) {
+        expect(said[i]?.startsWith(`${name}: `), JSON.stringify(said)).toBe(true);
+        expect(said[i]?.slice(name.length + 2), JSON.stringify(said)).toMatch(/^\d+ points$/);
+      }
+      expect(said.join(' ')).not.toMatch(/Same colour|cannot tell them apart/);
+      const heads = (await tableOf()).heads;
+      for (const name of names) expect(heads.filter((h) => h === name), `${name} in ${JSON.stringify(heads)}`).toHaveLength(1);
+      if (press === 1) firstHeads = heads;
+      else expect(heads, 'the second press leaves the same series').toEqual(firstHeads);
+    }
+    // every series on its own markers: the table's values against the figure's own truth (3 px is 0.045 h, 0.49 %)
+    const table = await tableOf();
+    for (const s of t.series) {
+      const k = table.heads.indexOf(s.name);
+      const pts = table.rows.map((r) => [Number(r[2 * k]), Number(r[2 * k + 1])]).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y)) as [number, number][];
+      const near = (p: [number, number], q: { x: number; y: number }) => Math.abs(p[0] - q.x) <= 0.06 && Math.abs(p[1] - q.y) <= 0.6;
+      const found = s.points.filter((q) => pts.some((p) => near(p, q))).length;
+      const on = pts.filter((p) => s.points.some((q) => near(p, q))).length;
+      expect(found / s.points.length, `${s.name}: ${found} of its ${s.points.length} markers read`).toBeGreaterThanOrEqual(0.9);
+      expect(on / pts.length, `${s.name}: ${on} of its ${pts.length} points on its own markers`).toBeGreaterThanOrEqual(0.9);
+    }
+  }, 300000);
+
   it('Find this line: a click on a curve adds that one line, a click off a line adds nothing, and the next click adds the next (role-play 2026-10-12)', async () => {
     const t = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'samples', 'xy-dashed-release.truth.json'), 'utf8')) as {
       calibration: { anchors: Record<'x1' | 'x2' | 'y1' | 'y2', { px: number; py: number; value: number }> };

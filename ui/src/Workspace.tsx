@@ -40,6 +40,7 @@ import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '.
 import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
 import { inkTest, paperColour, styleAlong, styleOfSample } from '../../algorithms/lineStyle.js';
 import { planStyleSeries } from '../../engine/styleSeries.js';
+import { readMarkerSeries } from '../../engine/markerSeries.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -7503,6 +7504,77 @@ export function Workspace() {
               if (pl.lineIds?.length && pl.lineIds.every((id) => leftIds.has(id))) return false;
               return ends.some((q) => Math.hypot(q.x - pl.at[0], q.y - pl.at[1]) < 12);
             }));
+          } else if (step.tool === 'points' && step.shares?.length) {
+            // ⚑⚑ ONE INK, TOLD APART BY MARKER (v2.7; docs/v2.7-workflow-walk.md, "Series told apart by their markers"):
+            // each marker goes to the entry whose legend marker it is most like, markers drawn over each other taken
+            // apart first; an entry with markers nearly as like another's is one place to check.
+            const group = [step.entry, ...step.shares];
+            const seen = readingImage();
+            const mp = seen ? readMarkerSeries({
+              data: seen.data,
+              legendData: img.data,
+              width: img.width,
+              height: img.height,
+              target: step.colour,
+              region: defaultTraceRegion() ?? undefined,
+              minDiameter: colorTraceMinBlob,
+              samples: group.map((e) => entries[e]!.sampleBox),
+            }) : null;
+            if (!mp) {
+              // the markers cannot be told apart: every marker of the ink is the first entry's, as before
+              colorTraceSaidRef.current = '';
+              colorTraceWith(hex, 'scatter');
+              const points = pointsIn([indexOf(intoDs)]);
+              if (points > 0) {
+                saidBy[step.entry] = autoExtractLine(step.name, { points });
+                readAny = true;
+              } else notRead(step.entry, `${step.name}: ${colorTraceSaidRef.current}`);
+              const measured = group.every((e) => entries[e]!.sampleBox);
+              for (const e of step.shares) {
+                notRead(e, !measured
+                  ? `${plan[e]!.name}: the same colour as ${step.name}, and the markers could not be measured in the legend, so they cannot be told apart: its data was all read into ${step.name}. Move each to its own series in the series list.`
+                  : `${plan[e]!.name}: the same colour and the same marker as ${step.name}, so neither can tell them apart: its data was all read into ${step.name}. Move each to its own series in the series list.`);
+              }
+              continue;
+            }
+            const nameOf = (gi: number) => plan[group[gi]!]!.name;
+            group.forEach((e, gi) => {
+              const name = nameOf(gi);
+              const pts = mp.perEntry[gi]!;
+              if (!pts.length) {
+                const same = mp.sameMarkerAs.find((x) => x.entry === gi);
+                notRead(e, same
+                  ? `${name}: the same colour and the same marker as ${nameOf(same.as)}, so the two cannot be told apart: what has that marker was read into ${nameOf(same.as)}. Move ${name}'s part to its own series in the series list.`
+                  : mp.unmeasured.includes(gi)
+                    ? `${name}: its marker could not be measured in the legend, so no markers were given to it: they are in the other series of this colour. Select them there and move them with Move selected to.`
+                    : `${name}: no marker of this colour is like its legend marker, so it was not read.`);
+                return;
+              }
+              // the first entry's series is the step's own; each other's is the series of its name, emptied, or a new one
+              let at = indexOf(intoDs);
+              if (gi > 0) {
+                const byName = s.getDatasetInfos().find((d) => d.index !== at && d.name.trim() === name);
+                at = byName ? byName.index : s.addDataset();
+                s.setActiveDataset(at);
+                if ((s.getDatasetInfos()[at]?.pointCount ?? 0) > 0) s.clearPoints();
+                at = s.getActiveDatasetIndex();
+                const refused = s.renameDataset(at, name);
+                if (refused) atEntry(e, `${name}: its markers were read, but ${refused} They are in ${s.getDatasetInfos()[at]!.name}.`);
+              } else s.setActiveDataset(at);
+              s.setDatasetColor(at, step.colour);
+              s.addSegmentFillPoints(pts);
+              saidBy[e] = autoExtractLine(name, { points: pts.length });
+              readAny = true;
+            });
+            for (const d of mp.doubtful) {
+              const name = nameOf(d.entry), like = nameOf(d.like);
+              extraPlaces.push({
+                id: 0,
+                kind: 'shape',
+                at: [d.at.x, d.at.y],
+                text: `${name}: ${d.count === 1 ? '1 of its markers is' : `${d.count} of its markers are`} nearly as like ${like}’s legend marker. Check ${d.count === 1 ? 'it' : 'them'}, and move any that are ${like}’s with Move selected to.`,
+              });
+            }
           } else {
             colorTraceSaidRef.current = '';
             colorTraceWith(hex, step.tool === 'points' ? 'scatter' : 'curve');
@@ -7533,7 +7605,7 @@ export function Workspace() {
     } finally {
       setAutoExtractBusy(false);
     }
-  }, [findLinesWith, colorTraceWith, commit, setLinePlaces]);
+  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob]);
 
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as

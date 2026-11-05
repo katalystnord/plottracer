@@ -10,6 +10,7 @@
 
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, markerCentres, type BlobDetectOptions } from '../algorithms/blobDetect.js';
+import { ONE_MARKER, splitBlob, templateOf, typicalMarker } from '../algorithms/markerFit.js';
 import type { Point2D } from '../algorithms/segmentFill.js';
 
 export interface BlobDetectSuccess {
@@ -59,8 +60,16 @@ export function runBlobDetect(
   // way the reader -- and the figure's own x-axis -- already does.
   // ⚑ v2.7: each point on the MARKER's own body, without an error bar or line of its colour that touches it
   // (algorithms/blobDetect.ts, markerCentres); a marker with nothing attached reads exactly as before.
+  // ⚑ v2.7: markers drawn over each other are taken apart, each its own point (docs/v2.7-workflow-walk.md, "Markers
+  // that run together"; David, 2026-11-05). With no legend the template is the plot's own commonest marker, and a blob
+  // is taken apart only when its markers explain nearly all of its ink; anything else reads as before.
+  const typical = typicalMarker(blobs);
+  const template = typical ? templateOf([...typical.members!], width) : null;
   const points = blobs
-    .flatMap((b) => markerCentres(b, width, { minDiameter: opts?.minDiameter ?? 0 }))
+    .flatMap((b) => {
+      const split = template && typical && b.area > ONE_MARKER * typical.area ? splitBlob([...b.members!], width, [template]) : null;
+      return split ? split.map((q) => ({ x: q.x, y: q.y })) : markerCentres(b, width, { minDiameter: opts?.minDiameter ?? 0 });
+    })
     .sort((a, b) => a.x - b.x || a.y - b.y);
   return { points, matched: count, blobs: points.length };
 }

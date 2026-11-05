@@ -77,4 +77,34 @@ describe('runBlobDetect', () => {
     if ('error' in result) throw new Error(result.error);
     expect(result.points.map((p) => Math.round(p.x))).toEqual([6, 19, 31]);
   });
+  // docs/v2.7-workflow-walk.md, "Series told apart by their markers" (David, 2026-11-05: the splitting goes into
+  // Colour trace's scattered points too)
+  describe('markers drawn over each other', () => {
+    const disc = (data: Uint8ClampedArray, width: number, cx: number, cy: number, r: number) => {
+      for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++)
+        for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) if (Math.hypot(x - cx, y - cy) <= r) fillBlock(data, width, x, y, 1, 1, RED);
+    };
+    const lone: [number, number][] = [[15, 15], [45, 15], [75, 15], [105, 15], [135, 15], [15, 60], [45, 60]];
+    const merged: [number, number][] = [[80, 60], [86, 61], [120, 60], [125, 66], [131, 59], [30, 100], [36, 100]];
+
+    it('given markers of one kind drawn over each other, each is its own point', () => {
+      const w = 160, h = 120;
+      const img = whiteImage(w, h);
+      for (const [x, y] of [...lone, ...merged]) disc(img, w, x, y, 4);
+      const result = runBlobDetect(img, w, h, RED, 40, 'foreground', undefined, { minDiameter: 3 });
+      if ('error' in result) throw new Error(result.error);
+      expect(result.points).toHaveLength(lone.length + merged.length);
+      for (const [x, y] of merged) expect(result.points.some((p) => Math.hypot(p.x - x - 0.5, p.y - y - 0.5) <= 1.5), `${x},${y}`).toBe(true);
+    });
+
+    it('given a line of the markers\' colour, it is not taken apart into markers', () => {
+      const w = 160, h = 120;
+      const img = whiteImage(w, h);
+      for (const [x, y] of lone) disc(img, w, x, y, 4);
+      fillBlock(img, w, 20, 100, 120, 2, RED);
+      const result = runBlobDetect(img, w, h, RED, 40, 'foreground', undefined, { minDiameter: 3 });
+      if ('error' in result) throw new Error(result.error);
+      expect(result.points).toHaveLength(lone.length + 1);
+    });
+  });
 });
