@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { datasetNameError, uniqueDatasetName, dedupeDatasetNames } from '../seriesNames.js';
 import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
+import { getErrorRelation, setErrorRelation } from '../errorRelation.js';
 
 describe('seriesNames - the rules', () => {
   it('accepts a name nothing else holds', () => {
@@ -150,4 +151,20 @@ describe('a series given its name back', () => {
     s.removeDataset(0);
     expect(s.getDatasetInfos().map((d) => d.name)).toEqual(['Series 1', 'Formulation A']);
   });
+
+  // the code review of 666ea46..7d5c927 (2026-11-05): an entry's name is set aside before Auto-extract knows which line
+  // is the entry's; the error bars bound to the name are the entry's, so they follow the name to its line
+  it('given error bars bound to "Control", setting the name aside leaves them bound to "Control", and they follow it to the series that takes it', () => {
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    s.addDataset();
+    s.addDataset();
+    expect(s.renameDataset(0, 'Control')).toBeNull();
+    setErrorRelation(s.getDatasets()[2]!, { role: 'upper', of: 'Control' });
+    s.giveBackName(0, { relationsStay: true });
+    expect(getErrorRelation(s.getDatasets()[2]!)?.of).toBe('Control');
+    expect(s.renameDataset(1, 'Control')).toBeNull();
+    expect(getErrorRelation(s.getDatasets()[2]!)?.of).toBe('Control');
+    expect(s.getDatasetInfos()[1]!.name).toBe('Control');
+  });
 });
+

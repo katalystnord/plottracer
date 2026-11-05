@@ -20,7 +20,7 @@ import { inkClosesLoop } from '../../algorithms/findLines/closure.js';
 import { readLineKey, keyPosition, keyPositionOfColour, keyValueAt, keyResolution, lineInkColour } from '../../algorithms/findLines/lineKey.js';
 import { thinFoundLine } from '../../engine/lineEdits.js';
 import type { LabelRead } from '../../engine/contourLabel.js';
-import { PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
+import { appendPlaces, PlacesToCheck, type LinePlace } from './panels/PlacesToCheck.js';
 import { StatusRing } from './panels/StatusRing.js';
 import { work } from './work.js';
 import type { NotDataRegion } from '../../core/plotData.js';
@@ -40,7 +40,7 @@ import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '.
 import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
 import { inkTest, paperColour, styleAlong, styleOfSample } from '../../algorithms/lineStyle.js';
 import { planStyleSeries } from '../../engine/styleSeries.js';
-import { readMarkerSeries } from '../../engine/markerSeries.js';
+import { fileMarkerSeries, onDrawnMarkers, readMarkerSeries } from '../../engine/markerSeries.js';
 import { axisRunsAlong } from '../../engine/ocrRegion.js';
 import { categoryTickDetectionMessage } from '../../engine/categoryTickOverlay.js';
 import type { AxesOption } from '../../engine/axesTypeConfigs.js';
@@ -271,7 +271,7 @@ import {
   reindexCellReadings,
 } from '../../engine/heatmapRun.js';
 import { HeatmapCard } from './panels/HeatmapCard.js';
-import { colorFilter, maskToRGBA, type FilterRegion } from '../../algorithms/colorFilter.js';
+import { colorFilter, maskToRGBA, type FilterRegion, type RGB } from '../../algorithms/colorFilter.js';
 import {
   runCurveFit,
   getCurveFitState,
@@ -6735,6 +6735,23 @@ export function Workspace() {
   /** What the last By colour trace said, for a caller that runs it (the Series
    * extraction card) to show beside the series it filled. */
   const colorTraceSaidRef = useRef<string>('');
+  /** On a drawn figure, the drawing's markers of a colour in the data area (or the figure), each at its centre, the
+   * masked areas left out, and how many error bars of that colour it draws; null on a picture. One read for Colour
+   * trace and for Auto-extract's markers in one ink. */
+  const drawnMarkers = useCallback((target: RGB, width: number, height: number): { markers: [number, number][]; errorBars: number } | null => {
+    const k = figureKindRef.current;
+    const read = pageDrawingReadRef.current;
+    if (!k || (k.kind !== 'drawn' && k.kind !== 'partly') || !read) return null;
+    const placed = placeDrawing(provenanceRef.current, read.drawing, read.text);
+    if (!placed) return null;
+    const r = defaultTraceRegion();
+    const region = r ? { x0: r.x, y0: r.y, x1: r.x + r.width, y1: r.y + r.height } : { x0: 0, y0: 0, x1: width, y1: height };
+    const masks = session.getNotDataRegions().map((m) => ({ x0: m.x, y0: m.y, x1: m.x + m.width, y1: m.y + m.height }));
+    return {
+      markers: markersFromDrawing(placed, target, region, masks).map(([x, y]) => [x, y] as [number, number]),
+      errorBars: errorBarsInDrawing(placed, target, region, masks),
+    };
+  }, [session, defaultTraceRegion]);
   /** By colour, with the colour and the shape given (its own button passes the
    * card's; the Series extraction card passes each legend entry's). */
   const colorTraceWith = useCallback((colourHex: string, traceShape: typeof colorTraceShape) => {
@@ -6904,24 +6921,16 @@ export function Workspace() {
       // ⚑ v2.7 V15: on a drawn figure the markers are read from the DRAWING -
       // one point at each marker's centre - when it holds any of that colour
       // in the region (or the figure); otherwise from the pixels, as always.
-      const k = figureKindRef.current;
-      const read = pageDrawingReadRef.current;
-      if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
-        const placed = placeDrawing(provenanceRef.current, read.drawing, read.text);
-        const r = defaultTraceRegion();
-        const region = r ? { x0: r.x, y0: r.y, x1: r.x + r.width, y1: r.y + r.height } : { x0: 0, y0: 0, x1: width, y1: height };
-        const masks = session.getNotDataRegions().map((m) => ({ x0: m.x, y0: m.y, x1: m.x + m.width, y1: m.y + m.height }));
-        const markers = placed ? markersFromDrawing(placed, target, region, masks) : [];
-        if (markers.length) {
-          session.addSegmentFillPoints(markers.map(([x, y]) => ({ x, y })));
-          adoptTracedColour();
-          // E2: error bars are not read, never pass as data, and are always said
-          const bars = placed ? errorBarsInDrawing(placed, target, region, masks) : 0;
-          const barsSaid = bars ? ` ${bars} error bar${bars === 1 ? '' : 's'} in this colour ${bars === 1 ? 'is' : 'are'} not read: they are not data. To capture them, use Error bars (add to a traced series).` : '';
-          setColorTraceInfo(`Read from the figure’s drawing: placed ${markers.length} point${markers.length === 1 ? '' : 's'} (one per marker).${barsSaid}`);
-          commit();
-          return;
-        }
+      const drawn = drawnMarkers(target, width, height);
+      if (drawn?.markers.length) {
+        const { markers, errorBars: bars } = drawn;
+        session.addSegmentFillPoints(markers.map(([x, y]) => ({ x, y })));
+        adoptTracedColour();
+        // E2: error bars are not read, never pass as data, and are always said
+        const barsSaid = bars ? ` ${bars} error bar${bars === 1 ? '' : 's'} in this colour ${bars === 1 ? 'is' : 'are'} not read: they are not data. To capture them, use Error bars (add to a traced series).` : '';
+        setColorTraceInfo(`Read from the figure’s drawing: placed ${markers.length} point${markers.length === 1 ? '' : 's'} (one per marker).${barsSaid}`);
+        commit();
+        return;
       }
       const result = runBlobDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob });
       if ('error' in result) {
@@ -6943,7 +6952,7 @@ export function Workspace() {
     adoptTracedColour();
     setColorTraceInfo(curveTraceReport(result.points.length, result.matched, width, height));
     commit();
-  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, defaultTraceRegion, commit, setColorTraceInfoState, readingImage]);
+  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, defaultTraceRegion, commit, setColorTraceInfoState, readingImage, drawnMarkers]);
   // ⚑ Where Find lines reads the lines, Colour trace reads markers (David, 2026-11-02).
   const handleColorTrace = useCallback(
     () => colorTraceWith(colorTraceColor, findLinesKind(config.id) ? 'scatter' : colorTraceShape),
@@ -7271,11 +7280,7 @@ export function Workspace() {
       }
     });
     const gaps = res.lines.reduce((n, L) => n + L.gaps.length, 0);
-    // after the ids already used, not after the count: places may have been taken out of the list since
-    if (opts.addPlaces) setLinePlaces((prev) => {
-      const next = prev.reduce((m, pl) => Math.max(m, pl.id + 1), 0);
-      return [...prev, ...places.map((pl, k) => ({ ...pl, id: next + k }))];
-    });
+    if (opts.addPlaces) setLinePlaces((prev) => appendPlaces(prev, places));
     else setLinePlaces(places);
     setSelectedPointIndices([]); setLineSelection([]);
     const summary =
@@ -7356,7 +7361,6 @@ export function Workspace() {
       const indexOf = (ds: Dataset) => s.getDatasets().indexOf(ds);
       // the points now in a series and in the further lines of its colour
       const pointsIn = (indices: number[]) => indices.reduce((n, i) => n + (s.getDatasetInfos()[i]?.pointCount ?? 0), 0);
-      // a free "Series N" for a line given to no entry: the name every found line has until it is named
       holdCommitsRef.current = s;
       try {
         for (const [n, step] of plan.entries()) {
@@ -7414,10 +7418,9 @@ export function Workspace() {
             // ⚑⚑ ONE INK, TOLD APART BY LINE STYLE (v2.7; docs/v2.7-workflow-walk.md, "Series told apart by their
             // line style"): each line goes to the entry whose legend sample it matches, an entry's pieces are joined
             // into one line, and what cannot be said with confidence is a place to check.
-            const stylePlan = group.length > 1 ? (() => {
-              const paper = paperColour(img.data, img.width, img.height);
-              const ink = inkTest(img.data, img.width, img.height, step.colour, paper);
-              const entryStyles = group.map((e) => (entries[e]!.sampleBox ? styleOfSample(entries[e]!.sampleBox!, ink) : null));
+            const ink = group.length > 1 ? inkTest(img.data, img.width, img.height, step.colour, paperColour(img.data, img.width, img.height)) : null;
+            const entryStyles = ink ? group.map((e) => (entries[e]!.sampleBox ? styleOfSample(entries[e]!.sampleBox!, ink) : null)) : [];
+            const stylePlan = ink ? (() => {
               const styled = lineSets.map((ds) => {
                 const pts = (s.getLinePoints(indexOf(ds)) ?? []).map((p) => [p.x, p.y] as [number, number]);
                 const xs = pts.map((p) => p[0]);
@@ -7426,7 +7429,9 @@ export function Workspace() {
               const planned2 = planStyleSeries(styled, entryStyles);
               return planned2 ? { planned: planned2, styled, entryStyles } : null;
             })() : null;
-            const measuredStyles = group.length > 1 ? group.filter((e) => entries[e]!.sampleBox).length : 0;
+            // ⚑ the styles measured, not the sample boxes: a picture legend always has one (the code review of
+            // 666ea46..7d5c927)
+            const measuredStyles = entryStyles.filter((st) => st !== null).length;
             if (!stylePlan) {
               // one entry, or entries the style cannot tell apart: every line of the ink is the first entry's, as
               // before, and the others are said to be in it
@@ -7446,8 +7451,9 @@ export function Workspace() {
             }
             const { planned: sp, styled, entryStyles: styleOf } = stylePlan;
             // ⚑ the first line was named for the first entry before anyone knew whose it is: it gives that name back, or
-            // the entry whose line it is not could not take it (the code review, 2026-11-05)
-            s.giveBackName(indexOf(intoDs));
+            // the entry whose line it is not could not take it (the code review, 2026-11-05). The error bars bound to
+            // the name stay with it, for the entry's own line (the code review of 666ea46..7d5c927)
+            s.giveBackName(indexOf(intoDs), { relationsStay: true });
             const idOf = (ds: Dataset): number[] => {
               const id = s.foundLineId(indexOf(ds));
               return id === null ? [] : [id];
@@ -7509,6 +7515,7 @@ export function Workspace() {
             // each marker goes to the entry whose legend marker it is most like, markers drawn over each other taken
             // apart first; an entry with markers nearly as like another's is one place to check.
             const group = [step.entry, ...step.shares];
+            const groupNames = group.map((e) => plan[e]!.name);
             const seen = readingImage();
             const mp = seen ? readMarkerSeries({
               data: seen.data,
@@ -7520,8 +7527,10 @@ export function Workspace() {
               minDiameter: colorTraceMinBlob,
               samples: group.map((e) => entries[e]!.sampleBox),
             }) : null;
-            if (!mp) {
-              // the markers cannot be told apart: every marker of the ink is the first entry's, as before
+            if (!mp?.told) {
+              // the markers cannot be told apart: every marker of the ink is the first entry's, as before, and the
+              // others' series from a press before are emptied
+              fileMarkerSeries(s, { into: indexOf(intoDs), names: groupNames, colour: step.colour, perEntry: null });
               colorTraceSaidRef.current = '';
               colorTraceWith(hex, 'scatter');
               const points = pointsIn([indexOf(intoDs)]);
@@ -7529,45 +7538,38 @@ export function Workspace() {
                 saidBy[step.entry] = autoExtractLine(step.name, { points });
                 readAny = true;
               } else notRead(step.entry, `${step.name}: ${colorTraceSaidRef.current}`);
-              const measured = group.every((e) => entries[e]!.sampleBox);
-              for (const e of step.shares) {
-                notRead(e, !measured
-                  ? `${plan[e]!.name}: the same colour as ${step.name}, and the markers could not be measured in the legend, so they cannot be told apart: its data was all read into ${step.name}. Move each to its own series in the series list.`
-                  : `${plan[e]!.name}: the same colour and the same marker as ${step.name}, so neither can tell them apart: its data was all read into ${step.name}. Move each to its own series in the series list.`);
-              }
+              step.shares.forEach((e, k) => {
+                const name = plan[e]!.name;
+                // ⚑ said from what was measured: a picture legend always has a sample box, so that is no measure (the
+                // code review of 666ea46..7d5c927)
+                notRead(e, !mp || mp.unmeasured.length
+                  ? `${name}: the same colour as ${step.name}, and the markers could not be measured in the legend, so they cannot be told apart: its data was all read into ${step.name}. Move each to its own series in the series list.`
+                  : `${name}: the same colour and the same marker as ${groupNames[mp.sameMarkerAs.find((x) => x.entry === k + 1)?.as ?? 0]}, so neither can tell them apart: its data was all read into ${step.name}. Move each to its own series in the series list.`);
+              });
               continue;
             }
-            const nameOf = (gi: number) => plan[group[gi]!]!.name;
+            // on a figure drawn in a PDF, each point at its marker's centre in the drawing, as Colour trace reads it
+            const drawn = drawnMarkers(step.colour, img.width, img.height);
+            const perEntry = drawn?.markers.length ? onDrawnMarkers(mp.perEntry, drawn.markers) : mp.perEntry;
+            const filed = fileMarkerSeries(s, { into: indexOf(intoDs), names: groupNames, colour: step.colour, perEntry });
             group.forEach((e, gi) => {
-              const name = nameOf(gi);
-              const pts = mp.perEntry[gi]!;
-              if (!pts.length) {
+              const name = groupNames[gi]!;
+              const got = filed[gi]!;
+              if (!got.points) {
                 const same = mp.sameMarkerAs.find((x) => x.entry === gi);
                 notRead(e, same
-                  ? `${name}: the same colour and the same marker as ${nameOf(same.as)}, so the two cannot be told apart: what has that marker was read into ${nameOf(same.as)}. Move ${name}'s part to its own series in the series list.`
+                  ? `${name}: the same colour and the same marker as ${groupNames[same.as]}, so the two cannot be told apart: what has that marker was read into ${groupNames[same.as]}. Move ${name}'s part to its own series in the series list.`
                   : mp.unmeasured.includes(gi)
                     ? `${name}: its marker could not be measured in the legend, so no markers were given to it: they are in the other series of this colour. Select them there and move them with Move selected to.`
                     : `${name}: no marker of this colour is like its legend marker, so it was not read.`);
                 return;
               }
-              // the first entry's series is the step's own; each other's is the series of its name, emptied, or a new one
-              let at = indexOf(intoDs);
-              if (gi > 0) {
-                const byName = s.getDatasetInfos().find((d) => d.index !== at && d.name.trim() === name);
-                at = byName ? byName.index : s.addDataset();
-                s.setActiveDataset(at);
-                if ((s.getDatasetInfos()[at]?.pointCount ?? 0) > 0) s.clearPoints();
-                at = s.getActiveDatasetIndex();
-                const refused = s.renameDataset(at, name);
-                if (refused) atEntry(e, `${name}: its markers were read, but ${refused} They are in ${s.getDatasetInfos()[at]!.name}.`);
-              } else s.setActiveDataset(at);
-              s.setDatasetColor(at, step.colour);
-              s.addSegmentFillPoints(pts);
-              saidBy[e] = autoExtractLine(name, { points: pts.length });
+              if (got.refused) atEntry(e, `${name}: its markers were read, but ${got.refused} They are in ${s.getDatasetInfos()[got.at]!.name}.`);
+              saidBy[e] = autoExtractLine(name, { points: got.points });
               readAny = true;
             });
             for (const d of mp.doubtful) {
-              const name = nameOf(d.entry), like = nameOf(d.like);
+              const name = groupNames[d.entry]!, like = groupNames[d.like]!;
               extraPlaces.push({
                 id: 0,
                 kind: 'shape',
@@ -7593,19 +7595,14 @@ export function Workspace() {
         return;
       }
       commit();
-      // ⚑ after the ids already used, not after the count: places have been taken out of the list (the code review,
-      // 2026-11-05: two places shared an id, and Done on one took both)
-      if (extraPlaces.length) setLinePlaces((prev) => {
-        const next = prev.reduce((m, pl) => Math.max(m, pl.id + 1), 0);
-        return [...prev, ...extraPlaces.map((pl, k) => ({ ...pl, id: next + k }))];
-      });
+      if (extraPlaces.length) setLinePlaces((prev) => appendPlaces(prev, extraPlaces));
       const said = saidBy.filter((t): t is string => t !== undefined);
       setAutoExtractReport({ on: s, lines: [...said, autoExtractFooter(anyPlaces || extraPlaces.length > 0)] });
       if (!readAny) setOcrError('No series could be read: none of the legend’s colours was found inside the data area.');
     } finally {
       setAutoExtractBusy(false);
     }
-  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob]);
+  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob, drawnMarkers]);
 
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as

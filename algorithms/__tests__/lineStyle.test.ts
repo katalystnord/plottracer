@@ -87,3 +87,21 @@ describe('pairing styles with entries, at the edges', () => {
     expect(assignStyles([broken(11, 40), dashdot, solid], [broken(11, 2), { ...dashdot, marks: 2 }, null])).toEqual([0, 1, null]);
   });
 });
+
+describe('what is the ink of a colour', () => {
+  // the code review, 2026-11-05: a pixel further from the paper than the ink, along the same line, passed, so black
+  // was read as the ink of a grey series and its markers given to the grey entries
+  it('given a grey ink, black is not that ink; the grey and its anti-aliased edge are', () => {
+    const px = (c: number[]) => new Uint8ClampedArray([...c, 255]);
+    const grey: [number, number, number] = [128, 128, 128];
+    const is = (c: number[]) => inkTest(px(c), 1, 1, grey, [255, 255, 255])(0, 0);
+    expect(is([128, 128, 128])).toBe(true);
+    expect(is([170, 170, 170])).toBe(true);
+    expect(is([110, 110, 110])).toBe(true);
+    expect(is([0, 0, 0])).toBe(false);
+  });
+  it('given a black ink, black is that ink', () => {
+    expect(inkTest(new Uint8ClampedArray([0, 0, 0, 255]), 1, 1, [0, 0, 0], [255, 255, 255])(0, 0)).toBe(true);
+    expect(inkTest(new Uint8ClampedArray([20, 20, 20, 255]), 1, 1, [40, 40, 40], [255, 255, 255])(0, 0)).toBe(true);
+  });
+});

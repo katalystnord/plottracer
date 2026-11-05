@@ -3239,14 +3239,16 @@ export class CalibrationSession<A extends CalibratedAxes> {
 
   /** Give the series at `index` a name PlotTracer chooses again ("Series N", kept up to date as the list
    * changes), as though no one had named it: Auto-extract names a found line for a legend entry before it knows
-   * whose the line is, and takes the name back when the line turns out to be another entry's or none's. */
-  giveBackName(index: number): void {
+   * whose the line is, and takes the name back when the line turns out to be another entry's or none's.
+   * `relationsStay`: the error bars bound to the name stay bound to it, for the series that takes the name next (the
+   * entry's own line), rather than following this series. */
+  giveBackName(index: number, { relationsStay = false }: { relationsStay?: boolean } = {}): void {
     const entry = this.datasetEntries[index];
     if (!entry) return;
     const oldName = entry.dataset.name;
     entry.dataset.name = freeSeriesNumberName(index + 1, this.otherDatasetNames(index));
     entry.dataset.setMetadata({ ...entry.dataset.getMetadata(), [TYPED_NAME_KEY]: false });
-    retargetErrorRelations(this.getDatasets(), oldName, entry.dataset.name);
+    if (!relationsStay) retargetErrorRelations(this.getDatasets(), oldName, entry.dataset.name);
     this.renumberGivenNames();
   }
 

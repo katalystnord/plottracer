@@ -27,6 +27,10 @@ export interface MarkerShape {
 
 const DIRS = 16;
 
+/** Closer than this, two markers are one marker, whatever their sizes (measured: the same marker within 0.88; different
+ * kinds at least 1.23 generated, 1.47 on real figures). */
+export const SAME_MARKER = 1.0;
+
 /** The shape of the marker whose pixels (indices into a `w`-wide image) are `pix`; null for fewer than 4. */
 export function markerShape(pix: readonly number[], w: number): MarkerShape | null {
   if (pix.length < 4) return null;

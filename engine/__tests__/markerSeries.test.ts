@@ -7,7 +7,8 @@ import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { readPng } from './helpers/readPng.js';
 import { withMasksBlanked } from '../imageEdit.js';
-import { readMarkerSeries, type MarkerSeriesPlan } from '../markerSeries.js';
+import { fileMarkerSeries, onDrawnMarkers, readMarkerSeries, type MarkerSeriesPlan } from '../markerSeries.js';
+import { CalibrationSession, XY_AXES_CONFIG } from '../calibrationSession.js';
 
 const DIR = 'algorithms/__tests__/fixtures/markers';
 type Box = { x0: number; y0: number; x1: number; y1: number };
@@ -16,7 +17,7 @@ const asBox = (b: readonly number[]): Box => ({ x0: b[0]!, y0: b[1]!, x1: b[2]!,
 
 /** The figure as Auto-extract reads it: the legend masked (as the Legend card's Mark legend masks it), the search in the
  * data area, each entry's sample where the legend says. */
-function read(name: string, samples: (fig: Fig) => (Box | null)[]): { fig: Fig; plan: MarkerSeriesPlan | null } {
+function read(name: string, samples: (fig: Fig) => (Box | null)[]): { fig: Fig; plan: MarkerSeriesPlan } {
   const fig = JSON.parse(fs.readFileSync(`${DIR}/${name}.json`, 'utf8')) as Fig;
   const img = readPng(`${DIR}/${name}.png`);
   const L = fig.legend;
@@ -122,8 +123,79 @@ describe('which markers make each entry series', () => {
     expect(agreement(fig.series[2]!, plan!.perEntry[2]!).found).toBeGreaterThanOrEqual(0.95);
   });
 
-  it('given entries whose markers cannot be told apart at all, there is no plan: the read goes as before', () => {
+  it('given entries whose markers cannot be told apart at all, nothing is told: the read goes as before, and it says they are the same marker', () => {
     const { plan } = read('scatter-mpl-filled3', (f) => [asBox(f.series[0]!.sample), asBox(f.series[0]!.sample)]);
-    expect(plan).toBeNull();
+    expect(plan.told).toBe(false);
+    expect(plan.sameMarkerAs).toEqual([{ entry: 1, as: 0 }]);
+    expect(plan.unmeasured).toEqual([]);
+  });
+
+  // the code review of 666ea46..7d5c927 (2026-11-05): a picture legend always has a sample box, so the wording that a
+  // marker could not be measured never showed, and the place said the two were the same marker
+  it('given two entries, one whose legend marker could not be measured, nothing is told, and it says that marker was not measured', () => {
+    const { plan } = read('scatter-mpl-filled3', (f) => [asBox(f.series[0]!.sample), { x0: 1, y0: 1, x1: 4, y1: 4 }]);
+    expect(plan.told).toBe(false);
+    expect(plan.unmeasured).toEqual([1]);
+    expect(plan.sameMarkerAs).toEqual([]);
+  });
+});
+
+describe('each entry\'s markers filed into its series', () => {
+  const p = (x: number, y: number) => ({ x: 100 + x, y: 100 + y });
+  /** A calibrated XY session (X 0-10 over 100-400 px, Y 0-10 over 250-100 px). */
+  function calibrated() {
+    const s = new CalibrationSession(XY_AXES_CONFIG);
+    for (const [px, py, value] of [[100, 250, '0'], [400, 250, '10'], [100, 250, '0'], [100, 100, '10']] as const) {
+      s.handleCalibrationClick(px, py);
+      s.confirmCalibrationValues([value]);
+    }
+    expect(s.runCalibration()).toBe(true);
+    return s;
+  }
+  /** A scatter read once: "A" and "B" in one ink, each with points, and an unrelated "C". */
+  function readOnce() {
+    const s = calibrated();
+    s.renameDataset(0, 'A');
+    s.addSegmentFillPoints([p(10, 10), p(20, 20)]);
+    s.setActiveDataset(s.addDataset());
+    s.renameDataset(1, 'B');
+    s.addSegmentFillPoints([p(30, 30)]);
+    s.setActiveDataset(s.addDataset());
+    s.renameDataset(2, 'C');
+    s.addSegmentFillPoints([p(50, 50)]);
+    return s;
+  }
+  const names = (s: CalibrationSession<never>) => s.getDatasetInfos().map((d) => `${d.name}:${d.pointCount}`);
+
+  it('given a second read that tells nothing apart, the other entry\'s series keeps none of its old points, and gives its name back', () => {
+    const s = readOnce() as unknown as CalibrationSession<never>;
+    s.setActiveDataset(0);
+    s.clearPoints();
+    fileMarkerSeries(s, { into: 0, names: ['A', 'B'], colour: [0, 0, 0], perEntry: null });
+    expect(names(s)).toEqual(['A:0', 'Series 2:0', 'C:1']);
+  });
+
+  it('given a second read where the first entry gets no markers, its series gives its name back; the other\'s is replaced', () => {
+    const s = readOnce() as unknown as CalibrationSession<never>;
+    s.setActiveDataset(0);
+    s.clearPoints();
+    const got = fileMarkerSeries(s, { into: 0, names: ['A', 'B'], colour: [0, 0, 0], perEntry: [[], [p(1, 1), p(2, 2)]] });
+    expect(names(s)).toEqual(['Series 1:0', 'B:2', 'C:1']);
+    expect(got.map((g) => g.points)).toEqual([0, 2]);
+  });
+
+  it('given a first read, an entry with no series of its name gets a new one', () => {
+    const s = calibrated() as unknown as CalibrationSession<never>;
+    s.renameDataset(0, 'A');
+    fileMarkerSeries(s, { into: 0, names: ['A', 'B'], colour: [0, 0, 0], perEntry: [[p(1, 1)], [p(2, 2)]] });
+    expect(names(s)).toEqual(['A:1', 'B:1']);
+  });
+});
+
+describe('a drawn figure\'s markers', () => {
+  // the code review of 666ea46..7d5c927 (2026-11-05): one ink shared, a drawn figure's points were the pixels' alone
+  it('given a figure drawn in a PDF, each point is at its marker\'s centre in the drawing, in the entry the pixels gave it', () => {
+    const got = onDrawnMarkers([[{ x: 10.4, y: 10.6 }], [{ x: 30.3, y: 29.8 }, { x: 33, y: 31 }]], [[10, 10], [30, 30], [33.5, 30.5]]);
+    expect(got).toEqual([[{ x: 10, y: 10 }], [{ x: 30, y: 30 }, { x: 33.5, y: 30.5 }]]);
   });
 });

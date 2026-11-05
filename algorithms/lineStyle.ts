@@ -43,7 +43,9 @@ export function inkTest(rgba: Uint8ClampedArray | Uint8Array, w: number, h: numb
     const i = (y * w + x) * 4;
     const v = [rgba[i]! - paper[0], rgba[i + 1]! - paper[1], rgba[i + 2]! - paper[2]];
     const a = (v[0]! * d[0] + v[1]! * d[1] + v[2]! * d[2]) / dd;
-    if (a < 0.35) return false;
+    // ⚑ and not much further from the paper than the ink: black lies on a grey's line, twice as far (the code review,
+    // 2026-11-05: black markers were given to grey entries)
+    if (a < 0.35 || a > 1.5) return false;
     const r = Math.hypot(v[0]! - a * d[0], v[1]! - a * d[1], v[2]! - a * d[2]);
     return r < 60;
   };

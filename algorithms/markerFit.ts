@@ -9,6 +9,8 @@
  */
 
 /** A marker's pixels, as offsets from its centre. */
+import { markerDistance, markerShape, SAME_MARKER } from './markerShape.js';
+
 export interface MarkerTemplate {
   offsets: [number, number][];
 }
@@ -104,6 +106,9 @@ export function fitMarkers(blob: readonly number[], w: number, templates: readon
   return out;
 }
 
+/** Markers drawn over each other span at most this many times one marker's box. */
+const MAX_MERGED_BOX = 40;
+
 /** The share of a blob's ink its fitted markers must explain for it to be taken apart. */
 const EXPLAINED = 0.9;
 
@@ -114,6 +119,31 @@ const EXPLAINED = 0.9;
  * scatters read 28 to 32 points per true point (docs/v2.7-workflow-walk.md, "Markers that run together").
  */
 export function splitBlob(blob: readonly number[], w: number, templates: readonly MarkerTemplate[], explainedShare = EXPLAINED): FittedMarker[] | null {
+  if (!templates.length || blob.length < 4) return null;
+  // ⚑ ink spread far wider than a few markers (the plot's frame, a filled area) is not tried: the fit's cost follows
+  // the blob's box, and 400 by 300 px of it took 566 ms to say no (the code review, 2026-11-05)
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const i of blob) {
+    const x = i % w, y = (i - x) / w;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const boxOf = (t: MarkerTemplate) => {
+    let r = 0;
+    for (const [dx, dy] of t.offsets) r = Math.max(r, Math.abs(dx), Math.abs(dy));
+    return (2 * r + 1) ** 2;
+  };
+  if ((maxX - minX + 1) * (maxY - minY + 1) > MAX_MERGED_BOX * Math.max(...templates.map(boxOf))) return null;
+  // ⚑ a blob shaped like one of the markers is that marker, drawn larger: the shape leaves size out. Fitted, a lone
+  // marker 1.2 times the template's radius came back as two, and 1.3 times as two and two of another entry's
+  const shape = markerShape(blob, w);
+  if (shape && templates.some((t) => {
+    const r = Math.sqrt(boxOf(t));
+    const ts = markerShape(t.offsets.map(([dx, dy]) => (dy + r) * (2 * r + 1) + dx + r), 2 * r + 1);
+    return ts !== null && markerDistance(shape, ts) < SAME_MARKER;
+  })) return null;
   const fit = fitMarkers(blob, w, templates);
   if (fit.length < 2) return null;
   const covered = new Set<number>();
@@ -133,17 +163,18 @@ export interface BlobPixels {
 }
 
 /** Whether a blob is shaped like one marker: at least 9 px, not a line (its box at most 2.2 times as long as wide),
- * and filling a good part of its box (not a stroke of text). */
-export function compactBlob(b: BlobPixels): boolean {
+ * and, unless `fill` is false, filling a good part of its box (not a stroke of text). An open marker fills less (a
+ * ring about 28%), so where the legend's marker keeps text out the fill is not asked. */
+export function compactBlob(b: BlobPixels, fill = true): boolean {
   const bw = b.bbox.maxX - b.bbox.minX, bh = b.bbox.maxY - b.bbox.minY;
-  return b.area >= 9 && Math.max(bw, bh) <= 2.2 * Math.min(bw, bh) && b.area >= 0.35 * bw * bh;
+  return b.area >= 9 && Math.max(bw, bh) <= 2.2 * Math.min(bw, bh) && (!fill || b.area >= 0.35 * bw * bh);
 }
 
-/** The marker the plot itself draws most, where there is no legend to say: of the compact blobs, the commonest area
- * (in steps of 15%), the smallest of those. Null with fewer than 3 compact blobs. */
-export function typicalMarker<B extends BlobPixels>(blobs: readonly B[]): B | null {
-  const compact = blobs.filter(compactBlob);
-  if (compact.length < 3) return null;
+/** The marker a plot draws most: of the blobs `keep` passes (by default the compact ones, where there is no legend to
+ * say), the commonest area (in steps of 15%), the smallest of those. Null with fewer than `least` of them. */
+export function typicalMarker<B extends BlobPixels>(blobs: readonly B[], keep: (b: B) => boolean = (b) => compactBlob(b), least = 3): B | null {
+  const compact = blobs.filter(keep);
+  if (compact.length < least || !compact.length) return null;
   const bin = (b: B) => Math.round(Math.log(b.area) / Math.log(1.15));
   const count = new Map<number, number>();
   for (const b of compact) count.set(bin(b), (count.get(bin(b)) ?? 0) + 1);

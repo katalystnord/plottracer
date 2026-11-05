@@ -23,6 +23,14 @@ export interface LinePlace {
   say?: (names: string) => string;
 }
 
+/** The list with `more` added after it, each given an id after the ids already used, not after the count: places are
+ * taken out of the list as they are done (the code review, 2026-11-05: two places shared an id, and Done on one took
+ * both). One rule for every reader that adds places. */
+export function appendPlaces(prev: readonly LinePlace[], more: readonly LinePlace[]): LinePlace[] {
+  const next = prev.reduce((m, pl) => Math.max(m, pl.id + 1), 0);
+  return [...prev, ...more.map((pl, k) => ({ ...pl, id: next + k }))];
+}
+
 export function PlacesToCheck(props: {
   places: readonly LinePlace[];
   onGo: (place: LinePlace) => void;

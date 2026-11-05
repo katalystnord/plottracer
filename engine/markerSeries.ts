@@ -12,13 +12,16 @@
 import type { RGB, FilterRegion } from '../algorithms/colorFilter.js';
 import { inkTest, paperColour } from '../algorithms/lineStyle.js';
 import { detectBlobs, markerCentres, type Blob } from '../algorithms/blobDetect.js';
-import { markerShape, markerDistance, type MarkerShape } from '../algorithms/markerShape.js';
-import { ONE_MARKER, splitBlob, templateOf, type MarkerTemplate } from '../algorithms/markerFit.js';
+import { markerShape, markerDistance, SAME_MARKER, type MarkerShape } from '../algorithms/markerShape.js';
+import { compactBlob, ONE_MARKER, splitBlob, templateOf, typicalMarker, type MarkerTemplate } from '../algorithms/markerFit.js';
 import type { Point2D } from '../algorithms/segmentFill.js';
 
 type Box = { x0: number; y0: number; x1: number; y1: number };
 
 export interface MarkerSeriesPlan {
+  /** False when fewer than two entries' legend markers can be told apart: then nothing is given to any entry (the read
+   * is by colour alone, as before), and `unmeasured` and `sameMarkerAs` say why. */
+  told: boolean;
   /** Per entry, its points (image px), in order along x. */
   perEntry: Point2D[][];
   /** Per entry with doubtful markers: how many, the entry they are most often nearly as like, and the most doubtful. */
@@ -48,9 +51,6 @@ export interface MarkerSeriesInput {
   samples: readonly (Box | null)[];
 }
 
-/** Closer than this, two legend markers are one marker drawn twice (measured: the same marker within 0.88; different
- * kinds at least 1.23 generated, 1.47 on real figures). */
-const SAME_MARKER = 1.0;
 /** A marker whose second nearest legend marker is less than twice as far as its nearest is doubtful (measured on 9
  * real figures: it marks all 54 given to the wrong entry, and 74 of the 219 given to the right one). */
 const DOUBT = 0.5;
@@ -94,8 +94,8 @@ function sampleMarker(mask: Uint8Array, w: number, h: number, box: Box): MarkerS
   return markerShape(best, w);
 }
 
-/** Null when fewer than two entries' legend markers can be told apart: then the read is as before, by colour alone. */
-export function readMarkerSeries(input: MarkerSeriesInput): MarkerSeriesPlan | null {
+/** Each entry's markers; `told` false when fewer than two entries' legend markers can be told apart. */
+export function readMarkerSeries(input: MarkerSeriesInput): MarkerSeriesPlan {
   const { width: w, height: h, target } = input;
   const paper = paperColour(input.legendData, w, h);
   const maskOf = (data: Uint8ClampedArray | Uint8Array, r: { x0: number; y0: number; x1: number; y1: number }): Uint8Array => {
@@ -115,7 +115,9 @@ export function readMarkerSeries(input: MarkerSeriesInput): MarkerSeriesPlan | n
     sameMarkerAs.push({ entry: e, as });
     return null;
   });
-  if (distinct.filter((s) => s !== null).length < 2) return null;
+  if (distinct.filter((s) => s !== null).length < 2) {
+    return { told: false, perEntry: input.samples.map(() => []), doubtful: [], empty: [], unmeasured, sameMarkerAs };
+  }
 
   const R = input.region;
   const mask = maskOf(input.data, R ? { x0: Math.ceil(R.x), y0: Math.ceil(R.y), x1: Math.floor(R.x + R.width), y1: Math.floor(R.y + R.height) } : { x0: 0, y0: 0, x1: w - 1, y1: h - 1 });
@@ -130,23 +132,12 @@ export function readMarkerSeries(input: MarkerSeriesInput): MarkerSeriesPlan | n
   };
   const near = blobs.map((b) => nearest(markerShape([...b.members!], w)));
   // each entry's template: its own commonest marker in the plot, of the blobs surely like its legend marker and shaped
-  // like one marker. ⚑ Not `compactBlob`, which Colour trace uses with no legend to keep a stroke of text out: an open
-  // marker fills less of its box than it asks (a ring about 28%), and the legend's marker keeps the text out here.
-  const oneMarker = (b: Blob, i: number) => {
-    const bw = b.bbox.maxX - b.bbox.minX, bh = b.bbox.maxY - b.bbox.minY;
-    return b.area >= 9 && Math.max(bw, bh) <= 2.2 * Math.min(bw, bh) && near[i]!.ratio <= DOUBT;
-  };
+  // like one marker (an open marker too: the legend's marker keeps text out, so the fill is not asked)
   const templates: (MarkerTemplate | null)[] = distinct.map(() => null);
   const templateArea: number[] = distinct.map(() => 0);
   distinct.forEach((_, e) => {
-    const mine = blobs.filter((b, i) => near[i]!.e === e && oneMarker(b, i));
-    if (!mine.length) return;
-    const bin = (b: Blob) => Math.round(Math.log(b.area) / Math.log(1.15));
-    const count = new Map<number, number>();
-    for (const b of mine) count.set(bin(b), (count.get(bin(b)) ?? 0) + 1);
-    let mk = 0, mn = -1;
-    for (const [k, n] of count) if (n > mn || (n === mn && k < mk)) { mn = n; mk = k; }
-    const t = mine.filter((b) => bin(b) === mk).sort((a, b) => a.area - b.area)[0]!;
+    const t = typicalMarker(blobs.filter((b, i) => near[i]!.e === e && near[i]!.ratio <= DOUBT), (b) => compactBlob(b, false), 1);
+    if (!t) return;
     templates[e] = templateOf([...t.members!], w);
     templateArea[e] = t.area;
   });
@@ -217,5 +208,80 @@ export function readMarkerSeries(input: MarkerSeriesInput): MarkerSeriesPlan | n
     doubtful.push({ entry: e, count: mine.length, like, at: most.at });
   }
   const empty = perEntry.map((p, e) => (p.length || sameMarkerAs.some((x) => x.entry === e) ? -1 : e)).filter((e) => e >= 0);
-  return { perEntry, doubtful, empty, unmeasured, sameMarkerAs };
+  return { told: true, perEntry, doubtful, empty, unmeasured, sameMarkerAs };
 }
+
+/**
+ * On a figure drawn in a PDF, each point at its marker's centre in the drawing (as Colour trace reads one ink alone),
+ * the entry still the one the pixels said: each drawn marker goes to the entry of the nearest point read. The code
+ * review of 666ea46..7d5c927 (2026-11-05): one ink shared, the points were the pixels' alone.
+ */
+export function onDrawnMarkers(perEntry: readonly (readonly Point2D[])[], drawn: readonly (readonly [number, number])[]): Point2D[][] {
+  const read = perEntry.flatMap((pts, e) => pts.map((p) => ({ p, e })));
+  if (!read.length || !drawn.length) return perEntry.map((pts) => [...pts]);
+  const out: Point2D[][] = perEntry.map(() => []);
+  for (const [x, y] of drawn) {
+    let best = read[0]!, bd = Infinity;
+    for (const r of read) {
+      const d = Math.hypot(r.p.x - x, r.p.y - y);
+      if (d < bd) { bd = d; best = r; }
+    }
+    out[best.e]!.push({ x, y });
+  }
+  for (const pts of out) pts.sort((a, b) => a.x - b.x || a.y - b.y);
+  return out;
+}
+
+/** What `fileMarkerSeries` needs of the session. */
+export interface MarkerSeriesSession {
+  getDatasetInfos(): { index: number; name: string; pointCount: number }[];
+  getActiveDatasetIndex(): number;
+  setActiveDataset(index: number): void;
+  clearPoints(): void;
+  addDataset(): number;
+  renameDataset(index: number, name: string): string | null;
+  setDatasetColor(index: number, rgb: RGB): void;
+  addSegmentFillPoints(points: readonly Point2D[]): number;
+  giveBackName(index: number, opts?: { relationsStay?: boolean }): void;
+}
+
+/**
+ * Each entry's markers into its series: the first entry's into `into` (its step's own, already emptied and named), each
+ * other's into the series of its name, emptied, or a new one. Read again, an entry's series is replaced as a whole:
+ * one given nothing this time keeps no points from the time before, and gives its name back, as a line given to no
+ * entry does (the code review of 666ea46..7d5c927, 2026-11-05: on a second press the others' series kept their old
+ * points, and an entry given nothing kept an empty series of its name). `perEntry` null: the markers could not be
+ * told apart, so the others' series are emptied and the first entry's is left to read by colour.
+ * Returns, per entry, its points and a refusal of its name.
+ */
+export function fileMarkerSeries(
+  s: MarkerSeriesSession,
+  { into, names, colour, perEntry }: { into: number; names: readonly string[]; colour: RGB; perEntry: readonly (readonly Point2D[])[] | null }
+): { points: number; refused: string | null; at: number }[] {
+  const byName = (name: string) => s.getDatasetInfos().find((d) => d.index !== into && d.name.trim() === name)?.index ?? null;
+  const empty = (i: number) => {
+    s.setActiveDataset(i);
+    if ((s.getDatasetInfos()[i]?.pointCount ?? 0) > 0) s.clearPoints();
+  };
+  const own = names.map((name, gi) => (gi === 0 ? into : byName(name)));
+  for (const i of own.slice(1)) if (i !== null) empty(i);
+  const out = names.map((): { points: number; refused: string | null; at: number } => ({ points: 0, refused: null, at: -1 }));
+  names.forEach((name, gi) => {
+    const pts = perEntry?.[gi] ?? [];
+    let at: number | null = own[gi] ?? null;
+    if (!pts.length) {
+      // the first entry's series is read by colour when nothing could be told apart
+      if (at !== null && (gi > 0 || perEntry)) s.giveBackName(at, { relationsStay: true });
+      return;
+    }
+    if (at === null) at = s.addDataset();
+    s.setActiveDataset(at);
+    const refused = gi > 0 ? s.renameDataset(at, name) : null;
+    s.setDatasetColor(at, colour);
+    s.addSegmentFillPoints(pts);
+    out[gi] = { points: pts.length, refused, at };
+  });
+  s.setActiveDataset(into);
+  return out;
+}
+
