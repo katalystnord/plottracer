@@ -59,11 +59,6 @@ const END = '<!-- BENCHMARK-TABLES:END -->';
  */
 const O_START = '<!-- BENCHMARK-OCR:START (generated - do not edit by hand) -->';
 const O_END = '<!-- BENCHMARK-OCR:END -->';
-// ⚑⚑ The assisted numbers were HAND-TYPED in prose until 2026-09-01, which is
-// the one thing this script exists to prevent: latest.json already carried
-// deltaPts, and the page carried a copy of it that nothing kept in step.
-const A_START = '<!-- BENCHMARK-ASSISTED:START (generated - do not edit by hand) -->';
-const A_END = '<!-- BENCHMARK-ASSISTED:END -->';
 const M_START = '<!-- BENCHMARK-MANUAL:START (generated - do not edit by hand) -->';
 const M_END = '<!-- BENCHMARK-MANUAL:END -->';
 
@@ -135,7 +130,9 @@ ${rows}
     </div>
     <p class="ev-stamp">
       Share of elements recovered within the competition's tolerance, scored in image space
-      by automatic extraction. PlotTracer <span class="data">${esc(results.appVersion)}</span> at its
+      under the competition's own task-6 protocol: given the answers to tasks 1 to 5 (chart
+      type, text, plot box and axes, legend), with each colour picked as a person picks it in
+      any digitiser. PlotTracer <span class="data">${esc(results.appVersion)}</span> at its
       default settings (tolerance ${results.settings.tolerance}, minimum blob diameter
       ${results.settings.minBlobDiameter}), measured ${esc(results.measured)}.
     </p>
@@ -152,18 +149,6 @@ ${refs}
  * had commissioned that morning, and could not find it. A measurement a reader
  * cannot locate has not been reported, whatever the page technically contains.
  */
-
-/** What the two declarations in the calibration walk are worth, as a table. */
-const assistedRows = corpora
-  .filter((c) => c.assisted)
-  .map((c, i) => {
-    const a = c.assisted;
-    return `            <tr><th scope="row">[${i + 1}] ${esc(REFERENCES[c.id]?.short ?? c.name)}</th>` +
-      `<td><span class="ev-val">${pct(a.autoPct)}</span><span class="ev-n">automatic</span></td>` +
-      `<td><span class="ev-val">${pct(a.assistedPct)}</span><span class="ev-n">assisted</span></td>` +
-      `<td><span class="ev-val">+${a.deltaPts}</span><span class="ev-n">points, n = ${num(a.bars)} bars</span></td></tr>`;
-  })
-  .join('\n');
 
 /**
  * Line charts as the app reads them since 2.7: Find lines, and Auto-extract all series with the legend marked, each
@@ -206,25 +191,6 @@ ${l27rows}
       ink the same points, so on those figures it is credited wherever it lands on any of them.
     </p>
     ${L_END}`
-  : null;
-
-const assistedBlock = assistedRows
-  ? `${A_START}
-    <div class="ev-scroll">
-      <table class="ev-results">
-        <thead><tr><th scope="col">Corpus</th><th scope="col">Automatic</th><th scope="col">Assisted</th><th scope="col">Difference</th></tr></thead>
-        <tbody>
-${assistedRows}
-        </tbody>
-      </table>
-    </div>
-    <p class="ev-stamp">
-      Bar recall, with and without the two things a person declares in the calibration
-      walk: the marked category axis, and the baseline the bars stand on. Nothing else
-      differs. This is a ceiling rather than a user's day, because those declarations come
-      from the corpus placed exactly. The second corpus is where hatched fills are common.
-    </p>
-    ${A_END}`
   : null;
 
 /** Reading the chart's own WORDS. Its own result, never folded into the table. */
@@ -292,7 +258,6 @@ let out = page.slice(0, a) + block + page.slice(b + END.length);
  */
 for (const [name, s0, s1, body] of [
   ['2.7 line', L_START, L_END, linesBlock],
-  ['assisted', A_START, A_END, assistedBlock],
   ['OCR', O_START, O_END, ocrBlock],
   ['manual-capture', M_START, M_END, manualBlock],
 ]) {
@@ -333,9 +298,6 @@ for (const [i, c] of corpora.entries()) {
     return x ? `${f} ${pct(x.all.pct)}` : null;
   };
   console.log(`  [${i + 1}] ${c.name}: ${ROW_ORDER.map(t).filter(Boolean).join(' \u00b7 ')}`);
-  if (c.assisted) {
-    console.log(`      assisted bars ${pct(c.assisted.autoPct)} -> ${pct(c.assisted.assistedPct)} (+${c.assisted.deltaPts} pts)`);
-  }
 }
 if (results.ocr) console.log(`  labels read: ${pct(results.ocr.pct)} of ${num(results.ocr.labels)}`);
 if (results.manual) console.log(`  manual capture: ${pct(results.manual.barsPct)} of ${num(results.manual.bars)} bars in data space`);

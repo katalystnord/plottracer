@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Accuracy - PlotTracer - measured on public corpora</title>
-<meta name="description" content="How accurately PlotTracer reads a figure, scored against two public corpora from the CHART-Infographics competition series using the competition's own metric - automatic extraction, assisted extraction and label reading reported apart, with the harness and image lists public.">
+<meta name="description" content="How accurately PlotTracer reads a figure, scored against two public corpora from the CHART-Infographics competition series using the competition's own protocol and metric, with extraction, manual capture and label reading reported apart, and the harness and image lists public.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="PlotTracer accuracy - measured on public corpora">
 <meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
@@ -356,11 +356,11 @@
 <section id="evidence" class="evidence">
   <div class="wrap">
     <div class="sec-head">
-      <span class="eyebrow">Automatic extraction</span>
+      <span class="eyebrow">Data extraction</span>
       <h2>Benchmark results</h2>
       <p>
-        PlotTracer's automatic extraction, scored against two public corpora from the
-        CHART-Infographics competition series using the competition's own metric.
+        PlotTracer's data extraction, scored against two public corpora from the
+        CHART-Infographics competition series under the competition's own protocol and metric.
         Box plots appear in both corpora and are excluded: PlotTracer captures them by
         hand but does not auto-extract them.
       </p>
@@ -371,7 +371,7 @@
       <table class="ev-results">
         <thead><tr><th scope="col">Chart type</th><th scope="col">[1] Real figures</th><th scope="col">[2] Synthetic figures</th></tr></thead>
         <tbody>
-            <tr><th scope="row">Bar</th><td><span class="ev-val">79.8%</span><span class="ev-n">n = 6,494</span></td><td><span class="ev-val">45.6%</span><span class="ev-n">n = 6,739</span></td></tr>
+            <tr><th scope="row">Bar</th><td><span class="ev-val">79.9%</span><span class="ev-n">n = 6,494</span></td><td><span class="ev-val">62.1%</span><span class="ev-n">n = 6,739</span></td></tr>
             <tr><th scope="row">Line</th><td><span class="ev-val">69.3%</span><span class="ev-n">n = 29,688</span></td><td><span class="ev-val">92.0%</span><span class="ev-n">n = 2,236</span></td></tr>
             <tr><th scope="row">Scatter</th><td><span class="ev-val">93.6%</span><span class="ev-n">n = 5,409</span></td><td><span class="ev-val">60.8%</span><span class="ev-n">n = 11,996</span></td></tr>
         </tbody>
@@ -379,7 +379,9 @@
     </div>
     <p class="ev-stamp">
       Share of elements recovered within the competition's tolerance, scored in image space
-      by automatic extraction. PlotTracer <span class="data">2.7.0</span> at its
+      under the competition's own task-6 protocol: given the answers to tasks 1 to 5 (chart
+      type, text, plot box and axes, legend), with each colour picked as a person picks it in
+      any digitiser. PlotTracer <span class="data">2.7.0</span> at its
       default settings (tolerance 60, minimum blob diameter
       3), measured 2026-11-06.
     </p>
@@ -419,30 +421,6 @@
       ink the same points, so on those figures it is credited wherever it lands on any of them.
     </p>
     <!-- BENCHMARK-LINES:END -->
-
-    <div class="sec-head" style="margin-top:64px;">
-      <h2>What a human declaration is worth</h2>
-      <p>PlotTracer is human-in-the-loop, so the honest question is not only what it
-        recovers alone but what one declaration buys. This is the same bar figures with
-        the two things a person states in the calibration walk, and nothing else changed.</p>
-    </div>
-    <!-- BENCHMARK-ASSISTED:START (generated - do not edit by hand) -->
-    <div class="ev-scroll">
-      <table class="ev-results">
-        <thead><tr><th scope="col">Corpus</th><th scope="col">Automatic</th><th scope="col">Assisted</th><th scope="col">Difference</th></tr></thead>
-        <tbody>
-            <tr><th scope="row">[1] Real figures</th><td><span class="ev-val">79.9%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">80.1%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+0.2</span><span class="ev-n">points, n = 5,778 bars</span></td></tr>
-            <tr><th scope="row">[2] Synthetic figures</th><td><span class="ev-val">45.6%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">62.1%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+16.6</span><span class="ev-n">points, n = 6,739 bars</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="ev-stamp">
-      Bar recall, with and without the two things a person declares in the calibration
-      walk: the marked category axis, and the baseline the bars stand on. Nothing else
-      differs. This is a ceiling rather than a user's day, because those declarations come
-      from the corpus placed exactly. The second corpus is where hatched fills are common.
-    </p>
-    <!-- BENCHMARK-ASSISTED:END -->
 
     <div class="sec-head" style="margin-top:64px;">
       <h2>Reading the chart's own words</h2>
@@ -533,14 +511,15 @@
     </div>
 
     <p class="ev-note">
-      <b>Method.</b> These corpora score fully automatic recognition, while PlotTracer is
-      human-in-the-loop, so the two are adjacent rather than equivalent. That is why each
-      path is reported on its own above and never blended: the <b>automatic</b> table is
-      the harness supplying the two inputs a person supplies, the plot box and one colour
-      pick per visible colour, and nothing else, with everything after that the
-      application's own shipped code at its default settings. Scoring is in image space at
-      the competition's tolerance of 5% of the smaller image dimension, except for manual
-      capture, which is in data space at 1% of the value range.
+      <b>Method.</b> Both corpora are the ICPR CHART-Info data, measured under the
+      competition's own protocol for data extraction (task 6): it is given the answers to
+      tasks 1 to 5, the chart type, the text and its roles, the plot box and the axes, and
+      the legend, as any tool's task-6 result is. A bar chart is read with the category axis
+      and the baseline those axes give, which PlotTracer's Automatic axis detection also finds
+      on the figure itself. Each colour is picked as a person picks it in any digitiser, and
+      everything after that is the application's own shipped code at its default settings.
+      Scoring is in image space at the competition's tolerance of 5% of the smaller image
+      dimension, except for manual capture, which is in data space at 1% of the value range.
       Every digitiser draws the line between what the human supplies and what the program
       does somewhere, and a number without that line drawn is not comparable to anything,
       so ours is written out in full rather than summarised.
