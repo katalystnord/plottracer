@@ -2141,6 +2141,8 @@ export function Workspace() {
   // kept: the next press asks again. Read on the image as loaded: a masked area holds none of the traced colour, so a
   // box there is not placed (algorithms/detectedBars.ts, OWN_COLOUR).
   const barsDetectedRef = useRef(new WeakMap<ImageData, Promise<DetectedBarProposal[] | null>>());
+  /** Colour trace, to read again once the detector has answered (it is defined below). */
+  const colorTraceAgainRef = useRef<((hex: string, shape: 'curve' | 'scatter', detected: readonly DetectedBarProposal[]) => void) | null>(null);
   const barsOnFigure = useCallback(async (): Promise<DetectedBarProposal[] | undefined> => {
     const img = imageCanvasRef.current?.getImageData();
     if (!img) return undefined;
@@ -6902,9 +6904,19 @@ export function Workspace() {
           return;
         }
       }
-      // ⚑ v2.7: with the detector's bar boxes, fetched by the caller before this synchronous read ("Bars seen whole by
-      // the detector", David 2026-11-06): a bar the colour read returns in pieces (a hatched fill) is placed whole, and
-      // a bar it finds whole keeps its exact edges. Without them the bars are read as before.
+      // ⚑ v2.7: with the detector's bar boxes ("Bars seen whole by the detector", David 2026-11-06): a bar the colour
+      // read returns in pieces (a hatched fill) is placed whole, and a bar it finds whole keeps its exact edges. Asked
+      // here, after every refusal has been said at the press and a drawn figure has been read from its drawing, and
+      // once per figure; the read then runs again with them, on the figure and series it was pressed on (the first
+      // press loads the model and can take seconds). Auto-extract hands them in, so its read stays synchronous.
+      if (detected === undefined) {
+        const s0 = sessionRef.current, image0 = imageCanvasRef.current?.getImageData(), series0 = session.getActiveDatasetIndex();
+        void barsOnFigure().then((found) => {
+          if (sessionRef.current !== s0 || imageCanvasRef.current?.getImageData() !== image0 || s0.getActiveDatasetIndex() !== series0) return;
+          colorTraceAgainRef.current?.(colourHex, traceShape, found ?? []);
+        });
+        return;
+      }
       const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined, detected);
       if ('error' in result) {
         setColorTraceInfo(result.error);
@@ -6973,22 +6985,13 @@ export function Workspace() {
     adoptTracedColour();
     setColorTraceInfo(curveTraceReport(result.points.length, result.matched, width, height));
     commit();
-  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, defaultTraceRegion, commit, setColorTraceInfoState, readingImage, drawnMarkers]);
+  }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, defaultTraceRegion, commit, setColorTraceInfoState, readingImage, drawnMarkers, barsOnFigure]);
+  colorTraceAgainRef.current = colorTraceWith;
   // ⚑ Where Find lines reads the lines, Colour trace reads markers (David, 2026-11-02).
-  const handleColorTrace = useCallback(() => {
-    const shape = findLinesKind(config.id) ? 'scatter' : colorTraceShape;
-    if (config.autoExtractKind !== 'bounding-box') {
-      colorTraceWith(colorTraceColor, shape);
-      return;
-    }
-    // bars: the detector's boxes first (asked once per figure), then the same synchronous read. The read goes ahead
-    // only on the figure and series it was pressed on: the first press loads the model and can take seconds.
-    const s0 = sessionRef.current, image0 = imageCanvasRef.current?.getImageData(), series0 = s0.getActiveDatasetIndex();
-    void barsOnFigure().then((detected) => {
-      if (sessionRef.current !== s0 || imageCanvasRef.current?.getImageData() !== image0 || s0.getActiveDatasetIndex() !== series0) return;
-      colorTraceWith(colorTraceColor, shape, detected);
-    });
-  }, [colorTraceWith, colorTraceColor, colorTraceShape, config.id, config.autoExtractKind, barsOnFigure]);
+  const handleColorTrace = useCallback(
+    () => colorTraceWith(colorTraceColor, findLinesKind(config.id) ? 'scatter' : colorTraceShape),
+    [colorTraceWith, colorTraceColor, colorTraceShape, config.id]
+  );
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
   // open, filter the native-resolution pixels by the current colour + tolerance
@@ -7358,11 +7361,18 @@ export function Workspace() {
       let entries: LegendEntry[] = [];
       const k = figureKindRef.current;
       const read = pageDrawingReadRef.current;
+      // bars on a picture: the detector asked once, alongside the legend's read (a drawn figure's bars are read from its
+      // drawing, and the detector is not asked)
+      const drawnFigure = !!(k && (k.kind === 'drawn' || k.kind === 'partly') && read);
+      const barsPending = s.getConfig().autoExtractKind === 'bounding-box' && !drawnFigure ? barsOnFigure() : Promise.resolve(undefined);
       if (!b) {
         // no legend: one series per bar colour the detector's bars show (engine/autoExtract.ts, entriesFromBars)
-        const found = await barsOnFigure();
+        const found = await barsPending;
         if (sessionRef.current !== s) return;
-        entries = entriesFromBars(found ?? [], img.data, img.width, img.height, s.getDatasetInfos());
+        if (found === undefined) return say('The bar detector could not run on this figure, and no legend is marked - pick each bar colour with Colour trace, or mark the legend (Legend, 3).');
+        // on the figure as every reader sees it (masked areas blanked), and only the bars in the data area
+        const seen = readingImage() ?? img;
+        entries = entriesFromBars(found, seen.data, seen.width, seen.height, defaultTraceRegion());
         if (!entries.length) return say('No bars were found on this figure, and no legend is marked - pick each bar colour with Colour trace, or mark the legend (Legend, 3).');
       } else if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
         const prov = provenanceRef.current;
@@ -7377,10 +7387,11 @@ export function Workspace() {
         entries = readLegendFromPixels(words, img.data, img.width, img.height, b);
       }
       const plan = planAutoExtract(s.getConfig(), entries, s.getDatasetInfos());
-      // bars: the detector's boxes once for every entry, before the synchronous reads (v2.7)
-      const barsDetected = s.getConfig().autoExtractKind === 'bounding-box' ? await barsOnFigure() : undefined;
-      if (sessionRef.current !== s) return;
       if (!plan.length) return say('No series could be read from the legend - check the legend is marked round its entries, or use the tools below one series at a time.');
+      // bars: the detector's boxes once for every entry, before the synchronous reads (v2.7); a list always, empty
+      // where there are none, so Colour trace reads at once and does not ask again
+      const barsDetected = s.getConfig().autoExtractKind === 'bounding-box' ? ((await barsPending) ?? []) : undefined;
+      if (sessionRef.current !== s) return;
       // one short line per series, in the legend's order (David, 2026-11-02); every problem one entry in Places to
       // check, never written out on the card as well (David, 2026-11-04)
       const saidBy: (string | undefined)[] = entries.map(() => undefined);

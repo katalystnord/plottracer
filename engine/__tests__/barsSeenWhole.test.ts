@@ -145,4 +145,29 @@ describe('bars seen whole by the detector', () => {
     if ('error' in r) return;
     expect(r.boxes.map(boxOf)).toEqual([[20, 40, 60, 140]]);
   });
+
+  // the code review of 2026-11-06 (02248a6..d4deb83)
+  it('given the detector’s bars alone (every piece too small), a floating swatch is held back and an empty category named, as on every path', () => {
+    const img = white(W, H);
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE, 6); // category 0, standing on the baseline at y 140
+    hatchedBar(img, W, 150, 20, 14, 10, BLUE, 6); // a legend swatch, floating and narrow, in category 2
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, { minDiameter: 12 },
+      { dividers: [0, 70, 140, 200], categoryAxis: 'x', expected: 3 }, { atPixel: 140, tolerancePx: 2 }, undefined, [
+        proposal(20, 40, 60, 140),
+        proposal(150, 20, 164, 30),
+      ]);
+    if ('error' in r) throw new Error(r.error);
+    expect((r.swatchSuspects ?? []).map((k) => boxOf(r.boxes[k]!))).toEqual([[150, 20, 164, 30]]);
+    expect(r.expectation?.emptyBands).toContain(1);
+  });
+
+  it('given one bar cut by a value label into big pieces, one above the other, the detector’s box is placed whole', () => {
+    const img = white(W, H);
+    block(img, W, 30, 40, 40, 100, BLUE);
+    block(img, W, 30, 78, 40, 24, [255, 255, 255]); // a white label band across the bar: 38 / (24) / 38 px
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined,
+      { dividers: [0, 100, 200], categoryAxis: 'x' }, undefined, undefined, [proposal(30, 40, 70, 140)]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf)).toEqual([[30, 40, 70, 140]]);
+  });
 });

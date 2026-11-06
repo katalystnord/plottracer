@@ -12913,7 +12913,7 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 6 points (one per marker). 6 error bars in this colour are not read: they are not data. To capture them, use Error bars (add to a traced series).');
   }, 120000);
 
-  it('V18: on a drawn bar chart, By colour reads each bar from its drawn rectangle; a bar off the baseline is said by the bar table', async () => {
+  it('V18: on a drawn bar chart, By colour reads each bar from its drawn rectangle, without asking the detector; a bar off the baseline is said by the bar table', async () => {
     const t = vTruth('bars-floating') as unknown as { box: number[]; value: [number, number][]; category: { from: [number, number]; to: [number, number]; count: number }; series: { colour: number[]; heights: number[] }[] };
     try {
       await app.evaluate(({ dialog }, f) => {
@@ -12960,8 +12960,15 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const span = t.category.to[0] - t.category.from[0];
     const onBar = vImg([t.category.from[0] + span / 6, (t.value[0]![1] + (t.value[0]![1] + (t.value[1]![1] - t.value[0]![1]) * (t.series[0]!.heights[0]! / t.value[1]![0]))) / 2]);
     await clickImagePixel(onBar[0], onBar[1]);
-    await page.getByTestId('color-trace-run').click();
-    await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 3 bars (one per drawn rectangle).');
+    // ⚑ the detector is not asked on a drawn figure ("Bars seen whole by the detector"; the code review of
+    // 2026-11-06): held for a minute here, the drawing's bars still come at once
+    await slowChannel('figdet:detect', 60000);
+    try {
+      await page.getByTestId('color-trace-run').click();
+      await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 10000 }).toBe('Read from the figure’s drawing: placed 3 bars (one per drawn rectangle).');
+    } finally {
+      await slowChannel('figdet:detect', 0);
+    }
     // each bar's value is its far end from the common origin (the bar model's
     // rule): the floating bar, drawn 1.5 to 5.25, reads 5.25 and is said below
     const tops = [t.series[0]!.heights[0]!, 1.5 + t.series[0]!.heights[1]!, t.series[0]!.heights[2]!];
@@ -13180,6 +13187,20 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
 
   // ⚑ docs/v2.7-workflow-walk.md, "Bars seen whole by the detector": the code review of 2026-11-06 found Colour trace on
   // bars made to wait for the detector, so Auto-extract read every series empty and the bars landed in the last one
+  // ⚑ the code review of 2026-11-06: a refusal is said at the press, not after the detector has run (pattern 5)
+  it('Colour trace on a bar picture with a colour that is not one says so at the press, before the detector answers', async () => {
+    await openBarsPicture();
+    await slowChannel('figdet:detect', 60000);
+    try {
+      await pickTool('color-trace');
+      await page.getByTestId('color-trace-color').fill('zzz');
+      await page.getByTestId('color-trace-run').click();
+      await expect.poll(() => textOf('color-trace-info').catch(() => ''), { timeout: 3000 }).toMatch(/"zzz" is not a colour/);
+    } finally {
+      await slowChannel('figdet:detect', 0);
+    }
+  }, 120000);
+
   it('Auto-extract all series on a bar chart: each legend entry’s bars are read into its own series', async () => {
     const { legend } = await openBarsPicture();
     await page.getByTestId('mode-legend').click();

@@ -1,6 +1,7 @@
 import type { AxesTypeConfig, CalibratedAxes } from './axesTypeConfigs.js';
 import type { LegendEntry } from './legendRead.js';
 import { DETECTED_BAR_SCORE } from '../algorithms/detectedBars.js';
+import { paperColour } from '../algorithms/lineStyle.js';
 import { findLinesKind, autoExtractModesFor } from './toolMode.js';
 
 /**
@@ -56,17 +57,28 @@ const SAME_INK = 40;
 export function planAutoExtract(
   config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'id'>,
   entries: readonly LegendEntry[],
-  series: readonly { index: number; name: string; pointCount: number }[]
+  series: readonly { index: number; name: string; pointCount: number; color?: readonly number[] }[]
 ): AutoExtractStep[] {
   const tools = autoExtractTools(config);
   if (!tools.length) return [];
   const names = entries.map((e) => e.name.trim());
   const claimed = new Set<number>();
   const readBy: { colour: RGB; name: string; entry: number; tool: AutoExtractTool }[] = [];
-  let unnamed = 0;
+  // ⚑ an entry with no name (a bar colour where no legend is marked, or a legend text not read) is called after the
+  // series it goes into, else the next "Series N" no series and no entry already has (the code review of 2026-11-06:
+  // "Series ${count + 1}" could be a series already there, and its data was replaced)
+  const taken = new Set([...series.map((s) => s.name.trim()), ...names.filter(Boolean)]);
+  const nextFree = (): string => {
+    let k = 1;
+    while (taken.has(`Series ${k}`)) k++;
+    taken.add(`Series ${k}`);
+    return `Series ${k}`;
+  };
+  const sameInk = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!) < SAME_INK;
   const steps = entries.map((e, i): AutoExtractStep => {
-    const name = names[i] || `Series ${series.length + ++unnamed}`;
+    let name = names[i]!;
     if (!e.colour) {
+      if (!name) name = nextFree();
       return { entry: i, name, skip: `No colour was found beside “${name}” in the legend, so it was not read. Pick its colour from the figure with Find lines or Colour trace.` };
     }
     // ⚑ A COLOUR IS NEVER READ TWICE (8a864e3): two entries in one ink would each read both series, and the data
@@ -78,16 +90,21 @@ export function planAutoExtract(
     // reads the ink once, for all of them. A line and a marker in one ink are read by different tools, which would
     // each read the other's ink too, so that stays as before.
     const tool = toolFor(tools, e.sample);
-    if (first && first.tool === tool && (tool === 'lines' || tool === 'points')) return { entry: i, name, readWith: first.entry };
+    if (first && first.tool === tool && (tool === 'lines' || tool === 'points')) return { entry: i, name: name || nextFree(), readWith: first.entry };
     if (first) {
+      if (!name) name = nextFree();
       return { entry: i, name, skip: `Same colour as ${first.name}, so colour cannot tell them apart: its data was all read into ${first.name}. Move each to its own series in the series list.` };
     }
-    readBy.push({ colour: c, name, entry: i, tool });
-    // the series of that name (read again, it is replaced); else an empty series no entry names; else a new one
-    const byName = series.find((s) => !claimed.has(s.index) && s.name.trim() === name);
+    // the series of that name (read again, it is replaced); an entry with no name, the series of its colour (read
+    // again, it is replaced, never a second copy); else an empty series no entry names; else a new one
+    const byName = name ? series.find((s) => !claimed.has(s.index) && s.name.trim() === name) : undefined;
+    const byColour = !name ? series.find((s) => !claimed.has(s.index) && s.pointCount > 0 && s.color && sameInk(s.color, c)) : undefined;
     const empty = series.find((s) => !claimed.has(s.index) && s.pointCount === 0 && !names.includes(s.name.trim()));
-    const into = byName?.index ?? empty?.index ?? 'new';
+    const intoSeries = byName ?? byColour ?? empty;
+    const into = intoSeries?.index ?? 'new';
     if (into !== 'new') claimed.add(into);
+    if (!name) name = intoSeries ? intoSeries.name.trim() : nextFree();
+    readBy.push({ colour: c, name, entry: i, tool });
     return { entry: i, name, colour: c, tool, into };
   });
   // the step that reads an ink says which other entries it reads for
@@ -124,18 +141,23 @@ export function autoExtractFooter(anyPlaces: boolean): string {
 
 /**
  * A bar chart's series where no legend is marked (v2.7; docs/v2.7-workflow-walk.md, "Auto-extract on a bar chart with
- * no legend"): one entry per bar colour the detector's bars show, with no name, in the order the bars stand. They go to
- * `planAutoExtract` as a legend's entries do, so an unnamed entry takes the next empty series and is called after it.
- * The colour is measured inside each box: the commonest colour of its middle half (a hatch or an outline leaves the
- * fill the commonest), and a box whose middle is the paper's colour is no bar of a colour.
+ * no legend"): one entry per bar colour the detector's sure bars show, in the order the bars stand, each with no name.
+ * They go to `planAutoExtract` as a legend's entries do, which names each after the series it goes into (the series
+ * of its colour when read again, else an empty one), else the next free "Series N".
+ * Only the bars the bar read itself would take: sure (DETECTED_BAR_SCORE), and their centre in the data area. The
+ * colour is measured inside each box, on the image as the readers see it (masked areas blanked): the commonest colour
+ * of its middle half (a hatch or an outline leaves the fill the commonest); a box whose middle is the paper, or a
+ * masked area, is no bar of a colour.
  */
 export function entriesFromBars(
   bars: readonly { x0: number; y0: number; x1: number; y1: number; score?: number }[],
   data: Uint8ClampedArray | Uint8Array,
   width: number,
   height: number,
-  series: readonly { name: string; pointCount: number }[]
+  dataArea: { x: number; y: number; width: number; height: number } | null
 ): LegendEntry[] {
+  const paper = paperColour(data, width, height);
+  const near = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!) < SAME_INK;
   const fillOf = (b: { x0: number; y0: number; x1: number; y1: number }): [number, number, number] | null => {
     const w = b.x1 - b.x0, h = b.y1 - b.y0;
     const x0 = Math.max(0, Math.round(b.x0 + w / 4)), x1 = Math.min(width, Math.round(b.x1 - w / 4));
@@ -152,26 +174,20 @@ export function entriesFromBars(
     for (const [k, c] of count) if (c > n) { n = c; best = k; }
     if (best < 0) return null;
     const rgb: [number, number, number] = [((best >> 10) & 31) * 8 + 4, ((best >> 5) & 31) * 8 + 4, (best & 31) * 8 + 4];
-    return Math.min(...rgb) > 235 ? null : rgb;
+    // the paper is no bar's colour, and a masked area is blanked in the paper around it (engine/imageEdit.ts)
+    return near(rgb, paper) ? null : rgb;
+  };
+  const inArea = (b: { x0: number; y0: number; x1: number; y1: number }) => {
+    if (!dataArea) return true;
+    const cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    return cx >= dataArea.x && cx <= dataArea.x + dataArea.width && cy >= dataArea.y && cy <= dataArea.y + dataArea.height;
   };
   const colours: { colour: [number, number, number]; box: { x0: number; y0: number; x1: number; y1: number } }[] = [];
-  // only the boxes the bar read itself takes (algorithms/detectedBars.ts): the detector's unsure guesses lie over
-  // anything, and each would be a series of its own
-  const sure = bars.filter((b) => (b.score ?? 1) >= DETECTED_BAR_SCORE);
+  const sure = bars.filter((b) => (b.score ?? 1) >= DETECTED_BAR_SCORE && inArea(b));
   for (const b of [...sure].sort((p, q) => p.x0 - q.x0 || p.y0 - q.y0)) {
     const c = fillOf(b);
-    if (!c) continue;
-    if (colours.some((q) => Math.hypot(q.colour[0] - c[0], q.colour[1] - c[1], q.colour[2] - c[2]) < SAME_INK)) continue;
+    if (!c || colours.some((q) => near(q.colour, c))) continue;
     colours.push({ colour: c, box: b });
   }
-  // unnamed entries are called after the series they go into: the empty ones first, in order, then new ones
-  const empty = series.filter((s) => s.pointCount === 0).map((s) => s.name.trim());
-  let added = 0;
-  return colours.map(({ colour, box }, k) => ({
-    name: empty[k] ?? `Series ${series.length + ++added}`,
-    colour,
-    sample: 'swatch' as const,
-    textBox: box,
-    sampleBox: null,
-  }));
+  return colours.map(({ colour, box }) => ({ name: '', colour, sample: 'swatch' as const, textBox: box, sampleBox: null }));
 }

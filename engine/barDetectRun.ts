@@ -415,12 +415,37 @@ export function runBarDetect(
       const cx = (b.start.x + b.end.x) / 2, cy = (b.start.y + b.end.y) / 2;
       return cx >= region.x && cx <= region.x + region.width && cy >= region.y && cy <= region.y + region.height;
     };
-    return withDetectedBars(bs, detected, ownShare, inArea, (b) => b);
+    return withDetectedBars(bs, detected, ownShare, inArea, (b) => b, categories?.categoryAxis);
   };
   /** The detector's bars alone, where the colour read finds none (null: nothing to place, the refusal stands). */
+  /**
+   * What the boxes say against the declared categories and the baseline: the categories that came back empty, and the
+   * shapes that float off the baseline as a legend swatch does. One report for every path that places bars, the
+   * detector's alone included (the code review of 2026-11-06: that path filed a swatch as a bar and named no empty
+   * category).
+   */
+  const categoryReport = (bs: DetectedBarBox[]): Pick<BarDetectSuccess, 'expectation' | 'swatchSuspects'> => {
+    const axis = categories?.categoryAxis ?? 'x';
+    const dv = categories && categories.dividers.length >= 2 ? categories.dividers : null;
+    let expectation: BarDetectSuccess['expectation'];
+    if (dv && categories!.expected !== undefined) {
+      const bandOf = (b: DetectedBarBox): number => {
+        const lo = axis === 'x' ? b.start.x : b.start.y;
+        const hi = axis === 'x' ? b.end.x : b.end.y;
+        return bandIndexIn(dv, (lo + hi) / 2, 'clamp') ?? dv.length - 2;
+      };
+      const filled = new Set(bs.map(bandOf));
+      const emptyBands = Array.from({ length: dv.length - 1 }, (_, i) => i).filter((i) => !filled.has(i));
+      expectation = reconcileWithExpected({ pieces: bs, emptyBands }, categories!.expected);
+    }
+    return {
+      ...(expectation ? { expectation } : {}),
+      ...(baseline ? { swatchSuspects: swatchSuspectsIn(bs, axis, baseline) } : {}),
+    };
+  };
   const detectedAlone = (): BarDetectResult | null => {
     const only = withDetected([]);
-    return only.length ? { boxes: only, matched: count, blobs: 0 } : null;
+    return only.length ? { boxes: only, matched: count, blobs: 0, ...categoryReport(only) } : null;
   };
   // Membership is only worth its memory when a run might actually be cut.
   const touches = (b: { bbox: { minX: number; minY: number; maxX: number; maxY: number } }) =>
@@ -560,7 +585,7 @@ export function runBarDetect(
   // the mask by the MEDIAN of its own columns (see algorithms/barSplit.ts), so a
   // divider a few pixels into the taller neighbour cannot drag the shorter bar's
   // reading up. Nothing is invented for an empty band.
-  const { dividers, categoryAxis, expected } = categories;
+  const { dividers, categoryAxis } = categories;
   const along = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
     categoryAxis === 'x' ? { lo: b.minX, hi: b.maxX } : { lo: b.minY, hi: b.maxY };
   let boxes: DetectedBarBox[] = [];
@@ -639,23 +664,5 @@ export function runBarDetect(
   // as it is because the question it answers is a different one: where does a
   // shape the user has ACCEPTED belong.
   boxes = withDetected(boxes);
-  const bandOf = (b: DetectedBarBox): number => {
-    const lo = categoryAxis === 'x' ? b.start.x : b.start.y;
-    const hi = categoryAxis === 'x' ? b.end.x : b.end.y;
-    return bandIndexIn(dividers, (lo + hi) / 2, 'clamp') ?? dividers.length - 2;
-  };
-  const filled = new Set(boxes.map(bandOf));
-  const emptyBands = Array.from({ length: dividers.length - 1 }, (_, i) => i).filter(
-    (i) => !filled.has(i)
-  );
-  return {
-    boxes,
-    matched: count,
-    blobs: whole.length,
-    ...joinReport,
-    ...(expected !== undefined
-      ? { expectation: reconcileWithExpected({ pieces: boxes, emptyBands }, expected) }
-      : {}),
-    ...(baseline ? { swatchSuspects: swatchSuspectsIn(boxes, categoryAxis, baseline) } : {}),
-  };
+  return { boxes, matched: count, blobs: whole.length, ...joinReport, ...categoryReport(boxes) };
 }

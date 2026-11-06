@@ -36,8 +36,10 @@ export const SAME_BAR = 0.5;
 /** A colour piece lying this much inside a detector box is part of that bar. */
 export const PIECE_INSIDE = 0.7;
 /** A colour box covering this much of a detector box is a bar of its own, not a piece: a detector box holding two such
- * (one box over two neighbouring bars of the colour) replaces nothing and is not placed. Pieces between hatch lines
- * are smaller: a cross-hatched horizontal bar's strips are about a quarter of the bar each. */
+ * side by side along the category axis (one box over two neighbouring bars of the colour) replaces nothing and is not
+ * placed. Pieces between hatch lines are smaller (a cross-hatched horizontal bar's strips are about a quarter of the
+ * bar each), and two big pieces of one bar (cut by a value label or a gridline) lie one above the other, not side by
+ * side (the code review of 2026-11-06). */
 export const WHOLE_BAR = 0.35;
 /** The share of a detector box that must be the traced colour for the box to be filed under it: another series' bar
  * or a legend is not. A cross-hatched bar keeps about two thirds of its fill. */
@@ -66,8 +68,18 @@ export function withDetectedBars<B extends BarBox>(
   detected: readonly DetectedBarProposal[],
   ownShare: (b: BarBox) => number,
   inDataArea: (b: BarBox) => boolean,
-  make: (b: BarBox) => B
+  make: (b: BarBox) => B,
+  /** Which way the categories run, where declared: two whole pieces side by side along it are two bars. Unknown, any
+   * two whole pieces are taken as two bars. */
+  categoryAxis?: 'x' | 'y'
 ): B[] {
+  const sideBySide = (a: BarBox, b: BarBox): boolean => {
+    if (!categoryAxis) return true;
+    const lo = (q: BarBox) => (categoryAxis === 'x' ? q.start.x : q.start.y);
+    const hi = (q: BarBox) => (categoryAxis === 'x' ? q.end.x : q.end.y);
+    const shared = Math.min(hi(a), hi(b)) - Math.max(lo(a), lo(b));
+    return shared < 0.5 * Math.min(hi(a) - lo(a), hi(b) - lo(b));
+  };
   const replaced = new Set<number>();
   const added: B[] = [];
   const kept: BarBox[] = [];
@@ -83,8 +95,9 @@ export function withDetectedBars<B extends BarBox>(
     // a bar the colour read found whole keeps the colour's exact edges
     if (boxes.some((b) => iou(b, box) >= SAME_BAR)) continue;
     const inside = boxes.flatMap((b, k) => (area(b) > 0 && overlap(b, box) / area(b) >= PIECE_INSIDE ? [k] : []));
-    // one box over two whole bars of the colour is not one bar
-    if (inside.filter((k) => area(boxes[k]!) >= WHOLE_BAR * area(box)).length >= 2) continue;
+    // one box over two whole bars of the colour, side by side, is not one bar
+    const whole = inside.filter((k) => area(boxes[k]!) >= WHOLE_BAR * area(box)).map((k) => boxes[k]!);
+    if (whole.some((a, i) => whole.some((b, j) => j > i && sideBySide(a, b)))) continue;
     for (const k of inside) replaced.add(k);
     kept.push(box);
     added.push(make(box));
