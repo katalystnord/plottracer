@@ -119,6 +119,15 @@ describe.runIf(RUN)('the packaged app is complete', () => {
       await page.locator('[data-testid="confirm-data-value"]').click({ timeout: 8000, force: true });
       await page.waitForTimeout(160);
     };
+    // the data area first, as the calibration card asks (v2.7): a drag round the plot. Missing here since v2.7, so the
+    // value box never opened and this test timed out (found 2026-11-06, driving the package after the detector change)
+    {
+      await page.mouse.move(box.x + 77.53 * scale + ox, box.y + 39.33 * scale + oy);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 874.05 * scale + ox, box.y + 660.28 * scale + oy, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+    }
     await clickAt(77.53, 660.28);
     await confirm('0');
     await clickAt(77.53, 39.33);
@@ -221,6 +230,15 @@ describe.runIf(RUN)('the packaged app is complete', () => {
       await page.waitForTimeout(160);
     };
     const a = t.calibration.anchors;
+    // the data area first, as the calibration card asks (v2.7): a drag round the plot. Missing here since v2.7, so the
+    // value box never opened and this test timed out (found 2026-11-06, driving the package after the detector change)
+    {
+      await page.mouse.move(box.x + a.x1.px * scale + ox, box.y + a.y2.py * scale + oy);
+      await page.mouse.down();
+      await page.mouse.move(box.x + a.x2.px * scale + ox, box.y + a.x1.py * scale + oy, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+    }
     await clickAt(a.x1.px, a.x1.py);
     await confirm(String(a.x1.value));
     await clickAt(a.x2.px, a.x2.py);
