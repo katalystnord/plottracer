@@ -37,7 +37,7 @@ import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
 import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, detectBars, readPictureAxes, readRegionWords, suggestFigureType } from './ocrClient.js';
 import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
-import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
+import { planAutoExtract, entriesFromBars, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
 import { inkTest, paperColour, styleAlong, styleOfSample } from '../../algorithms/lineStyle.js';
 import { planStyleSeries } from '../../engine/styleSeries.js';
 import { fileMarkerSeries, onDrawnMarkers, readMarkerSeries } from '../../engine/markerSeries.js';
@@ -7346,8 +7346,11 @@ export function Workspace() {
     };
     if (!s.getAxes()) return say('Calibrate the axes first - Auto-extract gives the series their values from the calibration.');
     const legend = s.getLegendRegion();
-    if (!legend) return say('Mark the legend first (Legend, 3) - Auto-extract reads the series the legend names.');
-    const b = { x0: legend.x, y0: legend.y, x1: legend.x + legend.width, y1: legend.y + legend.height };
+    // ⚑ a bar chart with no legend (a single series has none) is read by its bar colours (v2.7, "Auto-extract on a bar
+    // chart with no legend"); a line or scatter chart still needs its legend
+    const barsAlone = !legend && s.getConfig().autoExtractKind === 'bounding-box';
+    if (!legend && !barsAlone) return say('Mark the legend first (Legend, 3) - Auto-extract reads the series the legend names.');
+    const b = legend ? { x0: legend.x, y0: legend.y, x1: legend.x + legend.width, y1: legend.y + legend.height } : null;
     setAutoExtractBusy(true);
     setAutoExtractReport(null);
     setOcrError(null);
@@ -7355,12 +7358,18 @@ export function Workspace() {
       let entries: LegendEntry[] = [];
       const k = figureKindRef.current;
       const read = pageDrawingReadRef.current;
-      if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
+      if (!b) {
+        // no legend: one series per bar colour the detector's bars show (engine/autoExtract.ts, entriesFromBars)
+        const found = await barsOnFigure();
+        if (sessionRef.current !== s) return;
+        entries = entriesFromBars(found ?? [], img.data, img.width, img.height, s.getDatasetInfos());
+        if (!entries.length) return say('No bars were found on this figure, and no legend is marked - pick each bar colour with Colour trace, or mark the legend (Legend, 3).');
+      } else if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
         const prov = provenanceRef.current;
         const placed = placeDrawing(prov, read.drawing, read.text);
         if (placed) entries = readLegendFromDrawing(placed, placeTextItems(prov, read.items), b);
       }
-      if (!entries.length) {
+      if (!entries.length && b && legend) {
         // the picture itself: the legend is masked for every reader, never for its own read
         const words = await readRegionWords(img.data, img.width, img.height, legend, { whitenColour: true });
         if (sessionRef.current !== s) return;

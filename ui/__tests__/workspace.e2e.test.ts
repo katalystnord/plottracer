@@ -13119,6 +13119,44 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     await expect.poll(() => textOf('extract-series-name-error').catch(() => ''), { timeout: 5000 }).toMatch(/Kept the previous name\.$/);
   }, 120000);
 
+  // ⚑ docs/v2.7-workflow-walk.md, "Auto-extract on a bar chart with no legend" (David, 2026-11-06): a single-series
+  // bar chart has no legend, and Auto-extract asked for one while Colour trace read all six bars
+  it('Auto-extract all series on a bar chart with no legend: its bars are read into Series 1', async () => {
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(__dirname, '../../samples/bar-tensile-strength.png'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('axes-type-trigger').click();
+    await page.getByTestId('axes-option-bar').click();
+    await page.getByTestId('capture-figure').click();
+    await page.waitForTimeout(150);
+    await markDataAreaImage(77.53, 39.33, 874.05, 660.28); // the plot box, which the card asks for first (v2.7)
+    await clickImagePixel(77.53, 660.28);
+    await confirmValue('0');
+    await clickImagePixel(77.53, 39.33);
+    await confirmValue('450');
+    await clickImagePixel(154.0, 660.28); // the first and last category's tick marks
+    await clickImagePixel(809.0, 660.28);
+    await confirmValue('6');
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('auto-extract-all').click();
+    await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+    const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+    // six bars, two corners a bar
+    expect(said[0], JSON.stringify(said)).toBe('Series 1: 12 points');
+    expect(await page.getByTestId('series-select').locator('option').allTextContents()).toEqual(['Series 1']);
+    expect(await page.getByTestId('tips-bar-warning').count()).toBe(0);
+  }, 240000);
+
   it('Auto-extract all series with no legend marked says so in the bottom bar, with the warning triangle', async () => {
     await openDrawnFigure('lines-legend-colour');
     await page.getByTestId('auto-extract-all').click();

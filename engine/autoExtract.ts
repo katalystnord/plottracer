@@ -1,5 +1,6 @@
 import type { AxesTypeConfig, CalibratedAxes } from './axesTypeConfigs.js';
 import type { LegendEntry } from './legendRead.js';
+import { DETECTED_BAR_SCORE } from '../algorithms/detectedBars.js';
 import { findLinesKind, autoExtractModesFor } from './toolMode.js';
 
 /**
@@ -119,4 +120,58 @@ export function autoExtractNotRead(name: string): string {
 /** Said once under every series' line: where the places to check are, when there are some, and the undo. */
 export function autoExtractFooter(anyPlaces: boolean): string {
   return `${anyPlaces ? 'Places to check are listed on the right. ' : ''}Undo takes the whole read back.`;
+}
+
+/**
+ * A bar chart's series where no legend is marked (v2.7; docs/v2.7-workflow-walk.md, "Auto-extract on a bar chart with
+ * no legend"): one entry per bar colour the detector's bars show, with no name, in the order the bars stand. They go to
+ * `planAutoExtract` as a legend's entries do, so an unnamed entry takes the next empty series and is called after it.
+ * The colour is measured inside each box: the commonest colour of its middle half (a hatch or an outline leaves the
+ * fill the commonest), and a box whose middle is the paper's colour is no bar of a colour.
+ */
+export function entriesFromBars(
+  bars: readonly { x0: number; y0: number; x1: number; y1: number; score?: number }[],
+  data: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number,
+  series: readonly { name: string; pointCount: number }[]
+): LegendEntry[] {
+  const fillOf = (b: { x0: number; y0: number; x1: number; y1: number }): [number, number, number] | null => {
+    const w = b.x1 - b.x0, h = b.y1 - b.y0;
+    const x0 = Math.max(0, Math.round(b.x0 + w / 4)), x1 = Math.min(width, Math.round(b.x1 - w / 4));
+    const y0 = Math.max(0, Math.round(b.y0 + h / 4)), y1 = Math.min(height, Math.round(b.y1 - h / 4));
+    const count = new Map<number, number>();
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = (y * width + x) * 4;
+        const key = ((data[i]! >> 3) << 10) | ((data[i + 1]! >> 3) << 5) | (data[i + 2]! >> 3);
+        count.set(key, (count.get(key) ?? 0) + 1);
+      }
+    }
+    let best = -1, n = 0;
+    for (const [k, c] of count) if (c > n) { n = c; best = k; }
+    if (best < 0) return null;
+    const rgb: [number, number, number] = [((best >> 10) & 31) * 8 + 4, ((best >> 5) & 31) * 8 + 4, (best & 31) * 8 + 4];
+    return Math.min(...rgb) > 235 ? null : rgb;
+  };
+  const colours: { colour: [number, number, number]; box: { x0: number; y0: number; x1: number; y1: number } }[] = [];
+  // only the boxes the bar read itself takes (algorithms/detectedBars.ts): the detector's unsure guesses lie over
+  // anything, and each would be a series of its own
+  const sure = bars.filter((b) => (b.score ?? 1) >= DETECTED_BAR_SCORE);
+  for (const b of [...sure].sort((p, q) => p.x0 - q.x0 || p.y0 - q.y0)) {
+    const c = fillOf(b);
+    if (!c) continue;
+    if (colours.some((q) => Math.hypot(q.colour[0] - c[0], q.colour[1] - c[1], q.colour[2] - c[2]) < SAME_INK)) continue;
+    colours.push({ colour: c, box: b });
+  }
+  // unnamed entries are called after the series they go into: the empty ones first, in order, then new ones
+  const empty = series.filter((s) => s.pointCount === 0).map((s) => s.name.trim());
+  let added = 0;
+  return colours.map(({ colour, box }, k) => ({
+    name: empty[k] ?? `Series ${series.length + ++added}`,
+    colour,
+    sample: 'swatch' as const,
+    textBox: box,
+    sampleBox: null,
+  }));
 }
