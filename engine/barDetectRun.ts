@@ -397,6 +397,31 @@ export function runBarDetect(
   // column within a few pixels of an edge that the ink covers along most of that edge is a LINE, not a bar - a bar
   // crosses the edge, it does not run along it - so it is taken out of the match. A bar standing on it loses that row.
   if (region) cutEdgeLines(mask, width, height, region);
+  // the detector's bars, put in at the end of either path below, or alone where the colour read finds no bar at all
+  // (a dense hatch whose pieces are all below the size kept): the share of a box that is this colour, measured on the
+  // same mask
+  const withDetected = (bs: DetectedBarBox[]): DetectedBarBox[] => {
+    if (!detected || detected.length === 0) return bs;
+    const ownShare = (b: DetectedBarBox) => {
+      const x0 = Math.max(0, Math.floor(b.start.x)), x1 = Math.min(width, Math.ceil(b.end.x));
+      const y0 = Math.max(0, Math.floor(b.start.y)), y1 = Math.min(height, Math.ceil(b.end.y));
+      let n = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) n += mask[y * width + x] ? 1 : 0;
+      return n / Math.max(1, (x1 - x0) * (y1 - y0));
+    };
+    // the colour read's own data-area rule (`centreInside` below): the box's centre inside
+    const inArea = (b: DetectedBarBox) => {
+      if (!region) return true;
+      const cx = (b.start.x + b.end.x) / 2, cy = (b.start.y + b.end.y) / 2;
+      return cx >= region.x && cx <= region.x + region.width && cy >= region.y && cy <= region.y + region.height;
+    };
+    return withDetectedBars(bs, detected, ownShare, inArea, (b) => b);
+  };
+  /** The detector's bars alone, where the colour read finds none (null: nothing to place, the refusal stands). */
+  const detectedAlone = (): BarDetectResult | null => {
+    const only = withDetected([]);
+    return only.length ? { boxes: only, matched: count, blobs: 0 } : null;
+  };
   // Membership is only worth its memory when a run might actually be cut.
   const touches = (b: { bbox: { minX: number; minY: number; maxX: number; maxY: number } }) =>
     !region || (b.bbox.maxX > region.x && b.bbox.minX < region.x + region.width && b.bbox.maxY > region.y && b.bbox.minY < region.y + region.height);
@@ -405,6 +430,8 @@ export function runBarDetect(
     ...(categories && categories.dividers.length >= 2 ? { trackMembership: true } : {}),
   }).filter(touches);
   if (blobs.length === 0) {
+    const rescued = detectedAlone();
+    if (rescued) return rescued;
     return { error: 'No bars of that size were found. Lower the minimum blob size, or adjust the colour / tolerance.' };
   }
   // ⚑⚑ BEFORE ANYTHING ELSE READS THEM. A bar severed by the baseline rule is
@@ -494,21 +521,9 @@ export function runBarDetect(
     return cx >= region.x && cx <= region.x + region.width && cy >= region.y && cy <= region.y + region.height;
   };
   const inside = joined.filter(centreInside);
-  // the detector's bars, put in at the end of either path below: the share of a box that is this colour, measured on
-  // the same mask, and the colour read's own data-area rule (its centre inside)
-  const withDetected = (bs: DetectedBarBox[]): DetectedBarBox[] => {
-    if (!detected || detected.length === 0) return bs;
-    const ownShare = (b: DetectedBarBox) => {
-      const x0 = Math.max(0, Math.floor(b.start.x)), x1 = Math.min(width, Math.ceil(b.end.x));
-      const y0 = Math.max(0, Math.floor(b.start.y)), y1 = Math.min(height, Math.ceil(b.end.y));
-      let n = 0;
-      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) n += mask[y * width + x] ? 1 : 0;
-      return n / Math.max(1, (x1 - x0) * (y1 - y0));
-    };
-    const inArea = (b: DetectedBarBox) => centreInside({ bbox: { minX: b.start.x, minY: b.start.y, maxX: b.end.x, maxY: b.end.y } });
-    return withDetectedBars(bs, detected, ownShare, inArea, (b) => b);
-  };
   if (inside.length === 0) {
+    const rescued = detectedAlone();
+    if (rescued) return rescued;
     return { error: 'No bars of that colour were found inside the data area. Check the colour, or move the data area’s corners on the calibration card.' };
   }
   const whole = inside.map((b) => ({

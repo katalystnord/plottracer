@@ -35,6 +35,10 @@ export const DETECTED_BAR_SCORE = 0.5;
 export const SAME_BAR = 0.5;
 /** A colour piece lying this much inside a detector box is part of that bar. */
 export const PIECE_INSIDE = 0.7;
+/** A colour box covering this much of a detector box is a bar of its own, not a piece: a detector box holding two such
+ * (one box over two neighbouring bars of the colour) replaces nothing and is not placed. Pieces between hatch lines
+ * are smaller: a cross-hatched horizontal bar's strips are about a quarter of the bar each. */
+export const WHOLE_BAR = 0.35;
 /** The share of a detector box that must be the traced colour for the box to be filed under it: another series' bar
  * or a legend is not. A cross-hatched bar keeps about two thirds of its fill. */
 export const OWN_COLOUR = 0.3;
@@ -66,18 +70,23 @@ export function withDetectedBars<B extends BarBox>(
 ): B[] {
   const replaced = new Set<number>();
   const added: B[] = [];
-  for (const d of detected) {
+  const kept: BarBox[] = [];
+  // the surest first, and a box the detector gave twice placed once (it keeps no other dedup of its own here)
+  for (const d of [...detected].sort((a, b) => b.score - a.score)) {
     if (d.score < DETECTED_BAR_SCORE) continue;
     const box: BarBox = {
       start: { x: Math.round(d.x0), y: Math.round(d.y0) },
       end: { x: Math.round(d.x1), y: Math.round(d.y1) },
     };
     if (area(box) <= 0 || !inDataArea(box) || ownShare(box) < OWN_COLOUR) continue;
+    if (kept.some((k) => iou(k, box) >= SAME_BAR)) continue;
     // a bar the colour read found whole keeps the colour's exact edges
     if (boxes.some((b) => iou(b, box) >= SAME_BAR)) continue;
-    boxes.forEach((b, k) => {
-      if (area(b) > 0 && overlap(b, box) / area(b) >= PIECE_INSIDE) replaced.add(k);
-    });
+    const inside = boxes.flatMap((b, k) => (area(b) > 0 && overlap(b, box) / area(b) >= PIECE_INSIDE ? [k] : []));
+    // one box over two whole bars of the colour is not one bar
+    if (inside.filter((k) => area(boxes[k]!) >= WHOLE_BAR * area(box)).length >= 2) continue;
+    for (const k of inside) replaced.add(k);
+    kept.push(box);
     added.push(make(box));
   }
   if (added.length === 0) return [...boxes];

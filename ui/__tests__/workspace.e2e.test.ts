@@ -13140,6 +13140,25 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await textOf('tips-bar')).toMatch(/Mark the data area/);
   }, 120000);
 
+  // ⚑ docs/v2.7-workflow-walk.md, "Bars seen whole by the detector": the code review of 2026-11-06 found Colour trace on
+  // bars made to wait for the detector, so Auto-extract read every series empty and the bars landed in the last one
+  it('Auto-extract all series on a bar chart: each legend entry’s bars are read into its own series', async () => {
+    const { legend } = await openBarsPicture();
+    await page.getByTestId('mode-legend').click();
+    await page.getByTestId('legend-mark').click();
+    const from = await imageToLocal(legend.x0 - 3, legend.y1 + 3);
+    const to = await imageToLocal(legend.x1 + 3, legend.y0 - 3);
+    await dragMarker(from.lx, from.ly, to.lx, to.ly);
+    await page.getByTestId('mode-data-extraction').click();
+    await page.getByTestId('auto-extract-all').click();
+    await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+    const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+    // five bars each, two corners a bar, each in the series of its legend entry (the series list names bar series
+    // without a count)
+    expect(said.slice(0, 2)).toEqual(['A: 10 points', 'B: 10 points']);
+    expect(await page.getByTestId('series-select').locator('option').allTextContents()).toEqual(['A', 'B']);
+  }, 240000);
+
   it('Auto-extract all series on a picture: detected axes, detected legend, and the four blends read by name', async () => {
     await resetWorkspace('xy');
     try {

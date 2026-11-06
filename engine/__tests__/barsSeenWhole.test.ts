@@ -111,4 +111,38 @@ describe('bars seen whole by the detector', () => {
     expect(none).toEqual(before);
     expect(absent).toEqual(before);
   });
+
+  // the code review of 2026-11-06
+  it('given the detector boxing one hatched bar twice, it is one bar', () => {
+    const img = white(W, H);
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE);
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(20, 40, 60, 140, 0.9),
+      proposal(21, 42, 61, 139, 0.8),
+    ]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf).filter((b) => b[0]! >= 15 && b[2]! <= 65)).toEqual([[20, 40, 60, 140]]);
+  });
+
+  it('given one detector box over two whole bars of the colour, both bars stay as the colour read found them', () => {
+    const img = white(W, H);
+    block(img, W, 30, 50, 30, 90, BLUE);
+    block(img, W, 62, 60, 30, 80, BLUE);
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(30, 50, 92, 140),
+    ]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf)).toEqual([[30, 50, 60, 140], [62, 60, 92, 140]]);
+  });
+
+  it('given a hatch so dense that every piece is below the size kept, the detector’s bars are placed, not refused', () => {
+    const img = white(W, H);
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE, 6); // 2 px lines every 6 px: 44% of the bar its own colour
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, { minDiameter: 12 }, undefined, undefined, undefined, [
+      proposal(20, 40, 60, 140),
+    ]);
+    expect('error' in r).toBe(false);
+    if ('error' in r) return;
+    expect(r.boxes.map(boxOf)).toEqual([[20, 40, 60, 140]]);
+  });
 });

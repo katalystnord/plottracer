@@ -40,9 +40,11 @@ let engine = null
 // ⚑ The graph-type models (v2.7, electron-figtype.cjs) share this thread and its onnxruntime-web:
 // one runtime in the app, started only when the graph type is first suggested.
 let models = null
-let detector = null
-// RF-DETR for bars (v2.7, its `bar` class): ChartDete reads the axes and legend where it is installed, and has no bars
-let barDetector = null
+// ⚑ ONE RF-DETR in the worker, for the axes, the legend and the bars (v2.7): a second copy of the 110 MB model would
+// stay resident beside the first. ChartDete, when asked for, is its own.
+let rfdetr = null
+let chartdeteModels = null
+const startRfdetr = () => rfdetr || (rfdetr = figdet.startDetector(require('onnxruntime-web')))
 
 parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
   try {
@@ -55,16 +57,16 @@ parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
     // the chart-element detector (v2.7), loaded on first use, like the classifiers: RF-DETR (electron-figdet.cjs), or
     // ChartDete when PLOTTRACER_DETECTOR=chartdete asks for it (electron-chartdete-onnx.cjs), to compare
     if (kind === 'figdet' && options && options.bars) {
-      if (!barDetector) barDetector = DETECTOR === 'rfdetr' && detector ? detector : figdet.startDetector(require('onnxruntime-web'))
-      const found = await figdet.detect(await barDetector, image)
+      const found = await figdet.detect(await startRfdetr(), image)
       parentPort.postMessage({ id, answer: { detections: (found.detections || []).filter((d) => d.cls === 'bar'), detector: 'rfdetr' } })
       return
     }
     if (kind === 'figdet') {
-      const det = DETECTOR === 'chartdete' ? chartdete : figdet
-      if (!detector) detector = DETECTOR === 'chartdete' ? chartdete.startChartDete(require('onnxruntime-web')) : figdet.startDetector(require('onnxruntime-web'))
+      const found = DETECTOR === 'chartdete'
+        ? await chartdete.detect(await (chartdeteModels || (chartdeteModels = chartdete.startChartDete(require('onnxruntime-web')))), image)
+        : await figdet.detect(await startRfdetr(), image)
       // the answer says which detector gave it, for the comparison switch and for the packaged-app test
-      parentPort.postMessage({ id, answer: { ...(await det.detect(await detector, image)), detector: DETECTOR } })
+      parentPort.postMessage({ id, answer: { ...found, detector: DETECTOR } })
       return
     }
     if (!engine) engine = startEngine()
@@ -73,7 +75,8 @@ parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
     // ⚑ A failed START is forgotten, so the next read tries again cleanly.
     if (engine) engine.catch(() => (engine = null))
     if (models) models.catch(() => (models = null))
-    if (detector) detector.catch(() => (detector = null))
+    if (rfdetr) rfdetr.catch(() => (rfdetr = null))
+    if (chartdeteModels) chartdeteModels.catch(() => (chartdeteModels = null))
     parentPort.postMessage({ id, error: e && e.message ? e.message : String(e) })
   }
 })

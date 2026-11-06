@@ -184,11 +184,10 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     expect(suggestGraphType(answer.own!, answer.docling!).type).toBe('bar');
   }, 120000);
 
-  it('finds a chart\'s plot area and tick labels with ChartDete, its pack in the package (v2.7)', async () => {
+  it('finds a chart\'s plot area and tick labels with RF-DETR, its model in the package and ChartDete\'s pack not (v2.7)', async () => {
     const app = path.join(path.dirname(BINARY), 'resources/app');
-    for (const p of ['backbone', 'rpn', 'roialign0', 'roialign3', 'global2', 'encoderfast2', 'head2']) {
-      expect(fs.existsSync(path.join(app, `ui/figdet-model/chartdete/${p}.onnx`)), `ui/figdet-model/chartdete/${p}.onnx is missing from the package`).toBe(true);
-    }
+    expect(fs.existsSync(path.join(app, 'ui/figdet-model/detector.onnx')), 'ui/figdet-model/detector.onnx is missing from the package').toBe(true);
+    expect(fs.existsSync(path.join(app, 'ui/figdet-model/chartdete')), 'ChartDete\'s pack is in the package, which no user path reaches').toBe(false);
     const png = fs.readFileSync(path.join(REPO_ROOT, 'samples/xy-stress-strain.png')).toString('base64');
     const answer = await page.evaluate(
       (b64) => (window as unknown as { electronAPI: { detectChartElements: (s: string) => Promise<{ detections?: { cls: string; score: number }[]; detector?: string; error?: string }> } }).electronAPI.detectChartElements(b64),
@@ -201,6 +200,20 @@ describe.runIf(RUN)('the packaged app is complete', () => {
     const sure = (answer.detections ?? []).filter((d) => d.score >= 0.5);
     expect(sure.some((d) => d.cls === 'plot_area')).toBe(true);
     expect(sure.filter((d) => d.cls === 'x_tick_label').length).toBeGreaterThanOrEqual(5);
+  }, 120000);
+
+  it('sees each bar of a hatched figure whole, with the detector in the package (v2.7)', async () => {
+    // the bars path at the worker boundary (ui/electron-ocr-worker.cjs, `options.bars`): only bar boxes come back
+    const png = fs.readFileSync(path.join(REPO_ROOT, 'samples/bar-hatched-extraction-yield.png')).toString('base64');
+    const answer = await page.evaluate(
+      (b64) => (window as unknown as { electronAPI: { detectChartElements: (s: string, o?: { bars?: boolean }) => Promise<{ detections?: { cls: string; score: number }[]; detector?: string; error?: string }> } }).electronAPI.detectChartElements(b64, { bars: true }),
+      png
+    );
+    expect(answer.error, 'the packaged app could not run the detector').toBeUndefined();
+    expect(answer.detector).toBe('rfdetr');
+    const sure = (answer.detections ?? []).filter((d) => d.score >= 0.5);
+    expect(sure.length, JSON.stringify(answer.detections?.slice(0, 5))).toBeGreaterThan(0);
+    expect(sure.every((d) => d.cls === 'bar')).toBe(true);
   }, 120000);
 
   it('finds lines, with the Find lines worker inlined into the packaged page', async () => {

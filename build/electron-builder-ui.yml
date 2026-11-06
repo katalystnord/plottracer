@@ -50,7 +50,10 @@ files:
   # ⚑ The graph-type models (v2.7, the graph type suggestion), with their LICENSE and NOTICE:
   # read by electron-figtype.cjs in the same worker.
   - ui/figtype-model/**/*
-  - ui/figdet-model/**/*
+  # ⚑ The chart-element detector (v2.7, electron-figdet.cjs): RF-DETR with its bar class, the app's one detector since
+  # 2026-11-06. ChartDete's pack (ui/figdet-model/chartdete/, 162 MB) stays out: no user path reaches it, and it is
+  # asked for only by PLOTTRACER_DETECTOR=chartdete, to compare, from a checkout.
+  - ui/figdet-model/detector.onnx
   - "!ui/electron-dev.cjs"
   - "!ui/electron-start.cjs"
   - build/icons/**/*

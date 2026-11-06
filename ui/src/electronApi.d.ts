@@ -54,7 +54,8 @@ declare global {
       /** `options.bars`: only the bar boxes, from RF-DETR whichever detector reads the axes (v2.7). */
       detectChartElements: (pngBase64: string, options?: { bars?: boolean }) => Promise<{
         detections?: { cls: string; box: { x0: number; y0: number; x1: number; y1: number }; score: number }[];
-        /** Which detector answered: ChartDete when its pack is installed, else RF-DETR (v2.7). */
+        /** Which detector answered: RF-DETR, the app's detector since 2026-11-06, or ChartDete when
+         * PLOTTRACER_DETECTOR=chartdete asks for it, to compare (v2.7). */
         detector?: 'chartdete' | 'rfdetr';
         error?: string;
       }>;

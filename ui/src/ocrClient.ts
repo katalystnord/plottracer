@@ -282,16 +282,16 @@ export async function detectChartElements(img: { data: Uint8ClampedArray; width:
 
 /**
  * The detector's bar boxes for a figure (v2.7, "Bars seen whole by the detector"): each drawn bar as one box,
- * whatever its fill, from RF-DETR whichever detector reads the axes. Empty where the detector is not available:
- * the colour read then reads the bars alone, as before.
+ * whatever its fill, from RF-DETR. Null where the detector is not available or failed (the caller does not keep a
+ * failure, and the colour read reads the bars alone, as before).
  */
-export async function detectBars(img: { data: Uint8ClampedArray; width: number; height: number }): Promise<{ x0: number; y0: number; x1: number; y1: number; score: number }[]> {
+export async function detectBars(img: { data: Uint8ClampedArray; width: number; height: number }): Promise<{ x0: number; y0: number; x1: number; y1: number; score: number }[] | null> {
   const api = window.electronAPI;
-  if (!api?.detectChartElements) return [];
+  if (!api?.detectChartElements) return null;
   const png = encodeCrop(img);
-  if (!png) return [];
+  if (!png) return null;
   const found = await work.track(api.detectChartElements(png.base64, { bars: true }));
-  if (found.error !== undefined) return [];
+  if (found.error !== undefined) return null;
   return (found.detections ?? []).filter((d) => d.cls === 'bar').map((d) => ({ ...d.box, score: d.score }));
 }
 

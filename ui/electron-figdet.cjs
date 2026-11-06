@@ -50,8 +50,12 @@ function toInput({ data, width, height }) {
 }
 
 /** The model's two outputs to boxes: RF-DETR's PostProcess. Every class index the training set does not
- * name (the model carries one more) is left out. */
+ * name (the model carries one more) is left out.
+ * ⚑ The names are the model's own: a model trained with N classes carries N + 1 outputs, so only the first N names
+ * apply. A model from before the `bar` class (13 classes, 14 outputs) would otherwise have its extra output read as a
+ * bar (the code review of 2026-11-06). */
 function postprocess(logits, boxes, nClasses, width, height) {
+  const names = CLASSES.slice(0, Math.max(0, nClasses - 1))
   const nQ = logits.length / nClasses
   const prob = new Float64Array(logits.length)
   for (let i = 0; i < logits.length; i++) prob[i] = 1 / (1 + Math.exp(-logits[i]))
@@ -59,11 +63,11 @@ function postprocess(logits, boxes, nClasses, width, height) {
   const out = []
   for (const i of order) {
     const q = Math.floor(i / nClasses), cls = i % nClasses
-    if (cls >= CLASSES.length) continue
+    if (cls >= names.length) continue
     const [cx, cy, w, h] = [boxes[q * 4], boxes[q * 4 + 1], boxes[q * 4 + 2], boxes[q * 4 + 3]]
     const clamp = (v, hi) => Math.min(Math.max(v, 0), hi)
     out.push({
-      cls: CLASSES[cls],
+      cls: names[cls],
       box: { x0: clamp((cx - w / 2) * width, width), y0: clamp((cy - h / 2) * height, height), x1: clamp((cx + w / 2) * width, width), y1: clamp((cy + h / 2) * height, height) },
       score: prob[i],
     })

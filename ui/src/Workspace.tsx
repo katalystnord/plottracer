@@ -224,7 +224,7 @@ import { runColorTrace, tracingADifferentColour, pickedColourAdopts } from '../.
 import { runSpiderTrace, spiderBoxRegion } from '../../engine/spiderTraceRun.js';
 import type { SpiderAxes } from '../../core/axes/spider.js';
 import { runBlobDetect } from '../../engine/blobDetectRun.js';
-import { runBarDetect, partitionSwatchSuspects, type DetectedBarBox } from '../../engine/barDetectRun.js';
+import { runBarDetect, partitionSwatchSuspects, type DetectedBarBox, type DetectedBarProposal } from '../../engine/barDetectRun.js';
 import { formatLabelList, labelCoverage, parseLabelList } from '../../core/heatmapLabels.js';
 import { cellIndexAt, cellsOf } from '../../core/heatmapGrid.js';
 import type { SerializedHeatmapLayer } from '../../core/plotData.js';
@@ -2136,6 +2136,24 @@ export function Workspace() {
    * crop, deskew, grid removal, capture, so a mask is never baked in), the eyedropper (a series' colour is often
    * picked from a legend swatch, and the legend is masked), the legend's own read, and the colour key.
    */
+  // ⚑ v2.7: the detector's bar boxes for the figure, asked once per image and kept with it (the canvas keeps one
+  // ImageData per loaded image), so Colour trace and every Auto-extract entry reuse one inference. A failure is not
+  // kept: the next press asks again. Read on the image as loaded: a masked area holds none of the traced colour, so a
+  // box there is not placed (algorithms/detectedBars.ts, OWN_COLOUR).
+  const barsDetectedRef = useRef(new WeakMap<ImageData, Promise<DetectedBarProposal[] | null>>());
+  const barsOnFigure = useCallback(async (): Promise<DetectedBarProposal[] | undefined> => {
+    const img = imageCanvasRef.current?.getImageData();
+    if (!img) return undefined;
+    let p = barsDetectedRef.current.get(img);
+    if (!p) {
+      p = detectBars(img).catch(() => null);
+      barsDetectedRef.current.set(img, p);
+    }
+    const got = await p;
+    if (got === null) barsDetectedRef.current.delete(img);
+    return got ?? undefined;
+  }, []);
+
   const readingImage = useCallback((): ImageData | null | undefined => {
     const img = imageCanvasRef.current?.getImageData();
     if (!img) return img;
@@ -6754,7 +6772,7 @@ export function Workspace() {
   }, [session, defaultTraceRegion]);
   /** By colour, with the colour and the shape given (its own button passes the
    * card's; the Series extraction card passes each legend entry's). */
-  const colorTraceWith = useCallback((colourHex: string, traceShape: typeof colorTraceShape) => {
+  const colorTraceWith = useCallback((colourHex: string, traceShape: typeof colorTraceShape, detected?: readonly DetectedBarProposal[]) => {
     const setColorTraceInfo = (t: string | null) => {
       colorTraceSaidRef.current = t ?? '';
       setColorTraceInfoState(t);
@@ -6884,44 +6902,40 @@ export function Workspace() {
           return;
         }
       }
-      // ⚑ v2.7: the detector's bar boxes first ("Bars seen whole by the detector", David 2026-11-06): a bar the colour
-      // read returns in pieces (a hatched fill) is placed whole, and a bar it finds whole keeps its exact edges. Where
-      // the detector is not available the list is empty and the bars are read as before.
-      const startedOn = sessionRef.current;
-      void detectBars(imageData).catch(() => []).then((detected) => {
-        if (sessionRef.current !== startedOn) return;
-        const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined, detected);
-        if ('error' in result) {
-          setColorTraceInfo(result.error);
-          return;
-        }
-        // ⚑⚑ THE SWATCH SUSPECTS ARE HELD BACK RATHER THAN FILED. A phantom bar
-        // filed as data looks exactly like a measurement - it has a row, a
-        // category and a value, and it exports - so the reader has to be told it
-        // is there, find it and delete it. Held back, it is visible by
-        // construction and one click from being taken back.
-        const { file, holdBack } = partitionSwatchSuspects(result);
-        const added = session.addBarDetectBoxes(file);
-        setHeldBackBars(holdBack);
-        adoptTracedColour();
-        // ⚑ Name the categories that came back empty. The split reports them by
-        // BAND, which is image order -- `categoryIndexOfBand` maps that back to the
-        // category the user declared, which is the axis's own order and runs the
-        // other way whenever the axis was marked right-to-left or bottom-to-top.
-        const missing = emptyCategoryNames(
-          result.expectation?.emptyBands ?? [],
-          (band) => session.categoryIndexOfBand(band, declared?.reversed ?? false),
-          session.getCategoryAxis().getCategories()
-        );
-        // ⚑ The held-back shapes are NOT reported here. They are an offer, and the
-        // offer says its own sentence beside the button that takes it - see
-        // `swatchHoldBackOffer`. Restating the arithmetic in two places is the
-        // "says one thing three times" defect through a new door.
-        setColorTraceInfo(
-          barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
-        );
-        commit();
-      });
+      // ⚑ v2.7: with the detector's bar boxes, fetched by the caller before this synchronous read ("Bars seen whole by
+      // the detector", David 2026-11-06): a bar the colour read returns in pieces (a hatched fill) is placed whole, and
+      // a bar it finds whole keeps its exact edges. Without them the bars are read as before.
+      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined, detected);
+      if ('error' in result) {
+        setColorTraceInfo(result.error);
+        return;
+      }
+      // ⚑⚑ THE SWATCH SUSPECTS ARE HELD BACK RATHER THAN FILED. A phantom bar
+      // filed as data looks exactly like a measurement - it has a row, a
+      // category and a value, and it exports - so the reader has to be told it
+      // is there, find it and delete it. Held back, it is visible by
+      // construction and one click from being taken back.
+      const { file, holdBack } = partitionSwatchSuspects(result);
+      const added = session.addBarDetectBoxes(file);
+      setHeldBackBars(holdBack);
+      adoptTracedColour();
+      // ⚑ Name the categories that came back empty. The split reports them by
+      // BAND, which is image order -- `categoryIndexOfBand` maps that back to the
+      // category the user declared, which is the axis's own order and runs the
+      // other way whenever the axis was marked right-to-left or bottom-to-top.
+      const missing = emptyCategoryNames(
+        result.expectation?.emptyBands ?? [],
+        (band) => session.categoryIndexOfBand(band, declared?.reversed ?? false),
+        session.getCategoryAxis().getCategories()
+      );
+      // ⚑ The held-back shapes are NOT reported here. They are an offer, and the
+      // offer says its own sentence beside the button that takes it - see
+      // `swatchHoldBackOffer`. Restating the arithmetic in two places is the
+      // "says one thing three times" defect through a new door.
+      setColorTraceInfo(
+        barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
+      );
+      commit();
       return;
     }
     if (traceShape === 'scatter') {
@@ -6961,10 +6975,20 @@ export function Workspace() {
     commit();
   }, [session, config.autoExtractKind, config.tupleNoun, colorTraceTolerance, colorTraceMinBlob, defaultTraceRegion, commit, setColorTraceInfoState, readingImage, drawnMarkers]);
   // ⚑ Where Find lines reads the lines, Colour trace reads markers (David, 2026-11-02).
-  const handleColorTrace = useCallback(
-    () => colorTraceWith(colorTraceColor, findLinesKind(config.id) ? 'scatter' : colorTraceShape),
-    [colorTraceWith, colorTraceColor, colorTraceShape, config.id]
-  );
+  const handleColorTrace = useCallback(() => {
+    const shape = findLinesKind(config.id) ? 'scatter' : colorTraceShape;
+    if (config.autoExtractKind !== 'bounding-box') {
+      colorTraceWith(colorTraceColor, shape);
+      return;
+    }
+    // bars: the detector's boxes first (asked once per figure), then the same synchronous read. The read goes ahead
+    // only on the figure and series it was pressed on: the first press loads the model and can take seconds.
+    const s0 = sessionRef.current, image0 = imageCanvasRef.current?.getImageData(), series0 = s0.getActiveDatasetIndex();
+    void barsOnFigure().then((detected) => {
+      if (sessionRef.current !== s0 || imageCanvasRef.current?.getImageData() !== image0 || s0.getActiveDatasetIndex() !== series0) return;
+      colorTraceWith(colorTraceColor, shape, detected);
+    });
+  }, [colorTraceWith, colorTraceColor, colorTraceShape, config.id, config.autoExtractKind, barsOnFigure]);
 
   // Live colour-match preview (checkpoint 121): while the Auto-trace panel is
   // open, filter the native-resolution pixels by the current colour + tolerance
@@ -7344,6 +7368,9 @@ export function Workspace() {
         entries = readLegendFromPixels(words, img.data, img.width, img.height, b);
       }
       const plan = planAutoExtract(s.getConfig(), entries, s.getDatasetInfos());
+      // bars: the detector's boxes once for every entry, before the synchronous reads (v2.7)
+      const barsDetected = s.getConfig().autoExtractKind === 'bounding-box' ? await barsOnFigure() : undefined;
+      if (sessionRef.current !== s) return;
       if (!plan.length) return say('No series could be read from the legend - check the legend is marked round its entries, or use the tools below one series at a time.');
       // one short line per series, in the legend's order (David, 2026-11-02); every problem one entry in Places to
       // check, never written out on the card as well (David, 2026-11-04)
@@ -7586,7 +7613,7 @@ export function Workspace() {
             }
           } else {
             colorTraceSaidRef.current = '';
-            colorTraceWith(hex, step.tool === 'points' ? 'scatter' : 'curve');
+            colorTraceWith(hex, step.tool === 'points' ? 'scatter' : 'curve', barsDetected);
             const points = pointsIn([into]);
             if (points > 0) {
               saidBy[step.entry] = autoExtractLine(step.name, { points });
@@ -7609,7 +7636,7 @@ export function Workspace() {
     } finally {
       setAutoExtractBusy(false);
     }
-  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob, drawnMarkers]);
+  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob, drawnMarkers, barsOnFigure]);
 
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as
