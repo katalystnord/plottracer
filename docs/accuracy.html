@@ -371,23 +371,54 @@
       <table class="ev-results">
         <thead><tr><th scope="col">Chart type</th><th scope="col">[1] Real figures</th><th scope="col">[2] Synthetic figures</th></tr></thead>
         <tbody>
-            <tr><th scope="row">Bar</th><td><span class="ev-val">76.4%</span><span class="ev-n">n = 6,494</span></td><td><span class="ev-val">45.5%</span><span class="ev-n">n = 6,739</span></td></tr>
+            <tr><th scope="row">Bar</th><td><span class="ev-val">79.8%</span><span class="ev-n">n = 6,494</span></td><td><span class="ev-val">45.6%</span><span class="ev-n">n = 6,739</span></td></tr>
             <tr><th scope="row">Line</th><td><span class="ev-val">69.3%</span><span class="ev-n">n = 29,688</span></td><td><span class="ev-val">92.0%</span><span class="ev-n">n = 2,236</span></td></tr>
-            <tr><th scope="row">Scatter</th><td><span class="ev-val">91.3%</span><span class="ev-n">n = 5,409</span></td><td><span class="ev-val">32.1%</span><span class="ev-n">n = 11,996</span></td></tr>
+            <tr><th scope="row">Scatter</th><td><span class="ev-val">93.6%</span><span class="ev-n">n = 5,409</span></td><td><span class="ev-val">60.8%</span><span class="ev-n">n = 11,996</span></td></tr>
         </tbody>
       </table>
     </div>
     <p class="ev-stamp">
       Share of elements recovered within the competition's tolerance, scored in image space
-      by automatic extraction. PlotTracer <span class="data">2.6.0</span> at its
+      by automatic extraction. PlotTracer <span class="data">2.7.0</span> at its
       default settings (tolerance 60, minimum blob diameter
-      3), measured 2026-10-10.
+      3), measured 2026-11-06.
     </p>
     <ol class="ev-refs">
       <li><span class="ev-refnum">[1]</span> K. Davila, F. Xu, S. Ahmed, D. A. Mendoza, S. Setlur and V. Govindaraju, &ldquo;ICPR 2022: Challenge on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>26th Int. Conf. on Pattern Recognition</i>, 2022, pp. 4995&ndash;5001. doi:<a href="https://doi.org/10.1109/ICPR56361.2022.9956289">10.1109/ICPR56361.2022.9956289</a><span class="ev-refnote"> Charts from open-access PubMed Central papers. 799 figures scored.</span></li>
       <li><span class="ev-refnum">[2]</span> K. Davila, B. U. Kota, S. Setlur, V. Govindaraju, C. Tensmeyer, S. Shekhar and R. Chaudhry, &ldquo;ICDAR 2019 Competition on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; <i>Int. Conf. on Document Analysis and Recognition</i>, 2019, pp. 1594&ndash;1599. doi:<a href="https://doi.org/10.1109/ICDAR.2019.00203">10.1109/ICDAR.2019.00203</a><span class="ev-refnote"> Generated with matplotlib from real data sources. 808 figures scored.</span></li>
     </ol>
     <!-- BENCHMARK-TABLES:END -->
+
+    <div class="sec-head" style="margin-top:64px;">
+      <h2>Line charts as PlotTracer reads them</h2>
+      <p>The line row above is Colour trace, which reads everything drawn in one ink as one
+        series. Find lines reads each line of an ink as its own line, and Auto-extract all
+        series reads every series the legend names, telling series drawn in one ink apart by
+        their line style. These are scored here on the same figures.</p>
+    </div>
+    <!-- BENCHMARK-LINES:START (generated - do not edit by hand) -->
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Line charts [1], read by</th><th scope="col">All (312 figures)</th><th scope="col">With a legend (184)</th><th scope="col">Series sharing one ink (47)</th></tr></thead>
+        <tbody>
+            <tr><th scope="row">Colour trace (the table above)</th><td><span class="ev-val">69.3%</span><span class="ev-n">n = 29,688</span></td><td><span class="ev-val">69.8%</span><span class="ev-n">n = 17,109</span></td><td><span class="ev-val">44.8%</span><span class="ev-n">n = 3,859</span></td></tr>
+            <tr><th scope="row">Find lines</th><td><span class="ev-val">59.4%</span><span class="ev-n">n = 29,688</span></td><td><span class="ev-val">55.6%</span><span class="ev-n">n = 17,109</span></td><td><span class="ev-val">40.5%</span><span class="ev-n">n = 3,859</span></td></tr>
+            <tr><th scope="row">Auto-extract all series</th><td class="ev-na">-</td><td><span class="ev-val">63.9%</span><span class="ev-n">n = 17,109</span></td><td><span class="ev-val">44.3%</span><span class="ev-n">n = 3,859</span></td></tr>
+            <tr><th scope="row">The same, line style not used</th><td class="ev-na">-</td><td><span class="ev-val">61.9%</span><span class="ev-n">n = 17,109</span></td><td><span class="ev-val">35.7%</span><span class="ev-n">n = 3,859</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Points within the competition's tolerance, on the same figures and metric as the table
+      above. Find lines is given what Colour trace is given: the plot box and each series'
+      ink. Auto-extract all series is given the plot box and the legend, with the corpus's own
+      legend entries (each sample and its text) standing in for the legend a user marks; each
+      series is scored only against the series of its name, so a line read into the wrong
+      name scores nothing. Series drawn in one ink are told apart by their line style; the
+      last row is the same read with that switched off. Colour trace gives every series of one
+      ink the same points, so on those figures it is credited wherever it lands on any of them.
+    </p>
+    <!-- BENCHMARK-LINES:END -->
 
     <div class="sec-head" style="margin-top:64px;">
       <h2>What a human declaration is worth</h2>
@@ -400,8 +431,8 @@
       <table class="ev-results">
         <thead><tr><th scope="col">Corpus</th><th scope="col">Automatic</th><th scope="col">Assisted</th><th scope="col">Difference</th></tr></thead>
         <tbody>
-            <tr><th scope="row">[1] Real figures</th><td><span class="ev-val">76.1%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">77.4%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+1.3</span><span class="ev-n">points, n = 5,778 bars</span></td></tr>
-            <tr><th scope="row">[2] Synthetic figures</th><td><span class="ev-val">45.5%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">62.0%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+16.5</span><span class="ev-n">points, n = 6,739 bars</span></td></tr>
+            <tr><th scope="row">[1] Real figures</th><td><span class="ev-val">79.9%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">80.1%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+0.2</span><span class="ev-n">points, n = 5,778 bars</span></td></tr>
+            <tr><th scope="row">[2] Synthetic figures</th><td><span class="ev-val">45.6%</span><span class="ev-n">automatic</span></td><td><span class="ev-val">62.1%</span><span class="ev-n">assisted</span></td><td><span class="ev-val">+16.6</span><span class="ev-n">points, n = 6,739 bars</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -423,7 +454,7 @@
       <table class="ev-results">
         <thead><tr><th scope="col">Read</th><th scope="col">Exactly right</th><th scope="col">Figures</th></tr></thead>
         <tbody>
-            <tr><th scope="row">Tick labels [1]</th><td><span class="ev-val">79.8%</span><span class="ev-n">10,169 of 12,751</span></td><td><span class="ev-val">887</span><span class="ev-n">real published figures</span></td></tr>
+            <tr><th scope="row">Tick labels [1]</th><td><span class="ev-val">90.5%</span><span class="ev-n">11,540 of 12,751</span></td><td><span class="ev-val">887</span><span class="ev-n">real published figures</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -447,7 +478,7 @@
       <table class="ev-results">
         <thead><tr><th scope="col">Captured by hand</th><th scope="col">Within 1%</th><th scope="col">Figures</th></tr></thead>
         <tbody>
-            <tr><th scope="row">Bars [1]</th><td><span class="ev-val">81.3%</span><span class="ev-n">4,695 of 5,778 bars</span></td><td><span class="ev-val">80.5%</span><span class="ev-n">277 of 344 with every bar within</span></td></tr>
+            <tr><th scope="row">Bars [1]</th><td><span class="ev-val">80.9%</span><span class="ev-n">4,674 of 5,778 bars</span></td><td><span class="ev-val">79.4%</span><span class="ev-n">273 of 344 with every bar within</span></td></tr>
         </tbody>
       </table>
     </div>

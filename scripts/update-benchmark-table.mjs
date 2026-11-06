@@ -165,6 +165,49 @@ const assistedRows = corpora
   })
   .join('\n');
 
+/**
+ * Line charts as the app reads them since 2.7: Find lines, and Auto-extract all series with the legend marked, each
+ * beside Colour trace (the line row of the main table) on exactly the same figures. Its own table because the legend
+ * path runs only on figures whose corpus legend names the series, so it cannot share a row with the all-figures one.
+ */
+const L_START = '<!-- BENCHMARK-LINES:START (generated - do not edit by hand) -->';
+const L_END = '<!-- BENCHMARK-LINES:END -->';
+const l27 = results.lines27;
+const l27cell = (g, k) =>
+  g?.[k] ? `<td><span class="ev-val">${pct(g[k].pct)}</span><span class="ev-n">n = ${num(g[k].total)}</span></td>` : '<td class="ev-na">-</td>';
+const l27rows = l27
+  ? [
+      ['Colour trace (the table above)', 'colourTrace'],
+      ['Find lines', 'findLines'],
+      ['Auto-extract all series', 'autoExtract'],
+      ['The same, line style not used', 'autoExtractNoStyle'],
+    ]
+      .map(([label, k]) => `            <tr><th scope="row">${label}</th>${['all', 'withLegend', 'sharedInk'].map((g) => l27cell(l27[g], k)).join('')}</tr>`)
+      .join('\n')
+  : null;
+const linesBlock = l27
+  ? `${L_START}
+    <div class="ev-scroll">
+      <table class="ev-results">
+        <thead><tr><th scope="col">Line charts [1], read by</th><th scope="col">All (${num(l27.all.figures)} figures)</th><th scope="col">With a legend (${num(l27.withLegend.figures)})</th><th scope="col">Series sharing one ink (${num(l27.sharedInk.figures)})</th></tr></thead>
+        <tbody>
+${l27rows}
+        </tbody>
+      </table>
+    </div>
+    <p class="ev-stamp">
+      Points within the competition's tolerance, on the same figures and metric as the table
+      above. Find lines is given what Colour trace is given: the plot box and each series'
+      ink. Auto-extract all series is given the plot box and the legend, with the corpus's own
+      legend entries (each sample and its text) standing in for the legend a user marks; each
+      series is scored only against the series of its name, so a line read into the wrong
+      name scores nothing. Series drawn in one ink are told apart by their line style; the
+      last row is the same read with that switched off. Colour trace gives every series of one
+      ink the same points, so on those figures it is credited wherever it lands on any of them.
+    </p>
+    ${L_END}`
+  : null;
+
 const assistedBlock = assistedRows
   ? `${A_START}
     <div class="ev-scroll">
@@ -248,6 +291,7 @@ let out = page.slice(0, a) + block + page.slice(b + END.length);
  * silent skip would restore exactly that.
  */
 for (const [name, s0, s1, body] of [
+  ['2.7 line', L_START, L_END, linesBlock],
   ['assisted', A_START, A_END, assistedBlock],
   ['OCR', O_START, O_END, ocrBlock],
   ['manual-capture', M_START, M_END, manualBlock],
