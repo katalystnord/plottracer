@@ -21,9 +21,10 @@ const SIZE = 768
 const MEAN = [0.485, 0.456, 0.406]
 const STD = [0.229, 0.224, 0.225]
 const NUM_SELECT = 300
-/** The training set's classes, in its order (gen_det.py, chartinfo_to_coco.py). */
+/** The training set's classes, in its order (gen_det.py, chartinfo_to_coco.py). `bar` since 2026-11-06: each drawn bar
+ * as one box, whatever its fill (plottracer-ref research/v2.7-figdet, the run train-bar-768). */
 const CLASSES = ['plot_area', 'x_tick', 'y_tick', 'x_tick_label', 'y_tick_label', 'x_title', 'y_title', 'chart_title',
-  'legend_area', 'legend_marker', 'legend_label', 'key_tick', 'key_tick_label']
+  'legend_area', 'legend_marker', 'legend_label', 'key_tick', 'key_tick_label', 'bar']
 
 /** RGBA pixels to the model's input: torch's bilinear (align_corners false, no antialias), normalised, NCHW. */
 function toInput({ data, width, height }) {

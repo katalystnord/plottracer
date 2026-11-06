@@ -281,6 +281,21 @@ export async function detectChartElements(img: { data: Uint8ClampedArray; width:
 }
 
 /**
+ * The detector's bar boxes for a figure (v2.7, "Bars seen whole by the detector"): each drawn bar as one box,
+ * whatever its fill, from RF-DETR whichever detector reads the axes. Empty where the detector is not available:
+ * the colour read then reads the bars alone, as before.
+ */
+export async function detectBars(img: { data: Uint8ClampedArray; width: number; height: number }): Promise<{ x0: number; y0: number; x1: number; y1: number; score: number }[]> {
+  const api = window.electronAPI;
+  if (!api?.detectChartElements) return [];
+  const png = encodeCrop(img);
+  if (!png) return [];
+  const found = await work.track(api.detectChartElements(png.base64, { bars: true }));
+  if (found.error !== undefined) return [];
+  return (found.detections ?? []).filter((d) => d.cls === 'bar').map((d) => ({ ...d.box, score: d.score }));
+}
+
+/**
  * The axes of a PICTURE from its labels (v2.7; engine/pictureAxes.ts): the detector finds the plot area
  * and the tick labels; PaddleOCR reads each label's crop (a tall one also turned a quarter each way) and
  * finds and reads the words in the strip along each axis; the labels lead. Everything runs in the OCR's

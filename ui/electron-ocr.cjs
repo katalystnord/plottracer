@@ -130,10 +130,10 @@ function classifyFigure(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
  * `{ detections: [{ cls, box, score }] }`, or `{ error }` with a sentence. Same thread, same bound and
  * the same rule as `readText`: a refusal is a value, never a hang.
  */
-function detectChartElements(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
+function detectChartElements(pngBase64, timeoutMs = READ_TIMEOUT_MS, options = {}) {
   // COMPARISON ONLY: the original ChartDete in its own Python, when asked for at launch (electron-chartdete.cjs);
   // the app's own ChartDete runs in the worker (electron-chartdete-onnx.cjs)
-  if (process.env.PLOTTRACER_DETECTOR === 'chartdete-python') return require('./electron-chartdete.cjs').detectWithChartDete(pngBase64)
+  if (process.env.PLOTTRACER_DETECTOR === 'chartdete-python' && !options.bars) return require('./electron-chartdete.cjs').detectWithChartDete(pngBase64)
   return new Promise((resolve) => {
     const id = nextId++
     let timer = null
@@ -148,7 +148,7 @@ function detectChartElements(pngBase64, timeoutMs = READ_TIMEOUT_MS) {
       )
     }, timeoutMs)
     try {
-      getWorker().postMessage({ id, kind: 'figdet', pngBase64: String(pngBase64) })
+      getWorker().postMessage({ id, kind: 'figdet', pngBase64: String(pngBase64), options })
     } catch (e) {
       dropWorker(`Could not find the chart's axes: ${e && e.message ? e.message : String(e)}`)
     }

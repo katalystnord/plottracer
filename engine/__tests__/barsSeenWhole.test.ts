@@ -1,0 +1,114 @@
+/**
+ * Bars seen whole by the detector (docs/v2.7-workflow-walk.md, "Bars seen whole by the detector", David 2026-11-06).
+ * The detector's bar boxes are given to the colour read; these are its cases.
+ */
+import { describe, it, expect } from 'vitest';
+import { runBarDetect, type DetectedBarProposal } from '../barDetectRun.js';
+
+type RGB = [number, number, number];
+const BLUE: RGB = [30, 60, 220];
+const RED: RGB = [220, 40, 40];
+const BLACK: RGB = [0, 0, 0];
+
+function white(w: number, h: number): Uint8ClampedArray {
+  const d = new Uint8ClampedArray(w * h * 4).fill(255);
+  return d;
+}
+function put(d: Uint8ClampedArray, w: number, x: number, y: number, c: RGB) {
+  const i = (y * w + x) * 4;
+  d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255;
+}
+function block(d: Uint8ClampedArray, w: number, x0: number, y0: number, bw: number, bh: number, c: RGB) {
+  for (let y = y0; y < y0 + bh; y++) for (let x = x0; x < x0 + bw; x++) put(d, w, x, y, c);
+}
+/** A bar cross-hatched as matplotlib's 'x' draws it: black diagonals both ways, 2 px wide, every `pitch` px. */
+function hatchedBar(d: Uint8ClampedArray, w: number, x0: number, y0: number, bw: number, bh: number, c: RGB, pitch = 10) {
+  block(d, w, x0, y0, bw, bh, c);
+  for (let y = y0; y < y0 + bh; y++) {
+    for (let x = x0; x < x0 + bw; x++) {
+      const a = (x - x0 + y - y0) % pitch, b = (((x - x0 - (y - y0)) % pitch) + pitch) % pitch;
+      if (a < 2 || b < 2) put(d, w, x, y, BLACK);
+    }
+  }
+}
+const proposal = (x0: number, y0: number, x1: number, y1: number, score = 0.9): DetectedBarProposal => ({ x0, y0, x1, y1, score });
+const boxOf = (b: { start: { x: number; y: number }; end: { x: number; y: number } }) => [b.start.x, b.start.y, b.end.x, b.end.y];
+
+const W = 200, H = 160;
+
+describe('bars seen whole by the detector', () => {
+  it('given a hatched bar chart, Colour trace places one bar per drawn bar, not its pieces', () => {
+    const img = white(W, H);
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE);
+    hatchedBar(img, W, 100, 70, 40, 70, BLUE);
+    const without = runBarDetect(img, W, H, BLUE, 60);
+    if ('error' in without) throw new Error(without.error);
+    // the colour read alone returns the pieces between the hatch lines
+    expect(without.boxes.length).toBeGreaterThan(2);
+    const withDet = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(19.5, 39.6, 60.4, 140.2),
+      proposal(100.3, 69.8, 139.6, 140.1),
+    ]);
+    if ('error' in withDet) throw new Error(withDet.error);
+    expect(withDet.boxes).toHaveLength(2);
+  });
+
+  it('given a bar the colour read found whole, its box is the colour read’s, not the detector’s', () => {
+    const img = white(W, H);
+    block(img, W, 30, 50, 40, 90, BLUE);
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(27, 47, 73, 141),
+    ]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf)).toEqual([[30, 50, 70, 140]]);
+  });
+
+  it('given a detector box over pieces of the colour, the pieces mostly inside it are replaced by the box', () => {
+    const img = white(W, H);
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE);
+    block(img, W, 150, 100, 20, 40, BLUE); // a plain bar elsewhere, untouched
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(20, 40, 60, 140),
+    ]);
+    if ('error' in r) throw new Error(r.error);
+    const inside = r.boxes.map(boxOf).filter((b) => b[0]! >= 15 && b[2]! <= 65);
+    expect(inside).toEqual([[20, 40, 60, 140]]);
+    expect(r.boxes.map(boxOf)).toContainEqual([150, 100, 170, 140]);
+  });
+
+  it('given a detector box mostly of another colour, it is not filed under this colour', () => {
+    const img = white(W, H);
+    block(img, W, 30, 50, 40, 90, BLUE);
+    block(img, W, 110, 60, 40, 80, RED);
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(30, 50, 70, 140),
+      proposal(110, 60, 150, 140),
+    ]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf)).toEqual([[30, 50, 70, 140]]);
+  });
+
+  it('given a detector box whose centre is outside the data area, it is not placed', () => {
+    const img = white(W, H);
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE);
+    hatchedBar(img, W, 150, 10, 30, 20, BLUE); // above the data area, as a legend swatch sits
+    const region = { x: 10, y: 35, width: 180, height: 115 };
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', region, undefined, undefined, undefined, undefined, [
+      proposal(20, 40, 60, 140),
+      proposal(150, 10, 180, 30),
+    ]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf)).not.toContainEqual([150, 10, 180, 30]);
+    expect(r.boxes.map(boxOf)).toContainEqual([20, 40, 60, 140]);
+  });
+
+  it('given no detector boxes (the detector unavailable), the bars are read exactly as before', () => {
+    const img = white(W, H);
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE);
+    const before = runBarDetect(img, W, H, BLUE, 60);
+    const none = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, []);
+    const absent = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, undefined);
+    expect(none).toEqual(before);
+    expect(absent).toEqual(before);
+  });
+});

@@ -35,7 +35,7 @@ import {
 } from '../../engine/categoryTickOverlay.js';
 import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
-import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, readPictureAxes, readRegionWords, suggestFigureType } from './ocrClient.js';
+import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, detectBars, readPictureAxes, readRegionWords, suggestFigureType } from './ocrClient.js';
 import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
 import { planAutoExtract, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
 import { inkTest, paperColour, styleAlong, styleOfSample } from '../../algorithms/lineStyle.js';
@@ -6884,37 +6884,44 @@ export function Workspace() {
           return;
         }
       }
-      const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined);
-      if ('error' in result) {
-        setColorTraceInfo(result.error);
-        return;
-      }
-      // ⚑⚑ THE SWATCH SUSPECTS ARE HELD BACK RATHER THAN FILED. A phantom bar
-      // filed as data looks exactly like a measurement - it has a row, a
-      // category and a value, and it exports - so the reader has to be told it
-      // is there, find it and delete it. Held back, it is visible by
-      // construction and one click from being taken back.
-      const { file, holdBack } = partitionSwatchSuspects(result);
-      const added = session.addBarDetectBoxes(file);
-      setHeldBackBars(holdBack);
-      adoptTracedColour();
-      // ⚑ Name the categories that came back empty. The split reports them by
-      // BAND, which is image order -- `categoryIndexOfBand` maps that back to the
-      // category the user declared, which is the axis's own order and runs the
-      // other way whenever the axis was marked right-to-left or bottom-to-top.
-      const missing = emptyCategoryNames(
-        result.expectation?.emptyBands ?? [],
-        (band) => session.categoryIndexOfBand(band, declared?.reversed ?? false),
-        session.getCategoryAxis().getCategories()
-      );
-      // ⚑ The held-back shapes are NOT reported here. They are an offer, and the
-      // offer says its own sentence beside the button that takes it - see
-      // `swatchHoldBackOffer`. Restating the arithmetic in two places is the
-      // "says one thing three times" defect through a new door.
-      setColorTraceInfo(
-        barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
-      );
-      commit();
+      // ⚑ v2.7: the detector's bar boxes first ("Bars seen whole by the detector", David 2026-11-06): a bar the colour
+      // read returns in pieces (a hatched fill) is placed whole, and a bar it finds whole keeps its exact edges. Where
+      // the detector is not available the list is empty and the bars are read as before.
+      const startedOn = sessionRef.current;
+      void detectBars(imageData).catch(() => []).then((detected) => {
+        if (sessionRef.current !== startedOn) return;
+        const result = runBarDetect(data, width, height, target, colorTraceTolerance, 'foreground', defaultTraceRegion() ?? undefined, { minDiameter: colorTraceMinBlob }, declared ? { dividers: declared.dividers, categoryAxis: declared.categoryAxis, ...(declaredCount !== undefined ? { expected: declaredCount } : {}) } : undefined, baseline ?? undefined, severedBy ?? undefined, detected);
+        if ('error' in result) {
+          setColorTraceInfo(result.error);
+          return;
+        }
+        // ⚑⚑ THE SWATCH SUSPECTS ARE HELD BACK RATHER THAN FILED. A phantom bar
+        // filed as data looks exactly like a measurement - it has a row, a
+        // category and a value, and it exports - so the reader has to be told it
+        // is there, find it and delete it. Held back, it is visible by
+        // construction and one click from being taken back.
+        const { file, holdBack } = partitionSwatchSuspects(result);
+        const added = session.addBarDetectBoxes(file);
+        setHeldBackBars(holdBack);
+        adoptTracedColour();
+        // ⚑ Name the categories that came back empty. The split reports them by
+        // BAND, which is image order -- `categoryIndexOfBand` maps that back to the
+        // category the user declared, which is the axis's own order and runs the
+        // other way whenever the axis was marked right-to-left or bottom-to-top.
+        const missing = emptyCategoryNames(
+          result.expectation?.emptyBands ?? [],
+          (band) => session.categoryIndexOfBand(band, declared?.reversed ?? false),
+          session.getCategoryAxis().getCategories()
+        );
+        // ⚑ The held-back shapes are NOT reported here. They are an offer, and the
+        // offer says its own sentence beside the button that takes it - see
+        // `swatchHoldBackOffer`. Restating the arithmetic in two places is the
+        // "says one thing three times" defect through a new door.
+        setColorTraceInfo(
+          barTraceReport(added, noun, result.matched, width, height) + categoryMissReport(missing)
+        );
+        commit();
+      });
       return;
     }
     if (traceShape === 'scatter') {

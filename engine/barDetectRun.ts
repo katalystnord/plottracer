@@ -22,6 +22,7 @@
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import { joinAcrossHatch } from '../algorithms/hatchJoin.js';
+import { withDetectedBars, type DetectedBarProposal } from '../algorithms/detectedBars.js';
 import { joinAcrossRule, type SeveringRule } from '../algorithms/ruleJoin.js';
 import {
   measureCategoryAxisFromFragments,
@@ -36,6 +37,8 @@ import {
 } from '../algorithms/barSplit.js';
 import type { Point2D } from '../algorithms/segmentFill.js';
 import { bandIndexIn } from '../core/bandedAxis.js';
+
+export type { DetectedBarProposal };
 
 export interface DetectedBarBox {
   /** The bbox's top-left corner, in the same continuous-pixel space
@@ -364,7 +367,13 @@ export function runBarDetect(
    * existing positional call would have kept compiling while quietly handing its
    * baseline to the join and nothing to the swatch test. Typecheck said nothing.
    */
-  severedBy?: SeveringRule
+  severedBy?: SeveringRule,
+  /**
+   * The detector's bar boxes for the figure (v2.7, "Bars seen whole by the detector"): a bar the colour read returns
+   * in pieces (a hatched fill) is placed whole, and a bar it found whole keeps its exact edges. Absent or empty, the
+   * bars are read exactly as before. See `algorithms/detectedBars.ts`.
+   */
+  detected?: readonly DetectedBarProposal[]
 ): BarDetectResult {
   // ⚑ `region` is the data area, and a bar counts when its CENTRE is inside it (David, 2026-11-02; the drawn reader's
   // rule, engine/barsFromDrawing.ts): the colour is matched over the whole figure, so a bar running past a
@@ -485,6 +494,20 @@ export function runBarDetect(
     return cx >= region.x && cx <= region.x + region.width && cy >= region.y && cy <= region.y + region.height;
   };
   const inside = joined.filter(centreInside);
+  // the detector's bars, put in at the end of either path below: the share of a box that is this colour, measured on
+  // the same mask, and the colour read's own data-area rule (its centre inside)
+  const withDetected = (bs: DetectedBarBox[]): DetectedBarBox[] => {
+    if (!detected || detected.length === 0) return bs;
+    const ownShare = (b: DetectedBarBox) => {
+      const x0 = Math.max(0, Math.floor(b.start.x)), x1 = Math.min(width, Math.ceil(b.end.x));
+      const y0 = Math.max(0, Math.floor(b.start.y)), y1 = Math.min(height, Math.ceil(b.end.y));
+      let n = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) n += mask[y * width + x] ? 1 : 0;
+      return n / Math.max(1, (x1 - x0) * (y1 - y0));
+    };
+    const inArea = (b: DetectedBarBox) => centreInside({ bbox: { minX: b.start.x, minY: b.start.y, maxX: b.end.x, maxY: b.end.y } });
+    return withDetectedBars(bs, detected, ownShare, inArea, (b) => b);
+  };
   if (inside.length === 0) {
     return { error: 'No bars of that colour were found inside the data area. Check the colour, or move the data area’s corners on the calibration card.' };
   }
@@ -501,9 +524,10 @@ export function runBarDetect(
     // one the baseline was given along - so the swatch reading is available
     // here too. `categories.categoryAxis` only names WHICH axis; an unmarked
     // figure defaults to the upright chart the caller drew the baseline for.
-    const suspects = baseline ? swatchSuspectsIn(plainBoxes, 'x', baseline) : [];
+    const placed = withDetected(plainBoxes);
+    const suspects = baseline ? swatchSuspectsIn(placed, 'x', baseline) : [];
     return {
-      boxes: plainBoxes,
+      boxes: placed,
       matched: count,
       // ⚑ The blobs the user is being told about are the SHAPES FOUND, after a
       // severed bar has been made whole again - not the connected components the
@@ -524,7 +548,7 @@ export function runBarDetect(
   const { dividers, categoryAxis, expected } = categories;
   const along = (b: { minX: number; minY: number; maxX: number; maxY: number }) =>
     categoryAxis === 'x' ? { lo: b.minX, hi: b.maxX } : { lo: b.minY, hi: b.maxY };
-  const boxes: DetectedBarBox[] = [];
+  let boxes: DetectedBarBox[] = [];
   // ⚑ THE BARS THIS FIGURE DRAWS, measured before anything is cut: the blobs no
   // interior divider crosses. They are the reference `cutMakesASliver` judges a
   // piece against, and they have to be collected up front because a run being
@@ -599,6 +623,7 @@ export function runBarDetect(
   // not reach `bandOf` at all unless the user asks for it, and `clamp` is left
   // as it is because the question it answers is a different one: where does a
   // shape the user has ACCEPTED belong.
+  boxes = withDetected(boxes);
   const bandOf = (b: DetectedBarBox): number => {
     const lo = categoryAxis === 'x' ? b.start.x : b.start.y;
     const hi = categoryAxis === 'x' ? b.end.x : b.end.y;

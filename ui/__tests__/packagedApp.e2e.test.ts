@@ -186,8 +186,9 @@ describe.runIf(RUN)('the packaged app is complete', () => {
       png
     );
     expect(answer.error, 'the packaged app could not run the detector').toBeUndefined();
-    // ⚑ WHICH detector answered: RF-DETR would find a plot area too, so the case says ChartDete
-    expect(answer.detector, 'the answer came from another detector').toBe('chartdete');
+    // ⚑ WHICH detector answered: ChartDete would find a plot area too, so the case says RF-DETR, the app's detector
+    // since 2026-11-06 (ui/electron-ocr-worker.cjs)
+    expect(answer.detector, 'the answer came from another detector').toBe('rfdetr');
     const sure = (answer.detections ?? []).filter((d) => d.score >= 0.5);
     expect(sure.some((d) => d.cls === 'plot_area')).toBe(true);
     expect(sure.filter((d) => d.cls === 'x_tick_label').length).toBeGreaterThanOrEqual(5);

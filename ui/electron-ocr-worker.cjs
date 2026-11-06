@@ -16,7 +16,11 @@ const { readPixels } = require('./electron-ocr-paddle.cjs')
 const figtype = require('./electron-figtype.cjs')
 const figdet = require('./electron-figdet.cjs')
 const chartdete = require('./electron-chartdete-onnx.cjs')
-const DETECTOR = process.env.PLOTTRACER_DETECTOR !== 'rfdetr' && fs.existsSync(chartdete.MODEL_DIR) ? 'chartdete' : 'rfdetr'
+// ⚑ RF-DETR for everything since 2026-11-06 (docs/v2.7-workflow-walk.md, "Bars seen whole by the detector"): measured at
+// the input size the app runs it at (768 px), it reads 92.7% of 1,608 real axes right and 2.4% wrong against ChartDete's
+// 75.9% and 2.2%. ChartDete had been preferred on a measurement taken at 384 px. PLOTTRACER_DETECTOR=chartdete asks
+// for ChartDete where its pack is installed, to compare.
+const DETECTOR = process.env.PLOTTRACER_DETECTOR === 'chartdete' && fs.existsSync(chartdete.MODEL_DIR) ? 'chartdete' : 'rfdetr'
 
 const MODEL_DIR = path.join(__dirname, 'ocr-model')
 
@@ -37,6 +41,8 @@ let engine = null
 // one runtime in the app, started only when the graph type is first suggested.
 let models = null
 let detector = null
+// RF-DETR for bars (v2.7, its `bar` class): ChartDete reads the axes and legend where it is installed, and has no bars
+let barDetector = null
 
 parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
   try {
@@ -46,9 +52,14 @@ parentPort.on('message', async ({ id, kind, pngBase64, options }) => {
       parentPort.postMessage({ id, answer: await figtype.classify(await models, image) })
       return
     }
-    // the chart-element detector (v2.7), loaded on first use, like the classifiers: ChartDete when its pack is
-    // installed (electron-chartdete-onnx.cjs; measured better on axes and legends), else RF-DETR
-    // (electron-figdet.cjs); PLOTTRACER_DETECTOR=rfdetr asks for RF-DETR, to compare
+    // the chart-element detector (v2.7), loaded on first use, like the classifiers: RF-DETR (electron-figdet.cjs), or
+    // ChartDete when PLOTTRACER_DETECTOR=chartdete asks for it (electron-chartdete-onnx.cjs), to compare
+    if (kind === 'figdet' && options && options.bars) {
+      if (!barDetector) barDetector = DETECTOR === 'rfdetr' && detector ? detector : figdet.startDetector(require('onnxruntime-web'))
+      const found = await figdet.detect(await barDetector, image)
+      parentPort.postMessage({ id, answer: { detections: (found.detections || []).filter((d) => d.cls === 'bar'), detector: 'rfdetr' } })
+      return
+    }
     if (kind === 'figdet') {
       const det = DETECTOR === 'chartdete' ? chartdete : figdet
       if (!detector) detector = DETECTOR === 'chartdete' ? chartdete.startChartDete(require('onnxruntime-web')) : figdet.startDetector(require('onnxruntime-web'))

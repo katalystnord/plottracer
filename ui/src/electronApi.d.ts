@@ -51,7 +51,8 @@ declare global {
        */
       classifyFigure: (pngBase64: string) => Promise<{ own?: number[]; docling?: number[]; error?: string }>;
       /** The chart-element detector's boxes for one figure (v2.7, ui/electron-figdet.cjs). */
-      detectChartElements: (pngBase64: string) => Promise<{
+      /** `options.bars`: only the bar boxes, from RF-DETR whichever detector reads the axes (v2.7). */
+      detectChartElements: (pngBase64: string, options?: { bars?: boolean }) => Promise<{
         detections?: { cls: string; box: { x0: number; y0: number; x1: number; y1: number }; score: number }[];
         /** Which detector answered: ChartDete when its pack is installed, else RF-DETR (v2.7). */
         detector?: 'chartdete' | 'rfdetr';
