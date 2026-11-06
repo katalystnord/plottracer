@@ -106,8 +106,10 @@ export function fitMarkers(blob: readonly number[], w: number, templates: readon
   return out;
 }
 
-/** Markers drawn over each other span at most this many times one marker's box. */
-const MAX_MERGED_BOX = 40;
+/** Markers drawn over each other span at most this many times one marker's box. Measured on Adobe CHART-Synthetic's
+ * 110 scatters: at 400 every cluster is still taken apart (60.8% of points found, as with no cap), at 150 not (47.0%),
+ * and at 40, the first value, 41.8%. A plot frame spans thousands. */
+const MAX_MERGED_BOX = 400;
 
 /** The share of a blob's ink its fitted markers must explain for it to be taken apart. */
 const EXPLAINED = 0.9;
@@ -120,8 +122,8 @@ const EXPLAINED = 0.9;
  */
 export function splitBlob(blob: readonly number[], w: number, templates: readonly MarkerTemplate[], explainedShare = EXPLAINED): FittedMarker[] | null {
   if (!templates.length || blob.length < 4) return null;
-  // ⚑ ink spread far wider than a few markers (the plot's frame, a filled area) is not tried: the fit's cost follows
-  // the blob's box, and 400 by 300 px of it took 566 ms to say no (the code review, 2026-11-05)
+  // ⚑ ink spread far wider than a cluster of markers (the plot's frame, a filled area) is not tried: the fit's cost
+  // follows the blob's box, and 400 by 300 px of it took 566 ms to say no (the code review, 2026-11-05)
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const i of blob) {
     const x = i % w, y = (i - x) / w;

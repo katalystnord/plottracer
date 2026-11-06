@@ -29,6 +29,12 @@ describe('markers drawn over each other, and what is not', () => {
     expect(got!.every((q) => q.template === 0)).toBe(true);
   });
 
+  it('given a long run of markers drawn over each other along a diagonal, spanning 180 marker boxes, each is its own point', () => {
+    // a cap of 40 boxes, the first value, left these whole: Adobe CHART-Synthetic's scatters 60.8% -> 41.8% found
+    const run = union(...Array.from({ length: 20 }, (_, k) => shape(3.5, 100 + 6 * k, 100 + 6 * k)));
+    expect(splitBlob(run, W, [disc, dot], 0.8)?.length).toBe(20);
+  });
+
   it('given one marker drawn larger than its template, it is one point, not a marker and pieces of others', () => {
     for (const big of [1.2, 1.3, 1.4, 1.5]) {
       expect(splitBlob(shape(3.5 * big), W, [disc, dot], 0.8), `${big}x the radius`).toBeNull();
