@@ -95,9 +95,11 @@ export function withDetectedBars<B extends BarBox>(
     // a bar the colour read found whole keeps the colour's exact edges
     if (boxes.some((b) => iou(b, box) >= SAME_BAR)) continue;
     const inside = boxes.flatMap((b, k) => (area(b) > 0 && overlap(b, box) / area(b) >= PIECE_INSIDE ? [k] : []));
-    // one box over two whole bars of the colour, side by side, is not one bar
+    // one box over two whole bars of the colour, side by side and nothing else, is not one bar. ⚠️ Only when the box
+    // holds nothing but such pieces: a hatch leaves small pieces besides its big ones, and refusing those too cost
+    // Adobe CHART-Synthetic 2.7 points of bars found (85.8% to 83.1%, measured 2026-11-07; PMC 0.1 to 0.3).
     const whole = inside.filter((k) => area(boxes[k]!) >= WHOLE_BAR * area(box)).map((k) => boxes[k]!);
-    if (whole.some((a, i) => whole.some((b, j) => j > i && sideBySide(a, b)))) continue;
+    if (inside.length === whole.length && whole.some((a, i) => whole.some((b, j) => j > i && sideBySide(a, b)))) continue;
     for (const k of inside) replaced.add(k);
     kept.push(box);
     added.push(make(box));

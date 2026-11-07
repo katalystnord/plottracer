@@ -170,4 +170,17 @@ describe('bars seen whole by the detector', () => {
     if ('error' in r) throw new Error(r.error);
     expect(r.boxes.map(boxOf)).toEqual([[30, 40, 70, 140]]);
   });
+
+  // measured 2026-11-07: the rule above cost Adobe 2.7 points of bars found, by refusing hatched bars whose big pieces
+  // lie side by side; a hatch also leaves small pieces, two plain bars do not
+  it('given a hatched bar whose two big pieces lie side by side among small ones, the detector’s box is placed whole', () => {
+    const img = white(W, H);
+    block(img, W, 30, 40, 40, 100, BLUE);
+    block(img, W, 49, 40, 2, 100, BLACK); // a hatch line down the middle: two big halves side by side
+    block(img, W, 30, 52, 40, 2, BLACK); // and one across near the top: two small pieces above
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined,
+      { dividers: [0, 100, 200], categoryAxis: 'x' }, undefined, undefined, [proposal(30, 40, 70, 140)]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf)).toEqual([[30, 40, 70, 140]]);
+  });
 });
