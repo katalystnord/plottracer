@@ -54,6 +54,8 @@ files:
   # 2026-11-06. ChartDete's pack (ui/figdet-model/chartdete/, 162 MB) stays out: no user path reaches it, and it is
   # asked for only by PLOTTRACER_DETECTOR=chartdete, to compare, from a checkout.
   - ui/figdet-model/detector.onnx
+  # Its model card: what it was trained on and under which licences (David, 2026-11-07).
+  - ui/figdet-model-card.md
   - "!ui/electron-dev.cjs"
   - "!ui/electron-start.cjs"
   - build/icons/**/*

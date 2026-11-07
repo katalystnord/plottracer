@@ -188,6 +188,17 @@ Reading text off a figure (category names, axis labels) uses the **PP-OCRv6** ti
 > Licensed under the MIT License
 > <https://github.com/microsoft/onnxruntime>
 
+Finding a chart's parts (plot area, ticks, labels, titles, legend, colour key, bars) uses our own detector, also
+bundled: **RF-DETR Nano** by Roboflow (Apache-2.0), fine-tuned by us. It was trained on charts from our own generator
+and on the **CHART-Info ICPR 2022** PMC training split: figures from CC BY articles in PubMed Central, with annotations
+by the CHART-Info organisers under CC BY-NC-SA 4.0 (<https://chartinfo.github.io/>). The weights are part of
+PlotTracer, under the AGPL; they contain no copy of the training figures or annotations. Its model card is
+[`ui/figdet-model-card.md`](ui/figdet-model-card.md).
+
+> RF-DETR - Copyright (c) Roboflow
+> Licensed under the Apache License 2.0
+> <https://github.com/roboflow/rf-detr>
+
 ---
 
 ## Contributing
