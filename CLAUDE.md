@@ -314,11 +314,15 @@ while every instrument reports green.
 - **What it is:** a cross-platform (Linux / macOS / Windows) Electron desktop app
   that extracts numerical data from the figures in scientific papers.
 - **Licence:** AGPL-3.0.
-- **Lineage & attribution (required):** started from **WebPlotDigitizer** by Ankit
+- **Lineage & attribution:** started from **WebPlotDigitizer** by Ankit
   Rohatgi (AGPL-3.0). Some algorithms are **clean-room** reimplementations of
   **Engauge Digitizer** ideas (written from the algorithm description, never ported
-  from its GPL-2.0 C++). UI design language follows **Ketcher**. Keep these
-  acknowledgements in the README and the in-app About dialog.
+  from its GPL-2.0 C++). UI design language follows **Ketcher**. These
+  acknowledgements live in the README and in shipped LICENSE/NOTICE files.
+  ⚑ **Not in the About dialog:** no licence requires a third-party credit there
+  (checked 2026-11-07; WebPlotDigitizer's LICENSE is the standard AGPL with no
+  section 7(b) term). Never add credits to About, and leave its current text
+  alone unless David asks; see `../policy-on-attribution.md`.
 
 ---
 
@@ -426,7 +430,8 @@ npm test            # builds ui/, then runs the full vitest suite (unit + e2e)
   leave their machine.
 - **Read other tools' project files faithfully; our own file format is ours**
   (Tenet 6). Import filters translate a foreign model into ours at the boundary.
-- **Acknowledge upstream clearly** (README + About) - legal requirement and the
-  right thing to do.
+- **Acknowledge upstream clearly in the README and the shipped LICENSE/NOTICE
+  files.** The licences require the notice files; the README credit is the right
+  thing to do. The About dialog is not where credits go (`../policy-on-attribution.md`).
 - **Guards belong in the model, and the model has more than one entrance** - the
   load/deserialize path must enforce the same validity as the interactive path.

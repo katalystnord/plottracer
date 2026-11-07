@@ -199,9 +199,13 @@ export function HelpMenu({ onOpenHelpOverlay, onOpenExample, onStartChallenge, a
                   like "XY Scatter - modulus vs. crosslinker (Auto-trace ▸ Scattered
                   points)" - which now set the card's width. The attribution was
                   wrapping to seven lines inside a card twice that wide, with the
-                  right half of every line empty. It is required text (AGPL-3.0 plus
-                  the clean-room and Ketcher acknowledgements), so it should read as
-                  a paragraph rather than a ransom note. */}
+                  right half of every line empty. It should read as a paragraph
+                  rather than a ransom note.
+                  ⚑ The credits here are NOT required by any licence (checked
+                  2026-11-07: WebPlotDigitizer's LICENSE is the standard AGPL with no
+                  section 7(b) term; Apache-2.0 and MIT are met by shipped NOTICE and
+                  LICENSE files). Do not add credits here, and leave this text as it
+                  is unless David asks: ../policy-on-attribution.md. */}
               <div style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary, lineHeight: 1.5 }}>
                 <strong>PlotTracer</strong> <span data-testid="app-version">v{appVersion}</span> - a
                 desktop plot digitizer based on{' '}
