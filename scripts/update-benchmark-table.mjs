@@ -99,7 +99,11 @@ const corpora = results.corpora;
 function cell(corpus, family) {
   const t = corpus.types.find((x) => x.family === family);
   if (!t) return '<td class="ev-na">-</td>';
-  return `<td><span class="ev-val">${pct(t.all.pct)}</span><span class="ev-n">n = ${num(t.all.total)}</span></td>`;
+  // ⚑ bars on the competition's own scale too (2026-11-07): the F-measure and Task 6a count every extra box
+  const comp = t.all.f1 !== undefined
+    ? `<span class="ev-n">precision ${pct(t.all.precision)} · F ${t.all.f1} · Task 6a ${t.all.task6a ?? '-'}</span>`
+    : '';
+  return `<td><span class="ev-val">${pct(t.all.pct)}</span><span class="ev-n">n = ${num(t.all.total)}</span>${comp}</td>`;
 }
 
 const head = corpora.map((c, i) => `<th scope="col">[${i + 1}] ${esc(REFERENCES[c.id]?.short ?? c.name)}</th>`).join('');
@@ -130,7 +134,9 @@ ${rows}
     </div>
     <p class="ev-stamp">
       Share of elements recovered within the competition's tolerance, scored in image space
-      under the competition's own task-6 protocol: given the answers to tasks 1 to 5 (chart
+      (for bars, the share of true bars a box overlaps by half; beneath it the share of boxes
+      that are bars, the F-measure at that overlap, and the competition's Task 6a score, each of
+      which counts every extra box), under the competition's own task-6 protocol: given the answers to tasks 1 to 5 (chart
       type, text, plot box and axes, legend), with each colour picked as a person picks it in
       any digitiser. PlotTracer <span class="data">${esc(results.appVersion)}</span> at its
       default settings (tolerance ${results.settings.tolerance}, minimum blob diameter

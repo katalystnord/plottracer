@@ -53,14 +53,37 @@ describe('bars seen whole by the detector', () => {
     expect(withDet.boxes).toHaveLength(2);
   });
 
-  it('given a bar the colour read found whole, its box is the colour read’s, not the detector’s', () => {
+  // ⚑ "The detector decides what is a bar" (2026-11-07): measured, the detector's edges are the closer ones
+  it('given a bar the colour read and the detector both find, its box is the detector’s', () => {
     const img = white(W, H);
     block(img, W, 30, 50, 40, 90, BLUE);
     const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
-      proposal(27, 47, 73, 141),
+      proposal(28.6, 48.6, 71.4, 141.3),
+    ]);
+    if ('error' in r) throw new Error(r.error);
+    expect(r.boxes.map(boxOf)).toEqual([[29, 49, 71, 141]]);
+  });
+
+  it('given a box the colour read returns that no detector box gives, it is not placed', () => {
+    const img = white(W, H);
+    block(img, W, 30, 50, 40, 90, BLUE);
+    block(img, W, 150, 100, 20, 40, BLUE); // the same colour, with no detector box: text, a swatch, a tick label
+    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(30, 50, 70, 140),
     ]);
     if ('error' in r) throw new Error(r.error);
     expect(r.boxes.map(boxOf)).toEqual([[30, 50, 70, 140]]);
+  });
+
+  it('given a figure on which the detector is sure of no bar, the colour read reads the bars as before', () => {
+    const img = white(W, H);
+    block(img, W, 30, 50, 40, 90, BLUE);
+    block(img, W, 150, 100, 20, 40, BLUE);
+    const before = runBarDetect(img, W, H, BLUE, 60);
+    const unsure = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
+      proposal(30, 50, 70, 140, 0.3),
+    ]);
+    expect(unsure).toEqual(before);
   });
 
   it('given a detector box over pieces of the colour, the pieces mostly inside it are replaced by the box', () => {
@@ -71,9 +94,8 @@ describe('bars seen whole by the detector', () => {
       proposal(20, 40, 60, 140),
     ]);
     if ('error' in r) throw new Error(r.error);
-    const inside = r.boxes.map(boxOf).filter((b) => b[0]! >= 15 && b[2]! <= 65);
-    expect(inside).toEqual([[20, 40, 60, 140]]);
-    expect(r.boxes.map(boxOf)).toContainEqual([150, 100, 170, 140]);
+    // the plain bar elsewhere has no detector box, so it is not placed (the detector decides what is a bar)
+    expect(r.boxes.map(boxOf)).toEqual([[20, 40, 60, 140]]);
   });
 
   it('given a detector box mostly of another colour, it is not filed under this colour', () => {
@@ -124,20 +146,9 @@ describe('bars seen whole by the detector', () => {
     expect(r.boxes.map(boxOf).filter((b) => b[0]! >= 15 && b[2]! <= 65)).toEqual([[20, 40, 60, 140]]);
   });
 
-  it('given one detector box over two whole bars of the colour, both bars stay as the colour read found them', () => {
-    const img = white(W, H);
-    block(img, W, 30, 50, 30, 90, BLUE);
-    block(img, W, 62, 60, 30, 80, BLUE);
-    const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, undefined, undefined, undefined, undefined, [
-      proposal(30, 50, 92, 140),
-    ]);
-    if ('error' in r) throw new Error(r.error);
-    expect(r.boxes.map(boxOf)).toEqual([[30, 50, 60, 140], [62, 60, 92, 140]]);
-  });
-
   it('given a hatch so dense that every piece is below the size kept, the detector’s bars are placed, not refused', () => {
     const img = white(W, H);
-    hatchedBar(img, W, 20, 40, 40, 100, BLUE, 6); // 2 px lines every 6 px: 44% of the bar its own colour
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE, 8); // 2 px lines every 8 px: 56% of the bar its own colour, its commonest
     const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, { minDiameter: 12 }, undefined, undefined, undefined, [
       proposal(20, 40, 60, 140),
     ]);
@@ -149,8 +160,8 @@ describe('bars seen whole by the detector', () => {
   // the code review of 2026-11-06 (02248a6..d4deb83)
   it('given the detector’s bars alone (every piece too small), a floating swatch is held back and an empty category named, as on every path', () => {
     const img = white(W, H);
-    hatchedBar(img, W, 20, 40, 40, 100, BLUE, 6); // category 0, standing on the baseline at y 140
-    hatchedBar(img, W, 150, 20, 14, 10, BLUE, 6); // a legend swatch, floating and narrow, in category 2
+    hatchedBar(img, W, 20, 40, 40, 100, BLUE, 8); // category 0, standing on the baseline at y 140
+    hatchedBar(img, W, 150, 20, 14, 10, BLUE, 8); // a legend swatch, floating and narrow, in category 2
     const r = runBarDetect(img, W, H, BLUE, 60, 'foreground', undefined, { minDiameter: 12 },
       { dividers: [0, 70, 140, 200], categoryAxis: 'x', expected: 3 }, { atPixel: 140, tolerancePx: 2 }, undefined, [
         proposal(20, 40, 60, 140),

@@ -22,7 +22,7 @@
 import { colorFilter, type RGB, type ColorFilterMode, type FilterRegion } from '../algorithms/colorFilter.js';
 import { detectBlobs, type BlobDetectOptions } from '../algorithms/blobDetect.js';
 import { joinAcrossHatch } from '../algorithms/hatchJoin.js';
-import { withDetectedBars, type DetectedBarProposal } from '../algorithms/detectedBars.js';
+import { withDetectedBars, OWN_COLOUR, OWN_INK, type DetectedBarProposal } from '../algorithms/detectedBars.js';
 import { joinAcrossRule, type SeveringRule } from '../algorithms/ruleJoin.js';
 import {
   measureCategoryAxisFromFragments,
@@ -402,12 +402,28 @@ export function runBarDetect(
   // same mask
   const withDetected = (bs: DetectedBarBox[]): DetectedBarBox[] => {
     if (!detected || detected.length === 0) return bs;
-    const ownShare = (b: DetectedBarBox) => {
+    // a box is this colour's when enough of it is within tolerance of the colour, and its middle's commonest colour is
+    // the colour itself (a hatch or an outline leaves the fill the commonest): within tolerance alone, two close
+    // series both claimed one bar
+    const belongs = (b: DetectedBarBox) => {
       const x0 = Math.max(0, Math.floor(b.start.x)), x1 = Math.min(width, Math.ceil(b.end.x));
       const y0 = Math.max(0, Math.floor(b.start.y)), y1 = Math.min(height, Math.ceil(b.end.y));
       let n = 0;
       for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) n += mask[y * width + x] ? 1 : 0;
-      return n / Math.max(1, (x1 - x0) * (y1 - y0));
+      if (n / Math.max(1, (x1 - x0) * (y1 - y0)) < OWN_COLOUR) return false;
+      const w = x1 - x0, h = y1 - y0, count = new Map<number, number>();
+      for (let y = Math.round(y0 + h / 4); y < Math.round(y1 - h / 4); y++) {
+        for (let x = Math.round(x0 + w / 4); x < Math.round(x1 - w / 4); x++) {
+          const i = (y * width + x) * 4;
+          const k = ((data[i]! >> 3) << 10) | ((data[i + 1]! >> 3) << 5) | (data[i + 2]! >> 3);
+          count.set(k, (count.get(k) ?? 0) + 1);
+        }
+      }
+      let top = -1, most = 0;
+      for (const [k, c] of count) if (c > most) { most = c; top = k; }
+      if (top < 0) return false;
+      const rgb = [((top >> 10) & 31) * 8 + 4, ((top >> 5) & 31) * 8 + 4, (top & 31) * 8 + 4];
+      return Math.max(Math.abs(rgb[0]! - target[0]), Math.abs(rgb[1]! - target[1]), Math.abs(rgb[2]! - target[2])) <= OWN_INK;
     };
     // the colour read's own data-area rule (`centreInside` below): the box's centre inside
     const inArea = (b: DetectedBarBox) => {
@@ -415,7 +431,7 @@ export function runBarDetect(
       const cx = (b.start.x + b.end.x) / 2, cy = (b.start.y + b.end.y) / 2;
       return cx >= region.x && cx <= region.x + region.width && cy >= region.y && cy <= region.y + region.height;
     };
-    return withDetectedBars(bs, detected, ownShare, inArea, (b) => b, categories?.categoryAxis);
+    return withDetectedBars(bs, detected, belongs, inArea, (b) => b);
   };
   /** The detector's bars alone, where the colour read finds none (null: nothing to place, the refusal stands). */
   /**
