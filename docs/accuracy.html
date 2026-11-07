@@ -371,7 +371,7 @@
       <table class="ev-results">
         <thead><tr><th scope="col">Chart type</th><th scope="col">[1] Real figures</th><th scope="col">[2] Synthetic figures</th></tr></thead>
         <tbody>
-            <tr><th scope="row">Bar</th><td><span class="ev-val">85.3%</span><span class="ev-n">n = 6,494</span></td><td><span class="ev-val">85.4%</span><span class="ev-n">n = 6,739</span></td></tr>
+            <tr><th scope="row">Bar</th><td><span class="ev-val">79.5%</span><span class="ev-n">n = 6,494</span><span class="ev-n">precision 95.2% · F 86.6 · Task 6a 78.9</span></td><td><span class="ev-val">79.6%</span><span class="ev-n">n = 6,739</span><span class="ev-n">precision 92.4% · F 85.5 · Task 6a 70.5</span></td></tr>
             <tr><th scope="row">Line</th><td><span class="ev-val">69.3%</span><span class="ev-n">n = 29,688</span></td><td><span class="ev-val">92.0%</span><span class="ev-n">n = 2,236</span></td></tr>
             <tr><th scope="row">Scatter</th><td><span class="ev-val">93.6%</span><span class="ev-n">n = 5,409</span></td><td><span class="ev-val">60.8%</span><span class="ev-n">n = 11,996</span></td></tr>
         </tbody>
@@ -379,7 +379,9 @@
     </div>
     <p class="ev-stamp">
       Share of elements recovered within the competition's tolerance, scored in image space
-      under the competition's own task-6 protocol: given the answers to tasks 1 to 5 (chart
+      (for bars, the share of true bars a box overlaps by half; beneath it the share of boxes
+      that are bars, the F-measure at that overlap, and the competition's Task 6a score, each of
+      which counts every extra box), under the competition's own task-6 protocol: given the answers to tasks 1 to 5 (chart
       type, text, plot box and axes, legend), with each colour picked as a person picks it in
       any digitiser. PlotTracer <span class="data">2.7.0</span> at its
       default settings (tolerance 60, minimum blob diameter
@@ -500,8 +502,9 @@
         </li>
         <li>
           <b>Adjacent same-coloured bars.</b> Bars of one colour with no gap merge into a
-          single region. Across 384 bar figures in [1]: 92.2% where bars are separated,
-          79.6% where they touch (92.3% and 76.9% on colour figures alone).
+          single region where the detector misses them. Across 384 bar figures in [1]: 87.8%
+          where bars are separated, 72.6% where they touch (87.6% and 67.1% on colour figures
+          alone).
         </li>
         <li>
           <b>Dense scatter.</b> Overlapping markers are over-detected in [1] and
