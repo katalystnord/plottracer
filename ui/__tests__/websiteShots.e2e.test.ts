@@ -24,7 +24,7 @@
  *   WEBSITE_SHOTS=1 SHOT_OUT=/tmp/shots npx vitest run ui/__tests__/websiteShots.e2e.test.ts
  *   WEBSITE_SHOTS=1 SHOT_ONLY=pie ...   one card only
  */
-import { describe, it, beforeAll, afterAll } from 'vitest';
+import { describe, it, beforeAll, afterAll, afterEach, expect } from 'vitest';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright-core';
 import { readFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -117,6 +117,21 @@ async function traceColour(d: Driver, hex: string, shape?: 'curve' | 'scatter', 
   await d.wait(150);
   await d.testId('color-trace-run').click();
   await d.wait(900);
+  // ⚑ A BAR READ ASKS THE DETECTOR FIRST (v2.7), and the first press on a figure
+  // loads it: seconds, not the 900 ms above. The frame came back with "No points
+  // yet" and a pass. Wait for the table to have something, or for the card to say
+  // why it has not.
+  await d.page
+    .getByText(/^No points yet/)
+    .waitFor({ state: 'detached', timeout: 60000 })
+    .catch(() => undefined);
+  await d.wait(400);
+}
+
+/** Put the tool down, so its card folds away from the figure before the frame is taken. */
+async function toolDown(d: Driver) {
+  await d.testId('mode-pan').click();
+  await d.wait(300);
 }
 
 const CARDS: Card[] = [
@@ -410,6 +425,26 @@ async function walkCalibration(
 ) {
   const answered: string[] = [];
   const answeredAnchors = new Set<unknown>();
+  // ⚑⚑ THE DATA AREA FIRST, AS THE CARD ASKS (v2.7). Every walk now opens with
+  // "Mark the data area: drag a box from one corner of the plot to the opposite
+  // corner", which is not a "Calibration step n/m" line - so this read no label,
+  // answered nothing, and every card timed out waiting for Calibrate. The box is
+  // the one the figure's own calibration anchors span (a colour key's k-points
+  // excluded: the key sits outside the plot), as a person drags round the plot.
+  if (/Mark the data area/.test(await d.text('tips-bar'))) {
+    const pts: { px: number; py: number }[] = [];
+    for (const [k, v] of Object.entries(anchors)) {
+      if (/^k/.test(k)) continue;
+      for (const q of Array.isArray(v) ? (v as { px: number; py: number }[]) : [v]) pts.push(q);
+    }
+    if (pts.length === 0) throw new Error('the walk asks for the data area, and the figure has no anchors to span it');
+    const xs = pts.map((q) => q.px), ys = pts.map((q) => q.py);
+    // ⚑ From the bottom-right corner: the card sits over the top of the canvas, so
+    // a press at the top-left lands on the card (a pie's top rim point does).
+    await d.drag([Math.max(...xs), Math.max(...ys)], [Math.min(...xs), Math.min(...ys)]);
+    if (/Mark the data area/.test(await d.text('tips-bar'))) throw new Error('the data area drag was not taken');
+    answered.push('Data area');
+  }
   for (let guard = 0; guard < 14; guard += 1) {
     // ⚑⚑ THE TIPS BAR, NOT THE STEP MATRIX. The matrix marks the live step with
     // "click image", which is only true while a CLICK is what is wanted - a
@@ -540,6 +575,7 @@ describe.runIf(RUN)('website gallery shots', () => {
         }
 
         if (card.after) await card.after(d);
+        if ((await d.testId('data-extraction-card').count()) > 0) await toolDown(d);
         {
           const b = (await page.locator('canvas').first().boundingBox())!;
           const v = (await page.getByTestId('view-state').textContent()) ?? '';
@@ -554,4 +590,130 @@ describe.runIf(RUN)('website gallery shots', () => {
       180000
     );
   }
+});
+
+/**
+ * THE USER GUIDE'S FIGURES (plottracer-book, guide/), taken the 2.7 way: Capture
+ * figure, [Automatic axis detection], Calibrate, the legend, Auto-extract all series.
+ *
+ * ⚑ The route the guide's quick start prints, driven click for click, so the guide
+ * cannot describe a step the app does not take. Each frame waits for what the step
+ * produces and throws when it does not arrive, rather than photographing a card
+ * that is still thinking.
+ *
+ * Usage:
+ *   GUIDE_SHOTS=1 SHOT_OUT=/tmp/guide npx vitest run ui/__tests__/websiteShots.e2e.test.ts
+ */
+const GUIDE = process.env['GUIDE_SHOTS'] === '1';
+
+async function shot(name: string) {
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: path.join(OUT, `${name}.png`), scale: 'device' });
+}
+
+/** Capture, pick the type, let [Automatic axis detection] fill the walk; waits for `last` chip to hold a number. */
+async function detectAxes(sample: string, type: string, last: string) {
+  await launch(sample);
+  await page.getByTestId('axes-type-trigger').click();
+  await page.getByTestId(`axes-option-${type}`).click();
+  await page.getByTestId('capture-figure').click();
+  await page.waitForTimeout(400);
+  await page.getByTestId('auto-axis-detect').click();
+  const deadline = Date.now() + 60000;
+  for (;;) {
+    const chip = ((await page.getByTestId(`calib-chip-${last}`).textContent()) ?? '').replace(/\s/g, '');
+    if (/\d/.test(chip.replace(/^[A-Za-z]+\d?/, '')) || /^Catn\d/.test(chip)) break;
+    if (Date.now() > deadline) throw new Error(`${sample}: detection placed no ${last} (chip reads "${chip}")`);
+    await page.waitForTimeout(300);
+  }
+  await page.waitForTimeout(500);
+}
+
+async function calibrate(sample: string) {
+  await page.getByTestId('run-calibration').click();
+  await page.waitForTimeout(700);
+  if ((await page.getByTestId('calibration-error').count()) > 0) {
+    throw new Error(`${sample}: calibration refused - ${await page.getByTestId('calibration-error').innerText()}`);
+  }
+}
+
+async function autoLegend(sample: string) {
+  await page.getByTestId('mode-legend').click();
+  await page.getByTestId('legend-auto-detect').click();
+  const deadline = Date.now() + 60000;
+  for (;;) {
+    const rects = JSON.parse((await page.getByTestId('masked-areas').getAttribute('data-rects')) ?? '[]') as { kind?: string }[];
+    if (rects.some((r) => r.kind === 'legend')) break;
+    if (Date.now() > deadline) throw new Error(`${sample}: Auto detect legend found no legend`);
+    await page.waitForTimeout(300);
+  }
+}
+
+async function autoExtract(): Promise<string[]> {
+  await page.getByTestId('mode-data-extraction').click();
+  await page.getByTestId('auto-extract-all').click();
+  await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+  await page.waitForTimeout(600);
+  return page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+}
+
+describe.runIf(GUIDE)('user guide figures', () => {
+  beforeAll(() => {
+    mkdirSync(OUT, { recursive: true });
+  });
+  afterEach(async () => {
+    if (app) await app.close().catch(() => undefined);
+  });
+
+  it('quick start: the stress-strain curve, detected, calibrated and auto-extracted', async () => {
+    await detectAxes('xy-stress-strain', 'xy', 'y2');
+    await shot('guide-qs-detected');
+    await calibrate('xy-stress-strain');
+    const said = await autoExtract();
+    console.log('quick start said:', said);
+    expect(said[0]).toMatch(/^Series 1: 1 line, \d+ points$/);
+    await shot('guide-qs-extracted');
+  }, 300000);
+
+  it('hero: four series in one ink, told apart by their line style', async () => {
+    await detectAxes('xy-dashed-release', 'xy', 'y2');
+    await calibrate('xy-dashed-release');
+    await autoLegend('xy-dashed-release');
+    await shot('guide-legend');
+    const said = await autoExtract();
+    console.log('hero said:', said);
+    expect(said.filter((t) => /^Formulation [A-D]: 1 line/.test(t)).length).toBe(4);
+    await shot('guide-autoextract');
+    await page.getByTestId('mode-pan').click();
+    await shot('guide-hero');
+  }, 300000);
+
+  it('grouped bars: categories detected, names offered and used, every series read', async () => {
+    await detectAxes('bar-grouped-viability', 'bar', 'c2');
+    await calibrate('bar-grouped-viability');
+    await page.getByTestId('name-offer-use').waitFor({ timeout: 60000 });
+    await shot('guide-bar-categories');
+    await page.getByTestId('name-offer-use').click();
+    await page.waitForTimeout(500);
+    await page.getByTestId('category-read').click();
+    await autoLegend('bar-grouped-viability');
+    const said = await autoExtract();
+    console.log('bars said:', said);
+    await page.getByTestId('mode-pan').click();
+    await shot('guide-bar');
+  }, 300000);
+
+  it('hatched bars: whole bars from the detector, no legend', async () => {
+    await detectAxes('bar-hatched-extraction-yield', 'bar', 'c2');
+    await calibrate('bar-hatched-extraction-yield');
+    await page.getByTestId('name-offer-use').waitFor({ timeout: 60000 });
+    await page.getByTestId('name-offer-use').click();
+    await page.waitForTimeout(400);
+    await page.getByTestId('category-read').click();
+    const said = await autoExtract();
+    console.log('hatched said:', said);
+    await page.getByTestId('mode-pan').click();
+    await shot('guide-hatched');
+  }, 300000);
 });

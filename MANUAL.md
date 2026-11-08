@@ -49,7 +49,7 @@ the picture, use **Mask an area** on the Legend card (section 4).
 
 Pick the graph type from the **card picker** in the top bar - each type shows its
 own icon, so a bar chart and a histogram are told apart by their shape rather than
-by reading two similar names. The types are **XY** (linear/log/date),
+by reading two similar names. The types are **XY** (linear/log/date), **Contour**,
 **Bar**, **Span chart**, **Stacked bar**, **Polar**, **Spider / Radar**,
 **Pie / Donut**, **Heatmap**, **Ternary**, **Map**, **Circular chart recorder**,
 **Histogram**, **Box plot**, **Candlestick**, or **Line** (categorical X).
