@@ -309,6 +309,16 @@ averaged or centroided away. It is greyed out for **Box plot**, **Candlestick**,
 letter-values, a candle's four, a matrix and a categorical point are none of them
 a bounding box - so those are placed by hand with the loupe.
 
+**Bars are found whole by the chart-element detector.** On a picture (not a figure
+drawn in a PDF, which is read from its drawing), Colour trace and Auto-extract ask
+the detector, offline, where the bars are. Where it is sure of any bar, each of its
+boxes is one bar, placed once with the detector's edges, and it goes to the colour
+that fills most of it: a hatched bar, which the colour read would find in pieces,
+is placed whole, and a box mostly of another colour, or outside the data area, is
+not placed. Where the detector is sure of no bar, the bars are read by colour alone,
+as before. The first press on a figure loads the detector and can take a few
+seconds.
+
 **A stacked bar chart is its own type**, because its segments are connected. You
 capture it a series at a time, with the same drag-box - but a segment's bottom is
 never a number of its own: it *is* the top of the segment below, and the lowest
@@ -913,6 +923,18 @@ This is a **one-way** road. PlotTracer reads those formats but does not write th
 a third of what it records (spider spokes and their per-axis scales, point roles,
 box-plot tuples, measurement blocks) has nowhere to go in any of them, so offering
 an export back would promise a round trip it could not honour.
+
+## 13. The Trace Challenge
+
+**Help ▸ Take The Trace Challenge** is a game: four figures (two easy,
+one medium, one hard), each already calibrated, traced against the clock. Read each round's instruction, place the
+points, and press **Done**; every point missed or placed off its true value adds
+time, and the lowest total time wins.
+
+**It is traced by hand.** It tests your eye and your aim, so during a round the
+Data extraction card offers **Place points** (and **Split a line** where lines are
+the record). The automatic tools stay in their places, greyed, saying *"The Trace
+Challenge is traced by hand."*, and Auto-extract refuses for the round.
 
 ---
 

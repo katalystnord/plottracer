@@ -2,6 +2,7 @@ import { theme } from '../theme.js';
 import { FloatingPanel } from '../FloatingPanel.js';
 import { HelpIcon, GRAPH_TYPE_ICONS } from '../icons.js';
 import { EXAMPLES, MANUAL_URL } from '../examples.js';
+import { DEFAULT_GRADE_PLAN, roundsPerGame } from '../../../engine/traceChallenge.js';
 
 /**
  * The Help dropdown - the F1 card's visible route, the bundled examples, the
@@ -165,7 +166,7 @@ export function HelpMenu({ onOpenHelpOverlay, onOpenExample, onStartChallenge, a
                     fontWeight: 700,
                     fontSize: theme.font.size.regular,
                   }}
-                  title="Race the clock tracing 5 pre-calibrated example figures - scored against their true values"
+                  title={`Race the clock tracing ${roundsPerGame(DEFAULT_GRADE_PLAN)} pre-calibrated example figures by hand, scored against their true values`}
                 >
                   🎯 Take The Trace Challenge
                 </button>

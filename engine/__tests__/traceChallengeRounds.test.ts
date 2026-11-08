@@ -415,3 +415,11 @@ describe('a bar round, end to end', () => {
     expect(good.penaltySeconds).toBeLessThan(1);
   });
 });
+
+describe('the Help menu names the game length the game is drawn with', () => {
+  it('a game is as many figures as its grade plan draws: two easy, one medium, one hard is 4', async () => {
+    const { roundsPerGame, DEFAULT_GRADE_PLAN } = await import('../traceChallenge.js');
+    expect(roundsPerGame(DEFAULT_GRADE_PLAN)).toBe(4);
+    expect(roundsPerGame({ easy: 3, medium: 2, hard: 1 })).toBe(6);
+  });
+});

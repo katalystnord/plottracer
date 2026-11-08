@@ -416,6 +416,12 @@ export interface GradePlan {
 /** The shape of a game: two easy, one medium, one hard (David, 2026-08-10). */
 export const DEFAULT_GRADE_PLAN: GradePlan = { easy: 2, medium: 1, hard: 1 };
 
+/** How many figures one game is: what the Help menu says, read from the plan the game is drawn with. It said 5 while
+ * the plan drew 4. */
+export function roundsPerGame(plan: GradePlan): number {
+  return plan.easy + plan.medium + plan.hard;
+}
+
 /**
  * Draw one game's rounds, `plan` many of each grade, without repeats.
  *
