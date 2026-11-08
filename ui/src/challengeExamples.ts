@@ -125,7 +125,7 @@ export const CHALLENGE_META: Record<string, ChallengeMeta> = {
   xy: {
     family: 'curve',
     grade: 'hard',
-    instruction: 'Trace the stress–strain curve - place points along it, left to right.',
+    instruction: 'Trace the stress-strain curve - place points along it, left to right.',
     truth: xyTruth as unknown as ChallengeTruth,
   },
   // The two multi-curve rounds ask for ONE curve only (David, playtest: four is a

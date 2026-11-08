@@ -9477,6 +9477,38 @@ describe('series names are unique (checkpoint 75)', () => {
 });
 
 describe('Workspace: Trace Challenge (v1.2 game)', () => {
+  // docs/v2.7-workflow-walk.md, "The Trace Challenge, by hand" (David, 2026-11-08: "manual-only, give it some TLC")
+  it('a Trace Challenge round is traced by hand: the automatic tools are greyed in place, and come back after the game', async () => {
+    await page.evaluate(() => window.localStorage.setItem('plottracer.challenge.seed', '20260901'));
+    await page.getByTestId('help-trigger').click();
+    await page.getByTestId('challenge-start').click();
+    await page.getByTestId('challenge-intro').waitFor({ state: 'visible' });
+    // the intro says so before the clock starts, and names no automatic tool
+    const intro = await textOf('challenge-by-hand');
+    expect(intro).toMatch(/by hand/);
+    expect(intro).not.toMatch(/Auto-extract|auto-trace|flood-fill|guide points|Find lines|Colour trace/);
+    await page.getByTestId('challenge-confirm').click();
+    await page.getByTestId('challenge-hud').waitFor({ state: 'visible' });
+    await expect.poll(() => textOf('challenge-timer'), { timeout: 15000 }).not.toMatch(/0:00\s*$/);
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
+    const reason = (id: string) => page.getByTestId(id).locator('xpath=..').getAttribute('title');
+    expect(await page.getByTestId('auto-extract-all').isDisabled()).toBe(true);
+    expect(await reason('auto-extract-all')).toBe('The Trace Challenge is traced by hand.');
+    for (const m of ['find-lines', 'color-trace', 'segment-fill', 'interpolate']) {
+      expect(await page.getByTestId(`extract-tool-${m}`).isDisabled(), m).toBe(true);
+      expect(await reason(`extract-tool-${m}`), m).toBe('The Trace Challenge is traced by hand.');
+    }
+    expect(await page.getByTestId('extract-tool-place-point').isDisabled()).toBe(false);
+    await page.getByTestId('challenge-quit').click();
+    await expect.poll(() => page.getByTestId('challenge-hud').count(), { timeout: 5000 }).toBe(0);
+    // out of the game (it ends on an empty workspace), a calibrated figure has its automatic tools
+    await resetWorkspace('xy');
+    await calibrateXYStandard(); // which picks Place points, so the Data extraction card is open
+    await page.getByTestId('data-extraction-card').waitFor({ state: 'visible' });
+    expect(await page.getByTestId('auto-extract-all').isDisabled()).toBe(false);
+    expect(await page.getByTestId('extract-tool-find-lines').isDisabled()).toBe(false);
+  }, 60000);
+
   it('plays a full game - pre-calibrated rounds, scoring, reveal, results, high score, then resets', async () => {
     // Electron persists localStorage across launches, so clear the high-score
     // board first -> this run's fresh total always qualifies (deterministic).

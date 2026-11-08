@@ -54,14 +54,20 @@ export const DATA_EXTRACTION_MODES: readonly ToolMode[] = ['extract', ...DATA_EX
  * applies everywhere but a heatmap, whose cells are read at the end of the calibration card.
  */
 export function dataExtractionToolsFor(
-  config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'id'>
+  config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'id'>,
+  // ⚑ A Trace Challenge round is traced by hand (David, 2026-11-08: "manual-only"): the automatic tools are greyed in
+  // their places, and Place points (with Split a line where lines are the record) is what is left.
+  { byHand = false }: { byHand?: boolean } = {}
 ): readonly ToolMode[] {
   if (config.id === 'heatmap') return [];
-  const auto = autoExtractModesFor(config.autoExtractKind, config.id);
+  const auto = byHand ? [] : autoExtractModesFor(config.autoExtractKind, config.id);
   return DATA_EXTRACTION_TOOLS.filter(
     (m) => auto.includes(m) || m === 'place-point' || (m === 'cut' && findLinesKind(config.id) !== null)
   );
 }
+
+/** Why an automatic tool is greyed during a Trace Challenge round. */
+export const BY_HAND_REASON = 'The Trace Challenge is traced by hand.';
 
 /**
  * Does Find lines apply to this graph type, and as what?

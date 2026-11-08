@@ -18,6 +18,9 @@ export interface DataExtractionCardProps {
   config: Pick<AxesTypeConfig<CalibratedAxes>, 'autoExtractKind' | 'autoExtractRefusal' | 'id'>;
   /** The card's tools that apply to this graph type (`dataExtractionToolsFor`); the others are greyed in place. */
   applies: readonly ToolMode[];
+  /** Why the automatic tools are greyed in a Trace Challenge round ("The Trace Challenge is traced by hand."), or
+   * null: then a greyed tool says why it does not apply to the graph type. */
+  byHandReason?: string | null;
   /**
    * The series every tool records into (David, 2026-11-02): a dropdown, renamed on the spot, with [+ Add] beside it.
    * The right panel keeps its own dropdown to pick and show the active series; adding is making something to
@@ -161,6 +164,7 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
     mode,
     config,
     applies,
+    byHandReason = null,
     series,
     tupleNoun,
     onPickTool,
@@ -204,7 +208,7 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
     const on = mode === m;
     const usable = applies.includes(m);
     return (
-      <span title={usable ? undefined : notHereReason(m, config)} style={{ pointerEvents: 'auto', display: 'flex' }}>
+      <span title={usable ? undefined : (byHandReason ?? notHereReason(m, config))} style={{ pointerEvents: 'auto', display: 'flex' }}>
         <button
           type="button"
           data-testid={`extract-tool-${m}`}
@@ -298,7 +302,7 @@ export function DataExtractionCard(props: DataExtractionCardProps) {
       <strong style={{ fontSize: theme.font.size.regular }}>Data extraction</strong>
 
       {grid(
-        <span title={autoExtract.applies ? undefined : 'No tool on this card reads a series of this graph type by its colour.'} style={{ pointerEvents: 'auto', display: 'flex' }}>
+        <span title={autoExtract.applies ? undefined : (byHandReason ?? 'No tool on this card reads a series of this graph type by its colour.')} style={{ pointerEvents: 'auto', display: 'flex' }}>
           <button
             type="button"
             data-testid="auto-extract-all"

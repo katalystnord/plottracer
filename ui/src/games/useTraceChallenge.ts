@@ -144,7 +144,9 @@ export function useTraceChallenge(
 
   // Load one round: fetch the example image, PRE-CALIBRATE from its committed
   // anchors (the player never clicks the axes), drop into place-point, start the
-  // clock. Manual-only tracing is enforced by the rail gate + this mode.
+  // clock. Tracing by hand is enforced by the Data extraction card, whose automatic tools are greyed while a round is
+  // played (`dataExtractionToolsFor(config, { byHand })`; tested in workspace.e2e.test.ts, "a Trace Challenge round is
+  // traced by hand"), and by this mode.
   const loadRound = useCallback(
     async (ex: ChallengeExample) => {
       setRoundStartMs(0); // clock reads 0:00 while this round loads; real start stamped at the end

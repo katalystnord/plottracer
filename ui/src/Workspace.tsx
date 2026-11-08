@@ -12,7 +12,7 @@ import {
   type SessionSnapshot,
 } from '../../engine/calibrationSession.js';
 import { describeCaptureProgress } from '../../engine/captureProgress.js';
-import { AUTO_EXTRACT_MODES, DATA_EXTRACTION_MODES, dataExtractionToolsFor, findLinesKind, toolAfterClosingCard, type ToolMode } from '../../engine/toolMode.js';
+import { AUTO_EXTRACT_MODES, BY_HAND_REASON, DATA_EXTRACTION_MODES, dataExtractionToolsFor, findLinesKind, toolAfterClosingCard, type ToolMode } from '../../engine/toolMode.js';
 import { findLinesInWorker } from './findLinesClient.js';
 import { labelSlots, slotCrop, readSlots } from '../../algorithms/findLines/labels.js';
 import { inferLevelsInScale } from '../../algorithms/findLines/levels.js';
@@ -7366,6 +7366,7 @@ export function Workspace() {
    * all can be read, the bottom bar says so with the warning triangle, as the other automatic tools do.
    */
   const autoExtractAll = useCallback(async () => {
+    if (gamePhase === 'playing') return; // a round is traced by hand (the button is greyed; this is its guard)
     const s = sessionRef.current;
     const img = imageCanvasRef.current?.getImageData();
     if (!img) return;
@@ -7689,7 +7690,7 @@ export function Workspace() {
     } finally {
       setAutoExtractBusy(false);
     }
-  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob, drawnMarkers, barsOnFigure, setOcrError]);
+  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob, drawnMarkers, barsOnFigure, setOcrError, gamePhase]);
 
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as
@@ -10876,7 +10877,9 @@ export function Workspace() {
             <DataExtractionCard
               mode={mode}
               config={config}
-              applies={dataExtractionToolsFor(config)}
+              // ⚑ A Trace Challenge round is traced by hand (David, 2026-11-08): the automatic tools greyed in place
+              applies={dataExtractionToolsFor(config, { byHand: gamePhase === 'playing' })}
+              byHandReason={gamePhase === 'playing' ? BY_HAND_REASON : null}
               series={{
                 infos: datasetInfos,
                 activeIndex: activeDatasetIndex,
@@ -10914,7 +10917,7 @@ export function Workspace() {
               heldBackOffer={swatchHoldBackOffer(heldBackBars.length)}
               onAddHeldBackBars={addHeldBackBars}
               onArmEyedropper={setEyedropper}
-              autoExtract={{ applies: autoExtractTools(config).length > 0, busy: autoExtractBusy, said: autoExtractSaid, onRun: () => void autoExtractAll() }}
+              autoExtract={{ applies: autoExtractTools(config).length > 0 && gamePhase !== 'playing', busy: autoExtractBusy, said: autoExtractSaid, onRun: () => void autoExtractAll() }}
               {...(findLinesKind(config.id)
                 ? {
                     findLines: {

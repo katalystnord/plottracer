@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DATA_EXTRACTION_TOOLS, dataExtractionToolsFor } from '../toolMode.js';
+import { BY_HAND_REASON, DATA_EXTRACTION_TOOLS, dataExtractionToolsFor } from '../toolMode.js';
+import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 import { resolveDigit, type KeyboardState } from '../keyboardActions.js';
 import { guidanceTip, noPointsHint } from '../guidanceTip.js';
 import { routeCanvasClick } from '../canvasClickRoute.js';
@@ -103,5 +104,24 @@ describe('the words around the Data extraction tool', () => {
 describe('with the Data extraction card open and nothing picked', () => {
   it('a click on the figure adds nothing (the router falls through to add-point otherwise)', () => {
     expect(routeCanvasClick({ eyedropper: null, mode: 'extract', figureCaptured: true, hasImage: true })).toEqual({ kind: 'ignore' });
+  });
+});
+
+// docs/v2.7-workflow-walk.md, "The Trace Challenge, by hand" (David, 2026-11-08: "manual-only")
+describe('a Trace Challenge round is traced by hand', () => {
+  const xy = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === 'xy')!;
+  const bar = ALL_AXES_TYPE_CONFIGS.find((c) => c.id === 'bar')!;
+  it('given a round on an XY figure, only Place points and Split a line are offered', () => {
+    expect(dataExtractionToolsFor(xy, { byHand: true })).toEqual(['place-point', 'cut']);
+  });
+  it('given a round on a bar chart, only Place points', () => {
+    expect(dataExtractionToolsFor(bar, { byHand: true })).toEqual(['place-point']);
+  });
+  it('given no round, the type\'s own tools, the automatic ones too', () => {
+    expect(dataExtractionToolsFor(xy)).toContain('find-lines');
+    expect(dataExtractionToolsFor(xy, { byHand: false })).toEqual(dataExtractionToolsFor(xy));
+  });
+  it('the reason a tool is greyed in a round says so', () => {
+    expect(BY_HAND_REASON).toBe('The Trace Challenge is traced by hand.');
   });
 });

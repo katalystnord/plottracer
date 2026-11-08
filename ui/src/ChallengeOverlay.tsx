@@ -108,11 +108,11 @@ function Intro({ roundCount, onConfirmStart, onCancel }: ChallengeOverlayProps) 
             You&apos;re racing the clock - and every error <em>adds</em> time. Miss a point, place it sloppily, or leave a
             curve half-traced and seconds pile on. <strong>Lowest total time wins.</strong>
           </p>
-          <p style={{ margin: 0, color: theme.color.text.legend }}>
-            Use whatever tools the round offers - auto-trace by colour, flood-fill, guide points or by hand. Bar and
-            histogram rounds have Auto-extract too, and using it is fair game. Where a round&apos;s buttons are greyed
-            out - the box plot and the pie - that figure has no automatic path and you place the points yourself.
-            Ready?
+          {/* ⚑ By hand (David, 2026-11-08: "manual-only... Elese, ther is no test of the person and the tools"): the
+              automatic tools are greyed in the Data extraction card for the whole round, so this says so up front. */}
+          <p data-testid="challenge-by-hand" style={{ margin: 0, color: theme.color.text.legend }}>
+            Every figure is traced <strong>by hand</strong>, with Place points: the automatic tools are greyed for the
+            round. It is a test of your eye and your aim. Ready?
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

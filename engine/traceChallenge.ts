@@ -394,7 +394,7 @@ export function valueToPy(cal: ChallengeCalibration, value: number): number {
  * How much WORK a round is, graded (v2.1).
  *
  * ⚑ WHY THE GAME NEEDS THIS. The scoring currency is TIME, and the pool spans a
- * factor of ten in clicks - 61 for the stress–strain curve against 6 for a
+ * factor of ten in clicks - 61 for the stress-strain curve against 6 for a
  * spider. Drawn uniformly, one playthrough could be three long curves and
  * another three short bar charts, and their scores would not be comparable. The
  * grade is a property of the ROUND, so the draw can hold the shape of a game
