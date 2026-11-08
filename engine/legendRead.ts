@@ -124,12 +124,19 @@ export function readLegendFromPixels(words: readonly OcrWord[], rgba: Uint8Clamp
     }
     return n;
   };
+  // ⚑ or whose ink is that sample's own colour, where the sample is not drawn in the names' ink: a marker on a sample
+  // line read as a character ("二" over a dark blue line through a circle, 2026-11-08), too tall for the thin-band
+  // test. A name is drawn in the names' ink. Where the samples share it (black samples), the thin-band test decides.
+  const near = (a: RGB | null, b: RGB | null) => !!a && !!b && Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2])) <= 60;
   const lines = all.filter((l) => !all.some((o) => {
     if (o === l) return false;
     const st = stripOf(o);
     const cy = (l.box.y0 + l.box.y1) / 2;
     const inStrip = l.box.x0 >= st.x0 - 1 && l.box.x1 <= o.box.x0 && cy >= o.box.y0 && cy <= o.box.y1;
-    return inStrip && inkRows(l.box) <= Math.max(2, 0.5 * (l.box.y1 - l.box.y0));
+    if (!inStrip) return false;
+    if (inkRows(l.box) <= Math.max(2, 0.5 * (l.box.y1 - l.box.y0))) return true;
+    const sampleInkOf = sampleInk(rgba, width, height, st);
+    return near(sampleInk(rgba, width, height, l.box), sampleInkOf) && !near(sampleInkOf, sampleInk(rgba, width, height, o.box));
   }));
   const out: LegendEntry[] = [];
   for (const l of lines) {

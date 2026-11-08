@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { autoExtractTools, planAutoExtract, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../autoExtract.js';
+import { autoExtractTools, planAutoExtract, autoExtractLine, autoExtractFooter, autoExtractNotRead, entriesFromInks } from '../autoExtract.js';
+import { readPng } from './helpers/readPng.js';
 import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 
 const getAxesTypeConfig = (id: string) => ALL_AXES_TYPE_CONFIGS.find((c) => c.id === id)!;
@@ -124,5 +125,65 @@ describe('the Auto-extract report: one short line per series, the shared sentenc
   it('the places and the undo are said once, under all the series; the places only when there are some', () => {
     expect(autoExtractFooter(true)).toBe('Places to check are listed on the right. Undo takes the whole read back.');
     expect(autoExtractFooter(false)).toBe('Undo takes the whole read back.');
+  });
+});
+
+// docs/v2.7-workflow-walk.md, "Auto-extract on a line or scatter chart with no legend" (David, 2026-11-08: "yes, for
+// lines and scatter both"): with no legend marked, each ink in the data area is a series, read by the tool that suits it.
+describe('Auto-extract with no legend: the inks in the data area are the series', () => {
+  // the data areas: each figure's plot frame, measured (3 px inside it is searched)
+  const area = (x0: number, y0: number, x1: number, y1: number) => ({ x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
+  const read = (file: string, a: ReturnType<typeof area>) => {
+    const img = readPng(file);
+    return entriesFromInks(img.data, img.width, img.height, a);
+  };
+  const near = (c: readonly number[] | null, want: readonly number[]) => !!c && Math.hypot(c[0]! - want[0]!, c[1]! - want[1]!, c[2]! - want[2]!) < 40;
+
+  it('given a line chart with one line, one entry: the line\'s ink, as a line; its lighter edge pixels are no series', () => {
+    const got = read('samples/xy-stress-strain.png', area(68, 39, 885, 637));
+    expect(got.map((e) => e.sample)).toEqual(['line']);
+    expect(near(got[0]!.colour, [28, 76, 124]), String(got[0]!.colour)).toBe(true);
+    expect(got[0]!.name).toBe('');
+  });
+
+  it('given four line colours and a legend inside the plot not marked, four entries, the most ink first; the legend\'s text is no series', () => {
+    const got = read('samples/xy-multiseries-modulus.png', area(87, 39, 885, 637));
+    expect(got.map((e) => e.sample)).toEqual(['line', 'line', 'line', 'line']);
+    for (const want of [[196, 60, 44], [140, 68, 172], [28, 76, 124], [36, 172, 100]]) {
+      expect(got.some((e) => near(e.colour, want)), String(want)).toBe(true);
+    }
+  });
+
+  it('given a scatter chart, its marker colour is read as points', () => {
+    const got = read('samples/scatter-crosslink-modulus.png', area(78, 39, 875, 637));
+    expect(got.map((e) => e.sample)).toEqual(['marker']);
+  });
+
+  it('given four series in one black ink (solid, dashed, dash-dot, dotted), one entry, as a line', () => {
+    const got = read('samples/xy-dashed-release.png', area(78, 39, 875, 637));
+    expect(got.map((e) => e.sample)).toEqual(['line']);
+  });
+
+  it('given black markers (circles, squares, triangles), one entry, as points', () => {
+    const got = read('ui/__tests__/fixtures/autoExtract/markers-scatter.png', area(78, 21, 875, 637));
+    expect(got.map((e) => e.sample)).toEqual(['marker']);
+  });
+
+  it('given an empty data area, no entry', () => {
+    const w = 60, h = 40;
+    expect(entriesFromInks(new Uint8ClampedArray(w * h * 4).fill(255), w, h, area(0, 0, w - 1, h - 1))).toEqual([]);
+  });
+
+  it('given ink in one small corner only (a word), no entry', () => {
+    const w = 200, h = 200;
+    const rgba = new Uint8ClampedArray(w * h * 4).fill(255);
+    for (let y = 10; y < 20; y++) for (let x = 10; x < 30; x++) if ((x + y) % 3) rgba.set([0, 0, 0, 255], (y * w + x) * 4);
+    expect(entriesFromInks(rgba, w, h, area(0, 0, w - 1, h - 1))).toEqual([]);
+  });
+
+  it('the entries go through the same plan a legend\'s do: Series 1, read with Find lines', () => {
+    const got = read('samples/xy-stress-strain.png', area(68, 39, 885, 637));
+    const plan = planAutoExtract(getAxesTypeConfig('xy'), got, [{ index: 0, name: 'Series 1', pointCount: 0 }]);
+    expect(plan).toEqual([{ entry: 0, name: 'Series 1', colour: got[0]!.colour, tool: 'lines', into: 0 }]);
   });
 });

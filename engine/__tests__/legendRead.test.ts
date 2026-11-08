@@ -168,3 +168,24 @@ describe('Read legend on a picture: what each sample is', () => {
     expect(got.map((e) => e.sample)).toEqual(['line', 'line', 'line', 'line']);
   });
 });
+
+// David's screenshot, 2026-11-08: Auto-extract on the bundled four-blend figure reported a fifth entry, "二: not read,
+// see Places to check". The words below are what PaddleOCR returned on the whitened legend crop (765, 35, 120 x 105),
+// moved into the picture's pixels: Blend A's sample, a dark blue line through a circle, read as "二" (U+4E8C).
+describe('Read legend on a picture: a marker on a sample line read as a character', () => {
+  const img = readPng('samples/xy-multiseries-modulus.png');
+  const at = (text: string, x0: number, y0: number, x1: number, y1: number) => ({ text, bbox: { x0: 765 + x0, y0: 35 + y0, x1: 765 + x1, y1: 35 + y1 } });
+  const words = [
+    at('二', 28, 16, 30, 30),
+    at('Blend', 57, 12, 92, 31), at('A', 102, 12, 105, 31),
+    at('Blend', 58, 33, 90, 52), at('B', 100, 33, 103, 52),
+    at('Blend', 58, 55, 90, 74), at('C', 103, 55, 106, 74),
+    at('…', 30, 80, 32, 91),
+    at('Blend', 58, 75, 91, 95), at('D', 101, 75, 105, 95),
+  ];
+  const box: Box = { x0: 765, y0: 35, x1: 885, y1: 140 };
+  it("given a word inside another entry's sample, on its row, drawn in that sample's colour (not its name's), it is the sample, not a name", () => {
+    const got = readLegendFromPixels(words, img.data, img.width, img.height, box);
+    expect(got.map((e) => e.name)).toEqual(['Blend A', 'Blend B', 'Blend C', 'Blend D']);
+  });
+});

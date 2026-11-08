@@ -37,7 +37,7 @@ import { CategoriesCard } from './panels/CategoriesCard.js';
 import { OcrReviewCard } from './panels/OcrReviewCard.js';
 import { readBandAtAngle, isOcrFailure, type OcrProposal, readLabelCrop, detectChartElements, detectBars, readPictureAxes, readRegionWords, suggestFigureType } from './ocrClient.js';
 import { readLegendFromDrawing, readLegendFromPixels, type LegendEntry } from '../../engine/legendRead.js';
-import { planAutoExtract, entriesFromBars, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
+import { planAutoExtract, entriesFromBars, entriesFromInks, autoExtractTools, autoExtractLine, autoExtractFooter, autoExtractNotRead } from '../../engine/autoExtract.js';
 import { inkTest, paperColour, styleAlong, styleOfSample } from '../../algorithms/lineStyle.js';
 import { planStyleSeries } from '../../engine/styleSeries.js';
 import { fileMarkerSeries, onDrawnMarkers, readMarkerSeries } from '../../engine/markerSeries.js';
@@ -286,7 +286,7 @@ import type { AnyAxes } from '../../core/plotData.js';
 import { measurementValue } from '../../core/measurementValues.js';
 import { makeDisplayRounder } from '../../core/displayPrecision.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
-import { calibrationCardModel, keepsCardOpenAfterCalibrate } from '../../engine/calibrationCardModel.js';
+import { autoAxesApplies as autoAxesAppliesTo, calibrationCardModel, keepsCardOpenAfterCalibrate } from '../../engine/calibrationCardModel.js';
 import { clampPanelWidth, defaultPanelWidthFor, readStoredPanelWidth, writePanelWidth } from './panelWidth.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
@@ -1617,7 +1617,14 @@ export function Workspace() {
   const [ocrAngleIsYours, setOcrAngleIsYours] = useState(false);
   const [ocrRereading, setOcrRereading] = useState(false);
   const [ocrAngleNotice, setOcrAngleNotice] = useState<string | null>(null);
-  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrError, setOcrErrorState] = useState<string | null>(null);
+  /** A refusal raised since the last render: the next change of tool or figure (below) keeps it when it came in the
+   * same gesture, and clears it otherwise. */
+  const ocrErrorFreshRef = useRef(false);
+  const setOcrError = useCallback((text: string | null) => {
+    if (text !== null) ocrErrorFreshRef.current = true;
+    setOcrErrorState(text);
+  }, []);
   /** Auto-extract all series is running; and what each series' tool said, once it has run. */
   const [autoExtractBusy, setAutoExtractBusy] = useState(false);
   const [autoExtractReport, setAutoExtractReport] = useState<{ on: CalibrationSession<CalibratedAxes>; lines: string[] } | null>(null);
@@ -1641,6 +1648,18 @@ export function Workspace() {
   } | null>(null);
 
   const session = sessionRef.current;
+  // ⚑⚑ A REFUSAL BELONGS TO THE GESTURE THAT RAISED IT (2026-11-08). The bottom bar's refusal was cleared only by a
+  // few actions, so "Mark the legend first" stayed after Find lines had read the curve, and followed David to the next
+  // figure and graph type. It goes at the next change of tool, figure or graph type, unless that change came in the
+  // same gesture as the refusal (a refusal raised as a tool is picked stays).
+  useEffect(() => {
+    if (ocrErrorFreshRef.current) return;
+    setOcrErrorState(null);
+  }, [mode, session, figureCaptured]);
+  // (after every render, and after the effect above: "fresh" means raised in the gesture this render shows)
+  useEffect(() => {
+    ocrErrorFreshRef.current = false;
+  });
   // what Auto-extract said is about the figure it read, and shown only on that one
   const autoExtractSaid = autoExtractReport?.on === session ? autoExtractReport.lines : null;
   const config = session.getConfig();
@@ -2213,7 +2232,7 @@ export function Workspace() {
     } finally {
       setLegendDetecting(false);
     }
-  }, [commit]);
+  }, [commit, setOcrError]);
 
   const applyCrop = useCallback(() => {
     const img = imageCanvasRef.current?.getImageData();
@@ -7356,10 +7375,12 @@ export function Workspace() {
     };
     if (!s.getAxes()) return say('Calibrate the axes first - Auto-extract gives the series their values from the calibration.');
     const legend = s.getLegendRegion();
-    // ⚑ a bar chart with no legend (a single series has none) is read by its bar colours (v2.7, "Auto-extract on a bar
-    // chart with no legend"); a line or scatter chart still needs its legend
+    // ⚑ with no legend (a single series has none), a bar chart is read by its bar colours (v2.7, "Auto-extract on a
+    // bar chart with no legend") and a line or scatter chart by the inks in its data area ("... on a line or scatter
+    // chart with no legend", David 2026-11-08)
     const barsAlone = !legend && s.getConfig().autoExtractKind === 'bounding-box';
-    if (!legend && !barsAlone) return say('Mark the legend first (Legend, 3) - Auto-extract reads the series the legend names.');
+    const dataArea = s.getDataArea();
+    if (!legend && !barsAlone && !dataArea) return say('Mark the data area or the legend first (Calibration) - with no legend, Auto-extract reads the inks inside the data area.');
     const b = legend ? { x0: legend.x, y0: legend.y, x1: legend.x + legend.width, y1: legend.y + legend.height } : null;
     setAutoExtractBusy(true);
     setAutoExtractReport(null);
@@ -7372,7 +7393,7 @@ export function Workspace() {
       // drawing, and the detector is not asked)
       const drawnFigure = !!(k && (k.kind === 'drawn' || k.kind === 'partly') && read);
       const barsPending = s.getConfig().autoExtractKind === 'bounding-box' && !drawnFigure ? barsOnFigure() : Promise.resolve(undefined);
-      if (!b) {
+      if (!b && barsAlone) {
         // no legend: one series per bar colour the detector's bars show (engine/autoExtract.ts, entriesFromBars)
         const found = await barsPending;
         if (sessionRef.current !== s) return;
@@ -7381,7 +7402,12 @@ export function Workspace() {
         const seen = readingImage() ?? img;
         entries = entriesFromBars(found, seen.data, seen.width, seen.height, defaultTraceRegion());
         if (!entries.length) return say('No bars were found on this figure, and no legend is marked - pick each bar colour with Colour trace, or mark the legend (Legend, 3).');
-      } else if (k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
+      } else if (!legend && dataArea) {
+        // no legend: one series per ink in the data area, the most ink first (engine/autoExtract.ts, entriesFromInks)
+        const seen = readingImage() ?? img;
+        entries = entriesFromInks(seen.data, seen.width, seen.height, dataArea);
+        if (!entries.length) return say('No series ink was found in the data area, and no legend is marked - pick a colour with Find lines or Colour trace, or mark the legend (Legend, 3).');
+      } else if (b && k && (k.kind === 'drawn' || k.kind === 'partly') && read) {
         const prov = provenanceRef.current;
         const placed = placeDrawing(prov, read.drawing, read.text);
         if (placed) entries = readLegendFromDrawing(placed, placeTextItems(prov, read.items), b);
@@ -7663,7 +7689,7 @@ export function Workspace() {
     } finally {
       setAutoExtractBusy(false);
     }
-  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob, drawnMarkers, barsOnFigure]);
+  }, [findLinesWith, colorTraceWith, commit, setLinePlaces, readingImage, defaultTraceRegion, colorTraceMinBlob, drawnMarkers, barsOnFigure, setOcrError]);
 
   // the latest callback, for the canvas click handler defined before it (as settingsRef is kept). ⚑ That
   // handler captured this ref first - which is the reason it exists - so the compiler's rule reads the write as
@@ -8202,11 +8228,10 @@ export function Workspace() {
   // identity every render silently disabled the memoization of everything
   // downstream of it (caught by the compiler lint, not by eye).
   const steps = useMemo(() => session.getSteps(), [session, version]);
-  /** [Automatic axis detection] reads an X and a Y value axis where the walk is X1, X2, Y1, Y2 (XY, Contour), and a
-   * value axis and the category axis on the bar family (v2.7). */
+  /** [Automatic axis detection] where it can fill the walk (engine/calibrationCardModel.ts, autoAxesApplies): X1, X2, Y1,
+   * Y2 on x/y axes (XY, Contour, Histogram), and the bar family's value points and category ticks (v2.7). */
   const autoAxesApplies =
-    ((config.id === 'xy' || config.id === 'contour') && ['x1', 'x2', 'y1', 'y2'].every((k) => steps.some((st) => st.key === k))) ||
-    (!!config.categoryTicks && ['c1', 'c2'].every((k) => steps.some((st) => st.key === k)));
+    autoAxesAppliesTo(config, steps.map((st) => st.key));
 
   /**
    * WHAT THE CALIBRATION CARD SHOWS - decided in `engine/`, rendered here.
@@ -8712,10 +8737,10 @@ export function Workspace() {
         fallbackColor: theme.color.error,
         axesKind: config.axesKind,
         isCalibrated: axes !== null,
-        // ⚑ While the WALK is on screen, not merely the card (2026-11-07): Calibrate leaves the card open on a second
-        // stage, whose drags (Read labels round the label row, a category tick) start right beside P1 and Cat 1, and a
-        // handle that took that press moved the calibration while its chips were not even shown.
-        calibrationCardOpen: figureCaptured && cardModel.showsWalk,
+        // ⚑ Not while a label read is armed (2026-11-08): the next drag is the read's. Calibrate leaves the card open on
+        // the Categories step, and Read labels round the label row starts right beside P1, whose handle took the press
+        // and moved the calibration. The handles stay adjustable on the open card otherwise, in either stage.
+        calibrationCardOpen: figureCaptured && calibExpanded && !ocrArmed,
         labelAway,
         ringClosingIndex,
         mode,
@@ -8725,7 +8750,7 @@ export function Workspace() {
         activeDatasetIndex,
         errorTargetIndex,
       }),
-    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex, figureCaptured, cardModel.showsWalk]
+    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex, figureCaptured, calibExpanded, ocrArmed]
   );
 
   // ⚑ An aid's marker carries the HIT AREA and draws nothing; the mark and its
@@ -8742,8 +8767,8 @@ export function Workspace() {
   // under every other marker: the origin is often the frame's corner, and a grip on top took the drag meant for the
   // calibration handle there (found by the tests).
   const dataAreaHandles = useMemo<CanvasMarker[]>(
-    () => (mode === 'calibrate' && figureCaptured && cardModel.showsWalk && dataArea ? dataAreaCornerMarkers(dataArea, DATA_AREA_COLOR, !dataAreaStep) : []),
-    [mode, figureCaptured, cardModel.showsWalk, dataArea, dataAreaStep]
+    () => (mode === 'calibrate' && figureCaptured && calibExpanded && !ocrArmed && dataArea ? dataAreaCornerMarkers(dataArea, DATA_AREA_COLOR, !dataAreaStep) : []),
+    [mode, figureCaptured, calibExpanded, ocrArmed, dataArea, dataAreaStep]
   );
   const allMarkers = useMemo<CanvasMarker[]>(
     () =>
@@ -9941,7 +9966,7 @@ export function Workspace() {
               kind of figure, drawn or picture. It reads X and Y axes, so it is greyed in its place on graph types
               calibrated otherwise. */}
           {figureCaptured && cardModel.showsWalk && (
-            <span title={autoAxesApplies ? undefined : 'Reads the axes of an XY, contour or bar-family figure; this graph type is calibrated by hand.'} style={{ display: 'flex' }}>
+            <span title={autoAxesApplies ? undefined : 'Reads the axes of an XY, contour, histogram or bar-family figure; this graph type is calibrated by hand.'} style={{ display: 'flex' }}>
               <button
                 type="button"
                 data-testid="auto-axis-detect"

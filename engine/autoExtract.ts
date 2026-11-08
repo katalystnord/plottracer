@@ -191,3 +191,119 @@ export function entriesFromBars(
   }
   return colours.map(({ colour, box }) => ({ name: '', colour, sample: 'swatch' as const, textBox: box, sampleBox: null }));
 }
+
+/**
+ * A line or scatter chart with no legend marked (v2.7; docs/v2.7-workflow-walk.md, "Auto-extract on a line or scatter
+ * chart with no legend"; David, 2026-11-08: "yes, for lines and scatter both"): the series are the inks in the data
+ * area, each an entry with no name, given to the same plan a legend's entries go to, the most ink first. The search is
+ * 3 px inside the data area, clear of its frame.
+ *
+ * - An ink is a colour within SAME_INK of the commonest colour of its pixels. A colour lying on the way from the paper
+ *   to a stronger ink (within SAME_INK of that segment) is that ink's anti-aliased edge, and no series (measured: the
+ *   stress-strain blue's edge tints were 9 of the 10 commonest colours after it).
+ * - A series spreads across the data area: its ink spans at least a fifth of the data area's width or height. Ink in
+ *   one small part is a legend's text inside the plot, or an annotation (the four-blend figure's legend text: 194 px).
+ * - An ink with one long piece (a fifth of the data area's larger side) is a line, markers on it or not; one in small
+ *   pieces about as tall as wide, at least 4 px across, is markers; anything else (dashes, dots) a line.
+ */
+export function entriesFromInks(
+  data: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number,
+  dataArea: { x: number; y: number; width: number; height: number }
+): LegendEntry[] {
+  const paper = paperColour(data, width, height);
+  const x0 = Math.max(0, Math.round(dataArea.x) + 3), y0 = Math.max(0, Math.round(dataArea.y) + 3);
+  const x1 = Math.min(width - 1, Math.round(dataArea.x + dataArea.width) - 3), y1 = Math.min(height - 1, Math.round(dataArea.y + dataArea.height) - 3);
+  if (x1 <= x0 || y1 <= y0) return [];
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  const dist = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
+  const rgbAt = (x: number, y: number): RGB => {
+    const i = (y * width + x) * 4;
+    return [data[i]!, data[i + 1]!, data[i + 2]!];
+  };
+  // the commonest colours, 5 bits a channel, of everything clearly not paper
+  const count = new Map<number, number>();
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const c = rgbAt(x, y);
+      if (dist(c, paper) <= 60) continue;
+      const key = ((c[0] >> 3) << 10) | ((c[1] >> 3) << 5) | (c[2] >> 3);
+      count.set(key, (count.get(key) ?? 0) + 1);
+    }
+  }
+  const centre = (k: number): RGB => [((k >> 10) & 31) * 8 + 4, ((k >> 5) & 31) * 8 + 4, (k & 31) * 8 + 4];
+  const inks: { colour: RGB; n: number }[] = [];
+  for (const [k, n] of [...count].sort((a, b) => b[1] - a[1])) {
+    const c = centre(k);
+    const same = inks.find((q) => dist(q.colour, c) < SAME_INK);
+    if (same) same.n += n;
+    else inks.push({ colour: c, n });
+  }
+  // an edge tint lies on the way from the paper to a stronger ink
+  const towards = (c: RGB, ink: RGB): number => {
+    const d = [ink[0] - paper[0], ink[1] - paper[1], ink[2] - paper[2]];
+    const len2 = d[0]! ** 2 + d[1]! ** 2 + d[2]! ** 2;
+    const t = Math.max(0, Math.min(1, ((c[0] - paper[0]) * d[0]! + (c[1] - paper[1]) * d[1]! + (c[2] - paper[2]) * d[2]!) / len2));
+    return dist(c, [paper[0] + t * d[0]!, paper[1] + t * d[1]!, paper[2] + t * d[2]!]);
+  };
+  const strong = inks.filter((c) => !inks.some((k) => k !== c && dist(k.colour, paper) > dist(c.colour, paper) + 30 && towards(c.colour, k.colour) < SAME_INK));
+  const out: { entry: LegendEntry; n: number }[] = [];
+  const longSide = Math.max(w, h);
+  const seen = new Uint8Array(w * h);
+  for (const ink of strong) {
+    // its pixels, as pieces (8-connected)
+    const mine = new Uint8Array(w * h);
+    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (dist(rgbAt(x, y), ink.colour) >= SAME_INK) continue;
+        mine[(y - y0) * w + (x - x0)] = 1;
+        if (x < bx0) bx0 = x;
+        if (x > bx1) bx1 = x;
+        if (y < by0) by0 = y;
+        if (y > by1) by1 = y;
+      }
+    }
+    if (bx1 < bx0 || (bx1 - bx0 < w / 5 && by1 - by0 < h / 5)) continue;
+    seen.fill(0);
+    const pieces: { across: number; tall: number }[] = [];
+    const stack: number[] = [];
+    for (let p = 0; p < w * h; p++) {
+      if (!mine[p] || seen[p]) continue;
+      let px0 = Infinity, py0 = Infinity, px1 = -Infinity, py1 = -Infinity, size = 0;
+      stack.push(p);
+      seen[p] = 1;
+      while (stack.length) {
+        const q = stack.pop()!;
+        const qx = q % w, qy = (q - qx) / w;
+        size++;
+        if (qx < px0) px0 = qx;
+        if (qx > px1) px1 = qx;
+        if (qy < py0) py0 = qy;
+        if (qy > py1) py1 = qy;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = qx + dx, ny = qy + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const r = ny * w + nx;
+            if (mine[r] && !seen[r]) {
+              seen[r] = 1;
+              stack.push(r);
+            }
+          }
+        }
+      }
+      if (size >= 4) pieces.push({ across: px1 - px0 + 1, tall: py1 - py0 + 1 });
+    }
+    if (!pieces.length) continue;
+    const longest = Math.max(...pieces.map((q) => Math.max(q.across, q.tall)));
+    const sizes = pieces.map((q) => Math.max(q.across, q.tall)).sort((a, b) => a - b);
+    const median = pieces.slice().sort((a, b) => Math.max(a.across, a.tall) - Math.max(b.across, b.tall))[Math.floor(pieces.length / 2)]!;
+    const compact = Math.min(median.across, median.tall) / Math.max(median.across, median.tall) >= 0.5;
+    const sample: 'line' | 'marker' = longest >= longSide / 5 ? 'line' : compact && sizes[Math.floor(sizes.length / 2)]! >= 4 ? 'marker' : 'line';
+    const box = { x0: bx0, y0: by0, x1: bx1, y1: by1 };
+    out.push({ entry: { name: '', colour: ink.colour, sample, textBox: box, sampleBox: null }, n: ink.n });
+  }
+  return out.sort((a, b) => b.n - a.n).map((e) => e.entry);
+}

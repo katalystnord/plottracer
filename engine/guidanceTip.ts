@@ -632,8 +632,9 @@ export function guidanceTipBase(input: GuidanceTipInput): string {
 export function guidanceTip(input: GuidanceTipInput): string {
   const base = guidanceTipBase(input);
   const slotAimNote =
-    // not on the Legend card, which captures no points: a slot to fill means nothing there
-    input.isCalibrated && input.hasSlots && input.captureProgressText && input.mode !== 'legend' && !base.includes(input.currentGroupLabel)
+    // not on the Legend card, which captures no points: a slot to fill means nothing there; nor in Data extraction with
+    // no tool picked, whose sentence says a click adds nothing (2026-11-08)
+    input.isCalibrated && input.hasSlots && input.captureProgressText && input.mode !== 'legend' && input.mode !== 'extract' && !base.includes(input.currentGroupLabel)
       ? ` - ${input.captureProgressText.replace(/^Next: /, '')}`
       : '';
   return base + slotAimNote;

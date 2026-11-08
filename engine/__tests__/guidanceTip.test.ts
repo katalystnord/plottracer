@@ -642,6 +642,13 @@ describe('guidanceTip - the slot-aim suffix', () => {
     expect(tip).toBe('Calibration step 1/2 - P1: click the baseline');
   });
 
+  it('given Data extraction with no tool picked, the tips bar says a click adds nothing, and names no slot to fill', () => {
+    // David's screenshots, 2026-11-08: "...A click on the figure adds nothing until one is picked. - Corner - new bar
+    // (0 of 2 filled)" - the second half aims a click the first half has just said adds nothing.
+    const tip = guidanceTip(withSlots({ mode: 'extract', captureProgressText: 'Next: Corner - new bar (0 of 2 filled)', currentGroupLabel: 'Corner' }));
+    expect(tip).toBe('Data extraction - pick a tool in the card. A click on the figure adds nothing until one is picked.');
+  });
+
   it('adds nothing when the type has no slots to report on', () => {
     const tip = guidanceTip(base({ mode: 'eraser', hasSlots: false, captureProgressText: null }));
     expect(tip).toBe(guidanceTipBase(base({ mode: 'eraser', hasSlots: false, captureProgressText: null })));

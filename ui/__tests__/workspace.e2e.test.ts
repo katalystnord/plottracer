@@ -3258,6 +3258,23 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await textOf('calib-chip-data-area')).toMatch(/Data area\s*marked/);
   }, 90000);
 
+  // David, 2026-11-08, on the histogram's greyed button: "why no auto callibration here?" Its walk is XY's.
+  it('Automatic axis detection on a histogram places X1, X2, Y1 and Y2, and Calibrate takes them', async () => {
+    await resetWorkspace('histogram');
+    await stubOpenProjectDialog(path.join(__dirname, '../../samples/histogram-pore-size.png'));
+    await page.getByTestId('open-image-button').click();
+    await waitForImageFitted();
+    await page.getByTestId('capture-figure').click();
+    expect(await page.getByTestId('auto-axis-detect').isEnabled()).toBe(true);
+    await page.getByTestId('auto-axis-detect').click();
+    const chip = async (k: string) => (await textOf(`calib-chip-${k}`)).replace(/\s/g, '');
+    await expect.poll(() => chip('y2'), { timeout: 60000 }).toMatch(/^Y2\d/);
+    // the outermost labels on each axis (the figure: x 0 to 100, y 0 to 60)
+    expect([await chip('x1'), await chip('x2'), await chip('y2')]).toEqual(['X10', 'X2100', 'Y260']);
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toBe('Calibrated ✓');
+  }, 90000);
+
   // ⚑⚑ The bar family (v2.7; the walk notes, "The category axis on two tick marks"): the value axis's two points with
   // their numbers, and Cat 1 and Cat n where the first and last category labels are centred, with the count.
   it('Automatic axis detection on a bar chart places P1, P2, Cat 1 and Cat n with the count of categories', async () => {
@@ -3480,6 +3497,28 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await page.getByTestId('tips-bar-warning').count()).toBe(1);
     // nothing found, nothing placed: the walk still asks for its first step, the data area (v2.7)
     expect(await textOf('calib-chip-data-area')).toMatch(/drag on image/);
+  }, 60000);
+
+  // David's screenshots, 2026-11-08: "Mark the legend first" was still in the bottom bar after Find lines had read the
+  // curve, and again on the next figure. A refusal belongs to the gesture that raised it.
+  it('a refusal in the bottom bar goes when another tool is picked, and does not follow the user to the next figure', async () => {
+    await resetWorkspace('xy');
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('figdet:detect');
+      ipcMain.handle('figdet:detect', async () => ({ detections: [] }));
+    });
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => page.getByTestId('tips-bar-warning').count(), { timeout: 15000 }).toBe(1);
+    await page.getByTestId('mode-pan').click();
+    await expect.poll(() => page.getByTestId('tips-bar-warning').count(), { timeout: 5000 }).toBe(0);
+    expect(await textOf('tips-bar')).not.toMatch(/No calibration points could be fixed/);
+    // raised again, then a new figure
+    await page.getByTestId('mode-calibrate').click();
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => page.getByTestId('tips-bar-warning').count(), { timeout: 15000 }).toBe(1);
+    await resetWorkspace('xy');
+    await expect.poll(() => page.getByTestId('tips-bar-warning').count(), { timeout: 5000 }).toBe(0);
   }, 60000);
 
   it('bundles the source PDF into the saved project, and restores it (checkpoint 104)', async () => {
@@ -13262,13 +13301,36 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     expect(await page.getByTestId('tips-bar-warning').count()).toBe(0);
   }, 240000);
 
-  it('Auto-extract all series with no legend marked says so in the bottom bar, with the warning triangle', async () => {
-    await openDrawnFigure('lines-legend-colour');
+  // ⚑ docs/v2.7-workflow-walk.md, "Auto-extract on a line or scatter chart with no legend" (David, 2026-11-08: "yes,
+  // for lines and scatter both"). This test asked for the legend until then.
+  it('Auto-extract on a line chart with no legend: the curve is read into Series 1 with Find lines, and nothing is refused', async () => {
+    await resetWorkspace('xy');
+    try {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, path.join(__dirname, '../../samples/xy-stress-strain.png'));
+      await page.getByTestId('open-image-button').click();
+      await waitForImageFitted();
+    } finally {
+      await app.evaluate(({ dialog }, f) => {
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] });
+      }, SAMPLE_IMAGE);
+    }
+    await page.getByTestId('capture-figure').click();
+    await page.getByTestId('auto-axis-detect').click();
+    await expect.poll(() => textOf('calib-chip-y2').then((t) => t.replace(/\s/g, '')), { timeout: 60000 }).toMatch(/^Y2\d/);
+    await page.getByTestId('run-calibration').click();
+    await expect.poll(() => textOf('calibrated-status'), { timeout: 5000 }).toMatch(/Calibrated/);
+    await page.getByTestId('mode-data-extraction').click();
     await page.getByTestId('auto-extract-all').click();
-    await expect.poll(() => textOf('tips-bar')).toMatch(/Mark the legend first \(Legend, 3\)/);
-    expect(await page.getByTestId('tips-bar-warning').count()).toBe(1);
-    expect(await page.getByTestId('series-select').locator('option').allTextContents()).toEqual(['Series 1 (0)']);
-  }, 120000);
+    await page.getByTestId('auto-extract-said').waitFor({ timeout: 120000 });
+    const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
+    expect(said[0], JSON.stringify(said)).toMatch(/^Series 1: 1 line, \d+ points$/);
+    const series = await page.getByTestId('series-select').locator('option').allTextContents();
+    expect(series.length, JSON.stringify(series)).toBe(1);
+    expect(Number(/\((\d+)\)$/.exec(series[0]!)?.[1] ?? 0), series[0]).toBeGreaterThan(100);
+    expect(await page.getByTestId('tips-bar-warning').count()).toBe(0);
+  }, 240000);
 
   it('Find this line armed on one figure is put down when another is opened: no banner, and the card asks for the data area first', async () => {
     await openDrawnFigure('lines-legend-colour');
@@ -13343,6 +13405,9 @@ describe('Workspace: Find lines, first version (v2.6)', () => {
     const said = await page.getByTestId('auto-extract-said').locator('[data-testid^="auto-extract-said-"]').allInnerTexts();
     const series = await page.getByTestId('series-select').locator('option').allTextContents();
     expect(series.map((t) => t.replace(/ \(\d+\)$/, '')), JSON.stringify(said)).toEqual(['Blend A', 'Blend B', 'Blend C', 'Blend D']);
+    // ⚑ and the report names no entry the legend does not have (David's screenshot, 2026-11-08: Blend A's sample read
+    // as "二", reported as a fifth entry not read)
+    expect(said.filter((t) => /not read/.test(t)), JSON.stringify(said)).toEqual([]);
     for (const t of series) expect(Number(/\((\d+)\)$/.exec(t)?.[1] ?? 0), t).toBeGreaterThan(50);
   }, 240000);
 

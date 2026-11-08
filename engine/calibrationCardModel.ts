@@ -199,3 +199,19 @@ export function keepsCardOpenAfterCalibrate(
 ): boolean {
   return secondStage !== undefined && !secondStageComplete;
 }
+
+/**
+ * Whether [Automatic axis detection] can fill this type's walk (v2.7): X1, X2, Y1, Y2 on x/y axes (XY, Contour,
+ * Histogram, and any later type with that walk), or the bar family's value points and its category ticks. Asked of the
+ * walk, not of the type's id: the histogram has XY's walk and was greyed only because it was not named (David,
+ * 2026-11-08: "why no auto callibration here?"). The heatmap's X2 and Y2 also take its band counts, and its walk goes
+ * on to the colour key, which detection does not read.
+ */
+export function autoAxesApplies(
+  config: { id: string; axesKind: string; categoryTicks?: unknown },
+  stepKeys: readonly string[]
+): boolean {
+  const has = (...k: string[]) => k.every((key) => stepKeys.includes(key));
+  if (config.axesKind === 'xy' && config.id !== 'heatmap' && has('x1', 'x2', 'y1', 'y2') && stepKeys.length === 4) return true;
+  return !!config.categoryTicks && has('c1', 'c2');
+}

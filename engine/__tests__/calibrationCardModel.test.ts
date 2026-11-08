@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calibrationCardModel, keepsCardOpenAfterCalibrate, type CalibrationCardInput } from '../calibrationCardModel.js';
+import { autoAxesApplies, calibrationCardModel, keepsCardOpenAfterCalibrate, type CalibrationCardInput } from '../calibrationCardModel.js';
 import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 
 /**
@@ -373,4 +373,26 @@ describe('the status line reports the WALK, not merely that axes exist', () => {
     const model = calibrationCardModel({ ...base, calibrated: false, placed: 1, steps: 4 });
     expect(model.foldedLine.status).toBe('1/4 set');
   });
+});
+
+// David, 2026-11-08, on the histogram's greyed [Automatic axis detection]: "why no auto callibration here?" It reads
+// XY's four points (X1, X2, Y1, Y2) on x/y axes, so every type whose walk is those four has it; and the bar family by
+// its category ticks. The heatmap's X2 and Y2 also take the band counts, and its walk the colour key, so it is not one.
+describe('[Automatic axis detection] is on every type whose walk it can fill', () => {
+  const keys = (id: string) => {
+    const c = ALL_AXES_TYPE_CONFIGS.find((t) => t.id === id)!;
+    return { c, k: (c.fixedSteps ?? []).map((s) => s.key) };
+  };
+  for (const id of ['xy', 'contour', 'histogram', 'bar', 'stacked', 'boxplot']) {
+    it(`${id}: yes`, () => {
+      const { c, k } = keys(id);
+      expect(autoAxesApplies(c, k)).toBe(true);
+    });
+  }
+  for (const id of ['heatmap', 'pie', 'polar', 'ternary', 'spider', 'map', 'ccr']) {
+    it(`${id}: no`, () => {
+      const { c, k } = keys(id);
+      expect(autoAxesApplies(c, k)).toBe(false);
+    });
+  }
 });

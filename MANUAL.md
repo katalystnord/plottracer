@@ -98,7 +98,7 @@ grid's size ("5 × 5 cells") and **Read cells**, and its rows are **Grid**,
 and **Detect grid** or **Overlay even grid** makes one.
 
 **[Automatic axis detection]**, just under the card's header, does the same walk
-for you on XY, Contour and the bar family: it sets the data area to the plot's
+for you on XY, Contour, Histogram and the bar family: it sets the data area to the plot's
 frame and places every point it can read, each on a labelled tick with the number
 printed there (on a bar chart, Cat 1 and Cat n where the first and last category
 labels are centred, with the count). A drawn PDF figure is read from its own text
@@ -111,7 +111,9 @@ the figure's own print, and the Categories stage's **Names** row says how many w
 read, with **Use them** and **Check them**. **Use them** writes them all in one Undo step, and
 they leave the figure for the table; **Check them** opens the review card to correct
 them first. Nothing is written until you do. If nothing could be read, the bottom
-bar says no calibration points could be fixed, with the warning triangle.
+bar says no calibration points could be fixed, with the warning triangle. A
+message with the warning triangle stays until you pick another tool, open another
+figure or change the graph type.
 
 You can click any point's chip and then the figure at any time to place or move
 it. **Any change to the calibration loses it** - a moved point, even a one-pixel
@@ -247,6 +249,13 @@ the graph type is greyed).
   style no line has, entries whose styles cannot be told apart) is listed once,
   under **Places to check**. One **Undo** takes the whole read back. Pressed again,
   it replaces what it found before.
+  **With no legend marked**, the series are what the figure draws inside the data
+  area: on a bar chart, each bar colour; on a line or scatter chart, each ink,
+  read as a line where it runs in one long piece and as points where it is many
+  small markers, into Series 1, Series 2 and on, the most ink first. An ink's
+  lighter edge pixels are part of it, and ink that stays in one small corner (a
+  legend inside the plot, an annotation) is not a series. Series drawn in one ink
+  come out as one series; mark the legend to have them told apart.
 - **Find individual series**: the **Series** row picks the series to read into
   (rename it in place, or **+ Add** one). Then:
   - **Find lines** (XY and Contour) - every line of the picked colour becomes its
