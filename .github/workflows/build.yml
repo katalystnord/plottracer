@@ -108,6 +108,11 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      # The models too large for git (the chart-element detector, 110 MB), from the models release, each checked
+      # against its sha256 in scripts/models.json. A failed download or a different file fails the job here:
+      # electron-builder would skip a missing file silently and ship the app without its detector.
+      - name: Fetch models
+        run: npm run models
       # ui:dist:<platform> runs ui:build then electron-builder for that OS
       # (build/electron-builder-ui.yml). mac/win are unsigned for now.
       - name: Build ${{ matrix.name }} installer

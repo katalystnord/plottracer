@@ -1,0 +1,8 @@
+[
+  {
+    "path": "ui/figdet-model/detector.onnx",
+    "url": "https://github.com/katalystnord/plottracer/releases/download/models-figdet-2026-11-07/detector.onnx",
+    "sha256": "3e0ddfaec9766965db030d73fe6d1be0be8f13d2bf9c903dd9db3aa5a2bbfaa3",
+    "card": "ui/figdet-model-card.md"
+  }
+]
