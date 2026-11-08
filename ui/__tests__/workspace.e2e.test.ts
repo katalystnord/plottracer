@@ -1353,7 +1353,7 @@ describe('Workspace: Bar axes', () => {
     await page.waitForTimeout(150);
 
     // The stage is named, and it reports the count the CALIBRATION declared.
-    expect(await textOf('category-ticks-summary')).toBe('Categories - 4 categories');
+    expect(await textOf('category-ticks-summary')).toBe('4 categories');
     // ...and says the count only there (the walk notes, "The Categories stage laid out in rows").
     expect(await page.getByTestId('category-declared').count()).toBe(0);
   });
@@ -1387,9 +1387,67 @@ describe('Workspace: Bar axes', () => {
     expect(await page.getByTestId('categories-card').count()).toBe(1);
   });
 
+  // ⚑⚑ The walk notes, "The calibration card in one layout, three states" (David, 2026-11-07: "I approve, I like
+  // this"). Gate 4: every click is the one a prompt on screen asks for, as in THE WALK above.
+  it('⚑⚑ the calibration card in three states: calibrating, the Categories step on the heading, done', async () => {
+    await resetWorkspace('bar');
+    await markDataArea(100, 100, 500, 400);
+    await clickAt(300, 400);
+    await confirmValue('0');
+    await clickAt(300, 100);
+    await confirmValue('10');
+    await clickAt(150, 400);
+    await clickAt(450, 400);
+    await confirmValue('4');
+
+    // Calibrating, open: the next step named last, in grey, after the calibration's own settings.
+    expect(await textOf('next-stage-line')).toBe('Categories: next, after Calibrate');
+    const options = await page.getByTestId('axes-options').boundingBox();
+    const next = await page.getByTestId('next-stage-line').boundingBox();
+    expect(next!.y).toBeGreaterThan(options!.y);
+    expect(await page.getByTestId('category-read').count()).toBe(0);
+
+    // Calibrate opens the card straight into the Categories step.
+    await page.getByTestId('run-calibration').click();
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('calib-fold').getAttribute('title')).toBe('Fold calibration');
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+    expect(await textOf('category-ticks-summary')).toBe('4 categories');
+    expect(await textOf('category-read')).toBe('Mark categories');
+    const middle = (b: { y: number; height: number } | null) => b!.y + b!.height / 2;
+    const status = await page.getByTestId('calibrated-status').boundingBox();
+    const ending = await page.getByTestId('category-read').boundingBox();
+    const reset = await page.getByTestId('reset-calibration').boundingBox();
+    expect(Math.abs(middle(ending) - middle(status))).toBeLessThanOrEqual(4);
+    expect(ending!.x).toBeLessThan(reset!.x);
+    expect(await page.getByTestId('categories-card').count()).toBe(1);
+    for (const gone of ['calib-chip-p1', 'axes-options', 'next-stage-line', 'category-series-count']) {
+      expect(await page.getByTestId(gone).count(), gone).toBe(0);
+    }
+
+    // Folded: the rows go, the heading stays as it is.
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('categories-card').count()).toBe(0);
+    expect(await textOf('category-ticks-summary')).toBe('4 categories');
+    expect(await page.getByTestId('category-read').isVisible()).toBe(true);
+
+    // Mark categories: the card folds to one line, and no tool is picked.
+    await page.getByTestId('category-read').click();
+    await page.waitForTimeout(150);
+    expect(await textOf('second-stage-status')).toBe('Categories marked ✓');
+    expect(await page.getByTestId('category-ticks-summary').count()).toBe(0);
+    expect(await page.getByTestId('category-read').count()).toBe(0);
+    expect(await page.getByTestId('categories-card').count()).toBe(0);
+    expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('⚑⚑ the tick convention is the HEATMAP\'s words, and switching it moves the marks', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
+    // ⚑ The helper picks Place points, which folds the card; the Categories rows show on an open card (2026-11-07).
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(150);
     // `Boundaries` / `Centres` - not a second vocabulary for one fact.
     expect(await page.getByTestId('category-convention-edge').count()).toBe(1);
     expect(await page.getByTestId('category-convention-centred').count()).toBe(1);
@@ -1401,6 +1459,9 @@ describe('Workspace: Bar axes', () => {
   it('⚑ E6: the drag fact survives as the convention control\'s tooltip, not as prose', async () => {
     await resetWorkspace('bar');
     await calibrateBarStandard();
+    // ⚑ The helper picks Place points, which folds the card; the Categories rows show on an open card (2026-11-07).
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(150);
     expect(await page.getByTestId('category-convention-edge').getAttribute('title')).toContain('Drag');
   });
 
@@ -3213,7 +3274,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect([await chip('p1'), await chip('p2')]).toEqual(['P10', 'P270']);
     expect(await textOf('calib-chip-c1')).not.toContain('click image');
     await page.getByTestId('run-calibration').click();
-    await expect.poll(() => textOf('category-ticks-summary')).toBe('Categories - 4 categories');
+    await expect.poll(() => textOf('category-ticks-summary')).toBe('4 categories');
   }, 90000);
 
   // ⚑ The category names (v2.7; the walk notes, "Automatic axis detection reads the category names too"): read from the
@@ -3236,7 +3297,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
   it('the category names detection read: Calibrate offers them on the Names row, with no card popping up; Use them writes them, the row goes back to Read labels, and a bar on the first category is named Day 3', async () => {
     await detectAndCalibrateBars();
     expect(await page.getByTestId('ocr-review-card').count()).toBe(0);
-    expect(await textOf('category-names-row')).toMatch(/^Names\s*4 read from the labels\s*Use them\s*Check…$/);
+    expect(await textOf('category-names-row')).toMatch(/^Names\s*4 read from the labels\s*Use them\s*Check them$/);
     expect(await page.getByTestId('ocr-read-labels').count()).toBe(0);
     await page.getByTestId('name-offer-use').click();
     expect(await page.getByTestId('name-offer').count()).toBe(0);
@@ -3249,7 +3310,7 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     await expect.poll(() => textOf('bar-category-name-0')).toBe('Day 3');
   }, 120000);
 
-  it('the category names detection read: Check… opens the review card with them, Day 3 to Day 21, and its Cancel withdraws the offer', async () => {
+  it('the category names detection read: Check them opens the review card with them, Day 3 to Day 21, and its Cancel withdraws the offer', async () => {
     await detectAndCalibrateBars();
     await page.getByTestId('name-offer-check').click();
     await page.getByTestId('ocr-review-card').waitFor();
@@ -3275,18 +3336,17 @@ describe('Workspace: project save/load and CSV export (checkpoint 25)', () => {
     expect(await textOf('category-names-row')).toMatch(/^Names\s*Read labels from the figure$/);
   });
 
-  // ⚑ The walk notes, "The Categories stage laid out in rows" (David, 2026-11-04: "Try that").
-  it('the Categories stage in rows: the count said once on the heading, Mark categories at its right edge, then Ticks at, Names and # Series', async () => {
+  // ⚑ The walk notes, "The Categories stage laid out in rows" (David, 2026-11-04: "Try that"), and "The calibration
+  // card in one layout, three states" (David, 2026-11-07): the count and Mark categories moved to the heading.
+  it('the Categories stage in rows: the count said once on the heading, then Ticks at and Names, and no # Series box', async () => {
     await detectAndCalibrateBars();
-    expect(await textOf('category-ticks-summary')).toBe('Categories - 4 categories');
+    expect(await textOf('category-ticks-summary')).toBe('4 categories');
     expect(await page.getByTestId('category-declared').count()).toBe(0);
-    const card = await page.getByTestId('category-ticks-panel').boundingBox();
-    const ending = await page.getByTestId('category-read').boundingBox();
-    expect(Math.abs(card!.x + card!.width - (ending!.x + ending!.width))).toBeLessThanOrEqual(2);
+    expect(await page.getByTestId('category-series-count').count()).toBe(0);
     expect(await textOf('category-ticks-row')).toMatch(/^Ticks at\s*Boundaries\s*Centres\s*Find the figure's own ticks$/);
-    expect(await textOf('category-names-row')).toMatch(/^Names\s*4 read from the labels/);
+    expect(await textOf('category-names-row')).toMatch(/^Names\s*4 read from the labels\s*Use them\s*Check them$/);
     const order = await Promise.all(
-      ['category-ticks-row', 'category-names-row', 'category-series-count'].map(async (id) => (await page.getByTestId(id).boundingBox())!.y)
+      ['category-ticks-row', 'category-names-row'].map(async (id) => (await page.getByTestId(id).boundingBox())!.y)
     );
     expect(order).toEqual([...order].sort((a, b) => a - b));
   }, 120000);
@@ -10874,17 +10934,47 @@ describe('heatmap capture (v2.2)', () => {
   }
 
   // ⚑ The walk notes, "The Categories stage laid out in rows": the heatmap's stage mirrors the Categories stage.
-  it('the heatmap Grid stage in rows: Read cells at the heading\'s right edge, then Grid, Boundaries and Names', async () => {
+  it('the heatmap Grid stage in rows: the size and Read cells on the Calibration heading, then Grid, Boundaries and Names', async () => {
     await resetWorkspace('heatmap');
     await calibrateHeatmap();
     await page.getByTestId('heatmap-detect').click();
     await page.waitForTimeout(250);
-    const panel = await page.getByTestId('heatmap-grid-panel').boundingBox();
+    // ⚑ The size and Read cells on the Calibration heading, beside Calibrated ✓ (2026-11-07, both cards).
+    const middle = (b: { y: number; height: number } | null) => b!.y + b!.height / 2;
+    const status = await page.getByTestId('calibrated-status').boundingBox();
     const ending = await page.getByTestId('heatmap-read').boundingBox();
-    expect(Math.abs(panel!.x + panel!.width - (ending!.x + ending!.width))).toBeLessThanOrEqual(2);
+    const reset = await page.getByTestId('reset-calibration').boundingBox();
+    expect(Math.abs(middle(ending) - middle(status))).toBeLessThanOrEqual(4);
+    expect(ending!.x).toBeLessThan(reset!.x);
+    expect(await textOf('heatmap-grid-summary')).toBe('5 × 4 cells');
     expect(await textOf('heatmap-grid-row')).toMatch(/^Grid\s*Detect grid\s*Overlay even grid$/);
     expect(await textOf('heatmap-boundaries-row')).toMatch(/^Boundaries\s*\+ Column boundary\s*\+ Row boundary$/);
     expect(await textOf('heatmap-names-row')).toMatch(/^Names\s*Read column names\s*Read row names$/);
+  });
+
+  // ⚑⚑ The walk notes, "The calibration card in one layout, three states": the heatmap's card mirrors the bar card's
+  // (David, 2026-11-07: "Both").
+  it('⚑⚑ the heatmap card in three states: Calibrate opens the Grid step, Read cells folds it to one line', async () => {
+    await resetWorkspace('heatmap');
+    await calibrateHeatmap();
+    expect(await page.getByTestId('calib-fold').getAttribute('title')).toBe('Fold calibration');
+    expect(await textOf('calibrated-status')).toBe('Calibrated ✓');
+    expect(await textOf('heatmap-grid-summary')).toBe('5 × 4 cells');
+    expect(await textOf('heatmap-read')).toBe('Read cells');
+    expect(await page.getByTestId('heatmap-grid-row').count()).toBe(1);
+    for (const gone of ['calib-chip-x1', 'axes-options', 'next-stage-line', 'heatmap-declared-grid']) {
+      expect(await page.getByTestId(gone).count(), gone).toBe(0);
+    }
+    await page.getByTestId('calib-fold').click();
+    await page.waitForTimeout(150);
+    expect(await page.getByTestId('heatmap-grid-row').count()).toBe(0);
+    expect(await page.getByTestId('heatmap-read').isVisible()).toBe(true);
+    await page.getByTestId('heatmap-read').click();
+    await page.waitForTimeout(400);
+    expect(await textOf('second-stage-status')).toBe('20 cells read ✓');
+    expect(await page.getByTestId('heatmap-grid-summary').count()).toBe(0);
+    expect(await page.getByTestId('heatmap-read').count()).toBe(0);
+    expect(await page.getByTestId('mode-calibrate').getAttribute('aria-pressed')).toBe('false');
   });
 
   /** Local copies: the export helpers live inside another describe's scope. */
@@ -10930,9 +11020,9 @@ describe('heatmap capture (v2.2)', () => {
     // heatmap's own walk, whose first step is the colour key's business rather
     // than an XY chart's four points.
     await resetWorkspace('heatmap');
-    // The grid fold-down is on screen from the start, CLOSED - the feature is
-    // discoverable before it exists, without growing the card over the figure.
-    expect(await page.getByTestId('heatmap-grid-summary').isVisible()).toBe(true);
+    // The grid stage is named from the start, last and grey, with what it needs - the feature is
+    // discoverable before it exists, without growing the card over the figure (2026-11-07).
+    expect(await textOf('next-stage-line')).toBe('Grid: next, after Calibrate. It needs a rectangular grid of cells.');
     expect(await page.getByTestId('heatmap-detect').count()).toBe(0);
     // Eight steps, not four, and the extra ones are the colour key's - which is
     // what makes this the heatmap's walk rather than an XY chart's.
@@ -11100,7 +11190,9 @@ describe('heatmap capture (v2.2)', () => {
     await page.getByTestId('heatmap-detect').click();
     await page.waitForTimeout(200);
     expect(await textOf('heatmap-detect-message')).toMatch(/5 columns/);
-    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
+    // ⚑ The size is said once, on the heading (2026-11-07); the line under it speaks only when the grid differs.
+    expect(await textOf('heatmap-grid-summary')).toBe('5 × 4 cells');
+    expect(await page.getByTestId('heatmap-declared-grid').count()).toBe(0);
 
     await page.getByTestId('heatmap-read').click();
     await page.waitForTimeout(300);
@@ -11375,7 +11467,9 @@ describe('heatmap capture (v2.2)', () => {
     // that uses them after reading says so. ⚑ A user is not stuck - a column's
     // name is click-to-edit on the matrix header itself.
     await openHeatmapGrid();
-    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
+    // ⚑ The size is said once, on the heading (2026-11-07); the line under it speaks only when the grid differs.
+    expect(await textOf('heatmap-grid-summary')).toBe('5 × 4 cells');
+    expect(await page.getByTestId('heatmap-declared-grid').count()).toBe(0);
     // ⚑⚑ THE MESSAGE IS THERE FIRST, asserted so its DISAPPEARANCE below means
     // something. Without this the `.toBe(0)` at the end of this test would pass
     // just as happily if detection had stopped reporting at all - an absence
@@ -11422,7 +11516,9 @@ describe('heatmap capture (v2.2)', () => {
 
     await page.getByTestId('heatmap-remove-boundary').click();
     await page.waitForTimeout(300);
-    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
+    // ⚑ The size is said once, on the heading (2026-11-07); the line under it speaks only when the grid differs.
+    expect(await textOf('heatmap-grid-summary')).toBe('5 × 4 cells');
+    expect(await page.getByTestId('heatmap-declared-grid').count()).toBe(0);
     expect(await page.getByTestId('heatmap-row').count()).toBe(20);
 
     // A row boundary is the same gesture on the other axis, and the card says so.
@@ -11447,7 +11543,9 @@ describe('heatmap capture (v2.2)', () => {
     // premise. A value×value heatmap got ONE cell spanning the whole figure,
     // because the grid was gated on an axis being categorical. The figure has
     // 5 columns and 4 rows and says so in the walk, whichever way it is indexed.
-    expect(await textOf('heatmap-declared-grid')).toMatch(/5 columns × 4 rows/);
+    // ⚑ The size is said once, on the heading (2026-11-07); the line under it speaks only when the grid differs.
+    expect(await textOf('heatmap-grid-summary')).toBe('5 × 4 cells');
+    expect(await page.getByTestId('heatmap-declared-grid').count()).toBe(0);
 
     // Click the x-divider handle at the calibrated left edge (data x = 0).
     const left = await imageToLocal(truth.frame.x1.x, truth.frame.x1.y);

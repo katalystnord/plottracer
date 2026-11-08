@@ -1248,6 +1248,13 @@ export interface AxesTypeConfig<A extends CalibratedAxes> {
      * component. Absent = the caller's summary, then `label`.
      */
     done?: string;
+    /**
+     * What the stage needs of the figure, said on the grey line that names it
+     * while the axes are still being calibrated ("Grid: next, after Calibrate.
+     * It needs a rectangular grid of cells."): the moment it can still save the
+     * clicks. Absent = nothing to say.
+     */
+    precondition?: string;
   };
   /**
    * Rewrite the walk when an OPTION changes what a step is asking for.
@@ -1795,7 +1802,9 @@ export const HEATMAP_AXES_CONFIG: AxesTypeConfig<XYAxes> = {
   axesKind: 'xy',
   // ⚑ Stage 2: the grid, read through the colour key. Was 21 hardcoded
   // `heatmapActive` branches in Workspace.tsx before it was declared.
-  secondStage: { label: 'Grid', ending: 'Read cells' },
+  // ⚑ B14: a radial heatmap calibrates as a rectangle without complaint and
+  // cannot be detected, so the requirement is NAMED before the walk is done.
+  secondStage: { label: 'Grid', ending: 'Read cells', precondition: 'It needs a rectangular grid of cells.' },
   exportShape: 'heatmap',
   dataDim: 2,
   // ⚑ THREE SLOTS, so each axis's second point can carry BOTH its coordinate

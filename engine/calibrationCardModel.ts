@@ -45,7 +45,7 @@ export interface CalibrationCardInput {
   /** The type's declared second stage. `done` is what the FOLDED line calls the
    * finished stage where that is not a count of readings - see the field's own
    * note on `AxesTypeConfig.secondStage`. */
-  secondStage?: { label: string; ending: string; done?: string | undefined } | undefined;
+  secondStage?: { label: string; ending: string; done?: string | undefined; precondition?: string | undefined } | undefined;
   figureCaptured: boolean;
   calibrated: boolean;
   /** How many calibration points are placed, and how many the walk asks for. */
@@ -71,22 +71,32 @@ export interface CalibrationCardModel {
     /** "25 cells read ✓", or null for a type with no second stage. */
     secondStage: string | null;
   };
-  /** Which sections the body shows. Both true only on a finished, unfolded card
-   * - the review view. */
+  /**
+   * Which sections the body shows. Nothing shows under a FOLDED card: the arrow
+   * and the content cannot disagree (David, 2026-11-07: the arrow said folded
+   * while the Categories controls showed). Both true only on a finished,
+   * unfolded card - the review view.
+   */
   showsWalk: boolean;
   showsSecondStage: boolean;
   /**
-   * Whether to NAME the second stage even when its controls are not shown.
+   * Whether the heading carries the second stage's COUNT ("5 categories",
+   * "5 × 5 cells") beside "Calibrated ✓": while you are in that stage, and on a
+   * finished card opened to change it, where a boundary added changes the size.
+   * Folded and done, `foldedLine.secondStage` stands there alone.
+   */
+  headingShowsCount: boolean;
+  /**
+   * The grey line naming the next stage, last on an open card while the axes are
+   * being calibrated ("Categories: next, after Calibrate"), or null.
    *
    * ⚑⚑ ONE STAGE AT A TIME MUST NOT MEAN A HIDDEN NEXT STEP. The card's own
-   * history records the cost: gating the stage's button on having something to
-   * read *"removed the button entirely before detection had found anything -
-   * the flow lost its visible next step again, one state earlier. A greyed
-   * control says 'this is what comes next'; a missing one says nothing at
-   * all."* So while you are still calibrating, the second stage is NAMED and
-   * disabled; only its controls wait.
+   * history records the cost: *"A greyed control says 'this is what comes next';
+   * a missing one says nothing at all."* So the next stage is named while you
+   * calibrate, after the calibration's own settings, and from Calibrate on its
+   * ending stands on the heading, folded or not.
    */
-  showsSecondStageHeader: boolean;
+  nextStageLine: string | null;
   /** The button that ends the CURRENT stage, or null when there is nothing to
    * end. Its words come from the type, because reading CELLS through a colour
    * key and reading CATEGORIES off an axis are not the same measurement. */
@@ -154,20 +164,16 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
     // ⚑⚑ ONE AT A TIME WHILE WORKING, BOTH WHEN REVIEWING. The walk shows while
     // walking; the second stage shows while in it; a FINISHED card that the user
     // opens shows both, because at that point it is a record rather than a
-    // workspace.
-    showsWalk: stage === 'calibrating' || (done && expanded),
+    // workspace. And only on an OPEN card (2026-11-07): the heading carries the
+    // current step's ending, so folding can hide the controls without hiding it.
+    showsWalk: expanded && (stage === 'calibrating' || done),
     showsSecondStage:
-      stage === 'second-stage' || (done && expanded && secondStage !== undefined),
-    // ⚑ Named from the moment there is a card to name it on, so the next step is
-    // never invisible - see the field's own note.
-    // ⚑⚑ VISIBLE WHILE YOU ARE IN IT, folded card or not. Calibrating AUTO-FOLDS
-    // the card (the walk's own ending), and stage 2 is the step you are on the
-    // moment that happens - so requiring `expanded` here hid the current step
-    // behind the fold that had just closed on the previous one. Named while
-    // calibrating too, but only with the card open, because then it is a
-    // preview rather than the step you are on.
-    showsSecondStageHeader:
-      secondStage !== undefined && (stage === 'second-stage' || (stage !== 'capture' && expanded)),
+      expanded && (stage === 'second-stage' || (done && secondStage !== undefined)),
+    headingShowsCount: stage === 'second-stage' || (done && expanded && secondStage !== undefined),
+    nextStageLine:
+      secondStage && stage === 'calibrating' && expanded
+        ? `${secondStage.label}: next, after Calibrate${secondStage.precondition ? `. ${secondStage.precondition}` : ''}`
+        : null,
     // ⚑⚑ AND A FINISHED CARD YOU HAVE OPENED OFFERS IT AGAIN. Folded, there is
     // nothing to end - the line is a record. But you opened it in order to
     // change something, and without the action that is the dead end this card
@@ -180,4 +186,16 @@ export function calibrationCardModel(input: CalibrationCardInput): CalibrationCa
           ? (secondStage?.ending ?? null)
           : null,
   };
+}
+
+/**
+ * Does Calibrate leave the card open? Yes when it opens a second stage still to
+ * do: the card goes straight into it, arrow ▼ (David, 2026-11-07, approving the
+ * three-state layout). Otherwise it folds, as it always has (checkpoint 86).
+ */
+export function keepsCardOpenAfterCalibrate(
+  secondStage: CalibrationCardInput['secondStage'],
+  secondStageComplete: boolean
+): boolean {
+  return secondStage !== undefined && !secondStageComplete;
 }

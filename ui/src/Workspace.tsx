@@ -286,7 +286,7 @@ import type { AnyAxes } from '../../core/plotData.js';
 import { measurementValue } from '../../core/measurementValues.js';
 import { makeDisplayRounder } from '../../core/displayPrecision.js';
 import { theme, glassSurface, endsCardButton } from './theme.js';
-import { calibrationCardModel } from '../../engine/calibrationCardModel.js';
+import { calibrationCardModel, keepsCardOpenAfterCalibrate } from '../../engine/calibrationCardModel.js';
 import { clampPanelWidth, defaultPanelWidthFor, readStoredPanelWidth, writePanelWidth } from './panelWidth.js';
 import { useKeyTips, keyTipLabel, redoKeyTip, KeyTipsContext } from './useKeyTips.js';
 import { primaryMod } from './platform.js';
@@ -1354,8 +1354,6 @@ export function Workspace() {
   // had been refused (`categoryMarkError`), and a count typed into a box of its
   // own (`categoryCountInput`). Both ends are calibration steps now, so the walk
   // owns all of it and the canvas needs no special mode.
-  // ⛔ `# Series (optional)` stays exactly as it was - parked by standing order.
-  const [categorySeriesInput, setCategorySeriesInput] = useState('');
 
   const [dataValueInputs, setDataValueInputs] = useState<string[]>([]);
   const [projectError, setProjectError] = useState<string | null>(null);
@@ -3150,6 +3148,8 @@ export function Workspace() {
       // David asked for and, before this, the reason the grid panel had a fold
       // of its own at all.
       setCalibExpanded(false);
+      // ⚑ Nothing is picked after the last ending, as after Calibrate (David, 2026-11-01).
+      setMode('pan');
       // ⚑⚑ THE READ IS ITS OWN UNDO STEP. It produces the entire table, and it
       // took no snapshot - so undo had nothing to land on between "grid
       // detected" and "calibration finished", and took the grid with it.
@@ -4880,16 +4880,23 @@ export function Workspace() {
 
   const runCalibration = useCallback(() => {
     if (session.runCalibration()) {
-      // ⚑ Nothing is picked after Calibrate (David, 2026-11-01): the next step is the user's choice, the Legend or
-      // Data extraction. Until v2.7 this switched to Add points.
-      setMode('pan');
-      // Fold the card on success (checkpoint 86). The card overlays the canvas,
-      // and post-calibration the user is placing points -- a thin chip bar keeps
-      // the figure clear. Options/global fields now render inside the EXPANDED
-      // card (the !axes gate is gone), so folding is also what keeps that from
-      // reintroducing checkpoint 68's click-swallow: the tall state is opt-in,
-      // reached by unfolding when you actually want to change Log Y or the like.
-      setCalibExpanded(false);
+      // ⚑⚑ A SECOND STAGE STILL TO DO: the card opens straight into it (David, 2026-11-07, approving the three-state
+      // layout), and the Calibrate tool stays picked, since the card is that tool's fold-out.
+      const secondStageDone = heatmapActive ? heatmapCells.length > 0 : session.getCategoryAxis().categoriesMarked();
+      if (keepsCardOpenAfterCalibrate(config.secondStage, secondStageDone)) {
+        setCalibExpanded(true);
+      } else {
+        // ⚑ Nothing is picked after Calibrate (David, 2026-11-01): the next step is the user's choice, the Legend or
+        // Data extraction. Until v2.7 this switched to Add points.
+        setMode('pan');
+        // Fold the card on success (checkpoint 86). The card overlays the canvas,
+        // and post-calibration the user is placing points -- a thin chip bar keeps
+        // the figure clear. Options/global fields now render inside the EXPANDED
+        // card (the !axes gate is gone), so folding is also what keeps that from
+        // reintroducing checkpoint 68's click-swallow: the tall state is opt-in,
+        // reached by unfolding when you actually want to change Log Y or the like.
+        setCalibExpanded(false);
+      }
       // L3: a recalibrated colour key moves every level read off it
       readLevelsFromKey();
       commit();
@@ -4917,7 +4924,7 @@ export function Workspace() {
     } else {
       bump();
     }
-  }, [session, bump, commit, heatmapActive, runHeatmapDetect, setCalibExpanded]);
+  }, [session, bump, commit, heatmapActive, heatmapCells.length, config.secondStage, runHeatmapDetect, setCalibExpanded]);
 
   /**
    * [Automatic axis detection] (the calibration card, v2.7; David 2026-10-31 and 2026-11-01). One button for every
@@ -8245,8 +8252,8 @@ export function Workspace() {
   // line is David's own words for the walk being done, declared on the type
   // (`secondStage.done`) so the component does not assemble it.
   const secondStageSummary = heatmapActive ? `${heatmapCells.length} cells read` : undefined;
-  /** The stage's summary line - the sibling of `heatmapGridSummary`. */
-  const categoryStageSummary = categoryStageLine(categoryStage.count, categoryStage.marked, categoryStage.declared);
+  /** The stage's count on the heading - the sibling of `heatmapGridSummary`. */
+  const categoryStageSummary = categoryStageLine(categoryStage.count, categoryStage.declared);
   const cardModel = calibrationCardModel({
     ...(config.secondStage ? { secondStage: config.secondStage } : {}),
     figureCaptured,
@@ -8705,7 +8712,10 @@ export function Workspace() {
         fallbackColor: theme.color.error,
         axesKind: config.axesKind,
         isCalibrated: axes !== null,
-        calibrationCardOpen: figureCaptured && calibExpanded,
+        // ⚑ While the WALK is on screen, not merely the card (2026-11-07): Calibrate leaves the card open on a second
+        // stage, whose drags (Read labels round the label row, a category tick) start right beside P1 and Cat 1, and a
+        // handle that took that press moved the calibration while its chips were not even shown.
+        calibrationCardOpen: figureCaptured && cardModel.showsWalk,
         labelAway,
         ringClosingIndex,
         mode,
@@ -8715,7 +8725,7 @@ export function Workspace() {
         activeDatasetIndex,
         errorTargetIndex,
       }),
-    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex, figureCaptured, calibExpanded]
+    [steps, placedPoints, pendingPixel, dataPoints, dataPointRoles, activeCapRoles, axes, mode, config.axesKind, allDatasetsData, datasetInfos, activePointIndex, activeHandleKey, selectedPointIndices, activeDatasetIndex, errorTargetIndex, labelAway, ringClosingIndex, figureCaptured, cardModel.showsWalk]
   );
 
   // ⚑ An aid's marker carries the HIT AREA and draws nothing; the mark and its
@@ -8732,8 +8742,8 @@ export function Workspace() {
   // under every other marker: the origin is often the frame's corner, and a grip on top took the drag meant for the
   // calibration handle there (found by the tests).
   const dataAreaHandles = useMemo<CanvasMarker[]>(
-    () => (mode === 'calibrate' && figureCaptured && calibExpanded && dataArea ? dataAreaCornerMarkers(dataArea, DATA_AREA_COLOR, !dataAreaStep) : []),
-    [mode, figureCaptured, calibExpanded, dataArea, dataAreaStep]
+    () => (mode === 'calibrate' && figureCaptured && cardModel.showsWalk && dataArea ? dataAreaCornerMarkers(dataArea, DATA_AREA_COLOR, !dataAreaStep) : []),
+    [mode, figureCaptured, cardModel.showsWalk, dataArea, dataAreaStep]
   );
   const allMarkers = useMemo<CanvasMarker[]>(
     () =>
@@ -9824,6 +9834,73 @@ export function Workspace() {
                 {cardModel.foldedLine.secondStage}
               </span>
             )}
+            {/* ⚑⚑ THE SECOND STAGE'S COUNT, beside "Calibrated ✓" while you are in it (David, 2026-11-07: "integrated
+                on teh same row the same wat calibrated is"). Said once: the walk's Cat n chip is not shown in this
+                stage. */}
+            {cardModel.headingShowsCount && gamePhase === null && categoryStage.supported && (
+              <span data-testid="category-ticks-summary" style={{ fontSize: theme.font.size.small, whiteSpace: 'nowrap', color: theme.color.text.secondary }}>
+                {categoryStageSummary}
+              </span>
+            )}
+            {cardModel.headingShowsCount && heatmapActive && (
+              <span data-testid="heatmap-grid-summary" style={{ fontSize: theme.font.size.small, whiteSpace: 'nowrap', color: theme.color.text.secondary }}>
+                {heatmapGridSummary(heatmapShownGrid)}
+              </span>
+            )}
+            {/* ⚑⚑ THE SECOND STAGE'S ENDING, ON THE HEADING, where Calibrate stands in the first: the button that
+                finishes the current step is always in the same place, and visible with the card folded, so the next
+                step is never hidden behind the fold. Only past stage 1: there the ending is "Calibrate", and these
+                buttons would borrow its word with their own handler. */}
+            {cardModel.ending !== null && cardModel.stage !== 'calibrating' && gamePhase === null && categoryStage.supported && (
+            <button
+              type="button"
+              data-testid="category-read"
+              onClick={() => {
+                if (session.markCategories()) commit();
+                setCalibExpanded(false);
+                // ⚑ Nothing is picked after the last ending, as after Calibrate (David, 2026-11-01).
+                setMode('pan');
+              }}
+              disabled={!categoryStage.hasGeometry}
+              title={
+                categoryStage.hasGeometry
+                  ? 'Accept these ticks as the figure\u2019s category boundaries and finish this step'
+                  : // ⚑⚑ A REASON THAT NAMES AN ACTION THE SCREEN ACTUALLY OFFERS.
+                    // The button only renders past stage 1, so "finish
+                    // calibrating" is not the case here - a calibrated
+                    // bar-family figure has its axis by construction, and
+                    // the ONLY way to be here without one is a project
+                    // saved before the category axis joined the walk.
+                    // ⚑ The first draft said "calibrate the category axis
+                    // first" - true, and describing nothing the user can
+                    // do, because the walk is over. A message naming an
+                    // action the interface does not offer is the
+                    // keystone-persona failure this project keeps finding.
+                    'This figure was calibrated before the category axis was part of the walk. Press Reset calibration to place it - the values will need re-reading.'
+              }
+              // ⚑ On the Calibration heading, where Calibrate stood (David, 2026-11-07: "on the top row next to
+              // calibrated"): the button that finishes the current step is always in the same place.
+              style={{ marginLeft: 'auto', ...endsCardButton(categoryStage.hasGeometry) }}
+            >
+              {cardModel.ending}
+            </button>
+            )}
+            {cardModel.ending !== null && cardModel.stage !== 'calibrating' && heatmapActive && (
+            <button
+              type="button"
+              data-testid="heatmap-read"
+              onClick={() => finishHeatmapGrid()}
+              disabled={!heatmapShownGrid}
+              title={
+                heatmapShownGrid
+                  ? 'Read every cell through the colour key - the cells appear in the Cells panel'
+                  : 'Detect the grid first, or overlay an even one - there are no cells to read yet'
+              }
+              style={{ marginLeft: 'auto', ...endsCardButton(!!heatmapShownGrid) }}
+            >
+              {cardModel.ending}
+            </button>
+            )}
             {!isCalibrating && !axes && (
               // ⛑ THE SAME TEAL AS THE OTHER TWO. This ends the calibration
               // walk and auto-folds its card (checkpoint 86) - the identical
@@ -9843,7 +9920,14 @@ export function Workspace() {
               type="button"
               data-testid="reset-calibration"
               onClick={reset}
-              style={{ marginLeft: !isCalibrating && !axes ? 6 : 'auto', fontSize: 12, whiteSpace: 'nowrap' }}
+              style={{
+                marginLeft:
+                  (!isCalibrating && !axes) || (cardModel.ending !== null && cardModel.stage !== 'calibrating' && (heatmapActive || (gamePhase === null && categoryStage.supported)))
+                    ? 6
+                    : 'auto',
+                fontSize: 12,
+                whiteSpace: 'nowrap',
+              }}
             >
               Reset calibration
             </button>
@@ -9856,7 +9940,7 @@ export function Workspace() {
           {/* ⚑ [Automatic axis detection], just under the card's header (David, 2026-10-31): the same button on every
               kind of figure, drawn or picture. It reads X and Y axes, so it is greyed in its place on graph types
               calibrated otherwise. */}
-          {figureCaptured && calibExpanded && (
+          {figureCaptured && cardModel.showsWalk && (
             <span title={autoAxesApplies ? undefined : 'Reads the axes of an XY, contour or bar-family figure; this graph type is calibrated by hand.'} style={{ display: 'flex' }}>
               <button
                 type="button"
@@ -9869,14 +9953,14 @@ export function Workspace() {
               </button>
             </span>
           )}
-          {figureCaptured && calibExpanded && figureKindText && (
+          {figureCaptured && cardModel.showsWalk && figureKindText && (
             <span data-testid="figure-kind" style={{ fontSize: theme.font.size.small, color: theme.color.text.secondary }}>
               {figureKindText}
             </span>
           )}
           {/* ⚑ The data area, the walk's first step on every graph type that is XY in some form (David, 2026-11-01):
               a chip like the points' own, picked to mark it again. */}
-          {figureCaptured && calibExpanded && (
+          {figureCaptured && cardModel.showsWalk && (
             <div data-testid="calib-chip-data-area" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
               <span
                 role="button"
@@ -9914,7 +9998,7 @@ export function Workspace() {
               <span style={{ color: theme.color.text.legend }}>{dataAreaStep ? 'drag on image' : dataArea ? 'marked' : '-'}</span>
             </div>
           )}
-          {figureCaptured && calibExpanded && (
+          {figureCaptured && cardModel.showsWalk && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, auto)', gap: '5px 16px' }}>
               {steps.map((step, i) => {
                 const placed = placedPoints[step.key];
@@ -10057,7 +10141,7 @@ export function Workspace() {
               already know it exists to wait for it. The count and the floor are
               stated in words for the same reason, so nothing about the shape has to
               be inferred from whether a button happens to be greyed. */}
-          {figureCaptured && calibExpanded && repeatingStep && !axes && (
+          {figureCaptured && cardModel.showsWalk && repeatingStep && !axes && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
               <button
                 type="button"
@@ -10106,7 +10190,7 @@ export function Workspace() {
               option nobody should choose is an option that should not be there.
               ⚑ XY keeps it: that type really does have figures whose axes do not
               meet, so there it is a genuine question. */}
-          {figureCaptured && calibExpanded && config.commonOrigin && !config.commonOriginAlways && !axes && (
+          {figureCaptured && cardModel.showsWalk && config.commonOrigin && !config.commonOriginAlways && !axes && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: theme.color.text.secondary, cursor: 'pointer' }}>
               <input
                 type="checkbox"
@@ -10166,123 +10250,6 @@ export function Workspace() {
               })()}
             </label>
           )}
-          {/* ⚑⚑ STAGE 2, AND IT IS THE HEATMAP'S STAGE 2 (v2.3). David, with the
-              two cards side by side: *"So it is a two stage fold out card,
-              mirroring exactly heatmaps, and when we unfold from a calibrated
-              state, then we show both card content at the same time, exact
-              mirroring heatmaps."*
-
-              ⚠️ WHAT STOOD HERE, 380 lines of it, and why none of it survives.
-              The categorical stage was a FOLD-OUT INSIDE the card, with its own
-              chevron-free toggle, its own bordered section, a teal `Mark
-              categories` entry button, a prompt, a step line, a measured
-              short-span note, a count box, a tick-style control in its own
-              vocabulary, `Re-place axis`, `Remove ticks`, an ending at the
-              bottom, and a `<details>` arguing the case for the feature. Beside
-              the heatmap's stage 2 it read as a different feature by a different
-              author - and it was, which is exactly the failure CLAUDE.md's own
-              reuse rule names.
-
-              ▶ Now: a SUMMARY LINE with the stage's ENDING beside it, then the
-              stage's controls, gated on `cardModel.showsSecondStage`. Character
-              for character the arrangement `heatmap-grid-panel` uses fifty lines
-              below, because it is the same card. */}
-          {gamePhase === null && categoryStage.supported && cardModel.showsSecondStageHeader && (
-            <div
-              data-testid="category-ticks-panel"
-              style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* ⚑ NO SECOND TRIANGLE. One card, one fold - and this line is
-                    now plain text rather than a button, because there is nothing
-                    left for it to open. */}
-                <span data-testid="category-ticks-summary" style={{ color: theme.color.text.secondary }}>
-                  {categoryStageSummary}
-                </span>
-                {/* ⚑⚑ THE ENDING, ON THE SUMMARY ROW, in exactly the place and
-                    with exactly the gating `heatmap-read` has. It used to sit at
-                    the END of an opened fold-out, which is the arrangement the
-                    heatmap already had to abandon: everything on screen said
-                    READY while the one action that finishes the job was inside a
-                    closed fold-out inside a closed card. David: *"that is a UI
-                    design fault."*
-                    ⚑ DISABLED, NEVER ABSENT, with the reason on it - a greyed
-                    control says "this is what comes next", a missing one says
-                    nothing at all.
-                    ⚑ And ONLY in the second stage: during stage 1 the ending is
-                    "Calibrate", so gating on `ending !== null` alone would give
-                    this button stage 1's word and stage 2's handler. */}
-                {cardModel.ending !== null && cardModel.stage !== 'calibrating' && (
-                  <button
-                    type="button"
-                    data-testid="category-read"
-                    onClick={() => {
-                      if (session.markCategories()) commit();
-                      setCalibExpanded(false);
-                    }}
-                    disabled={!categoryStage.hasGeometry}
-                    title={
-                      categoryStage.hasGeometry
-                        ? 'Accept these ticks as the figure\u2019s category boundaries and finish this step'
-                        : // ⚑⚑ A REASON THAT NAMES AN ACTION THE SCREEN ACTUALLY OFFERS.
-                          // The button only renders past stage 1, so "finish
-                          // calibrating" is not the case here - a calibrated
-                          // bar-family figure has its axis by construction, and
-                          // the ONLY way to be here without one is a project
-                          // saved before the category axis joined the walk.
-                          // ⚑ The first draft said "calibrate the category axis
-                          // first" - true, and describing nothing the user can
-                          // do, because the walk is over. A message naming an
-                          // action the interface does not offer is the
-                          // keystone-persona failure this project keeps finding.
-                          'This figure was calibrated before the category axis was part of the walk. Press Reset calibration to place it - the values will need re-reading.'
-                    }
-                    // ⚑ At the row's right edge, as Calibrate and Reset calibration stand on the Calibration heading.
-                    style={{ marginLeft: 'auto', ...endsCardButton(categoryStage.hasGeometry) }}
-                  >
-                    {cardModel.ending}
-                  </button>
-                )}
-              </div>
-              {/* ⚑⚑ THE STAGE'S CONTROLS FOLLOW THE STAGE; the row above only
-                  NAMES it - the heatmap's rule, in the heatmap's own words.
-                  While you are still calibrating, the stage is named and its
-                  ending is disabled, and its controls wait. */}
-              {cardModel.showsSecondStage && (
-                <CategoriesCard
-                  declared={categoryStage.declared ? categoryStage.count : null}
-                  convention={categoryStage.convention}
-                  onConventionChange={(c) => {
-                    if (session.setCategoryTickConvention(c)) commit();
-                  }}
-                  regenerateWarning={categoryStage.regenerateWarning}
-                  seriesInput={categorySeriesInput}
-                  onSeriesInputChange={setCategorySeriesInput}
-                  onDetectTicks={detectCategoryTicks}
-                  detectNotice={tickDetectNotice}
-                  onReadLabels={() => {
-                    setOcrError(null);
-                    // ⚑ The reader serves more than one axis now, so arming it
-                    // says whose names it is about to read.
-                    setOcrTarget('category');
-                    setOcrArmed((armed) => !armed);
-                  }}
-                  readingArmed={ocrArmed}
-                  // ⚑ The names [Automatic axis detection] read (v2.7), offered on the Names row: nothing is written
-                  // until Use them, and Check… opens the review card for correcting them (David, 2026-11-04).
-                  nameOffer={
-                    figureCaptured && axes && nameOffer && nameOffer.length > 0
-                      ? {
-                          count: nameOffer.length,
-                          onUse: () => applyOcrNames(nameOffer),
-                          onCheck: () => setOcrProposals(nameOffer),
-                        }
-                      : null
-                  }
-                />
-              )}
-            </div>
-          )}
           {/* Per-axes calibration options (checkpoint 68) - log scales,
               orientations, units. WPD has always offered these; we hardcoded
               them to literals across 6 of 7 axes types, which the parity
@@ -10305,7 +10272,7 @@ export function Workspace() {
               about the click WALK (X1 and Y1 share a pixel), which only happens
               while placing calibration points, so post-calibration it has
               nothing to do. */}
-          {figureCaptured && calibExpanded && (config.options?.length ?? 0) > 0 && (
+          {figureCaptured && cardModel.showsWalk && (config.options?.length ?? 0) > 0 && (
             <div
               data-testid="axes-options"
               style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 12, color: theme.color.text.secondary }}
@@ -10360,88 +10327,55 @@ export function Workspace() {
               })()}
             </div>
           )}
+          {/* ⚑⚑ THE CATEGORIES STEP'S CONTROLS, after the calibration's own settings (David, 2026-11-07: one layout,
+              three states). Its count and its ending stand on the Calibration heading; only the rows are here, and
+              only while the card is open, so the arrow and the content agree. */}
+          {gamePhase === null && categoryStage.supported && cardModel.showsSecondStage && (
+            <div
+              data-testid="category-ticks-panel"
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
+            >
+              <CategoriesCard
+                declared={categoryStage.declared ? categoryStage.count : null}
+                convention={categoryStage.convention}
+                onConventionChange={(c) => {
+                  if (session.setCategoryTickConvention(c)) commit();
+                }}
+                regenerateWarning={categoryStage.regenerateWarning}
+                onDetectTicks={detectCategoryTicks}
+                detectNotice={tickDetectNotice}
+                onReadLabels={() => {
+                  setOcrError(null);
+                  // ⚑ The reader serves more than one axis now, so arming it
+                  // says whose names it is about to read.
+                  setOcrTarget('category');
+                  setOcrArmed((armed) => !armed);
+                }}
+                readingArmed={ocrArmed}
+                // ⚑ The names [Automatic axis detection] read (v2.7), offered on the Names row: nothing is written
+                // until Use them, and Check them opens the review card for correcting them (David, 2026-11-04).
+                nameOffer={
+                  figureCaptured && axes && nameOffer && nameOffer.length > 0
+                    ? {
+                        count: nameOffer.length,
+                        onUse: () => applyOcrNames(nameOffer),
+                        onCheck: () => setOcrProposals(nameOffer),
+                      }
+                    : null
+                }
+              />
+            </div>
+          )}
           {/* ⚑⚑ STAGE 2 COMES AFTER STAGE 1, because a review view should read
               in the order the work was done: calibrate the axes, then read what
               those axes make readable. It used to render ABOVE the axis options
               that belong to stage 1, so an unfolded card showed the second step
               before the first one's settings. */}
-          {heatmapActive && cardModel.showsSecondStageHeader && (
+          {heatmapActive && cardModel.showsSecondStage && (
             <div
               data-testid="heatmap-grid-panel"
               style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: theme.color.text.secondary }}
             >
-              {/* ⚑⚑ THE ACTION TRAVELS WITH THE GRID, exactly as its provenance
-                  does one block below. David, on the built 2.2.0: *"You now have
-                  to know that to HAVE to open the 'lower part' of the calibration
-                  card to be able to read the cells, even though everything looks
-                  ready. That is a UI design fault."* The screen said `Calibrated
-                  ✓`, `▶ Grid - 5 × 5 cells` and detection's own "5 columns,
-                  matching the 4 boundaries found" - everything reads READY - and
-                  the one action that finishes the job was inside a closed
-                  fold-out inside a closed card.
-                  ⚠️ AND THE "ENDING" FIX MADE IT WORSE: Read cells FOLDS the card
-                  behind it, so the second read was buried too. Fixing "the flow
-                  has no ending" created "the flow has no visible NEXT STEP", and
-                  the fix has to keep both properties at once.
-                  ⚑ SO: THE SAME ACTION, IN THE SAME WORDS, IN TWO PLACES - which
-                  is this feature's own established answer to an undiscoverable
-                  gesture, not a new one. `Reset to key` is already offered both
-                  on the picked-cell line and in the right-click menu, in the same
-                  words, because right-click alone could not be found. One handler,
-                  one label, one style; the fold-out keeps its ending and the
-                  header line carries the next step. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {/* ⚑⚑ NO SECOND TRIANGLE. The card has ONE fold - David's design: the
-                  whole two-stage process folds to one row, and unfolding it shows
-                  both stages at once. A nested fold-out meant the user had to open
-                  two things to see what one card had recorded, and it is how the
-                  bulk name boxes came to be hidden behind a fold nobody opened. */}
-              <span
-                data-testid="heatmap-grid-summary"
-                style={{ color: theme.color.text.secondary }}
-              >
-                {heatmapGridSummary(heatmapShownGrid)}
-              </span>
-              {/* ⚑ Only once there IS a grid to read - the same gate the button
-                  inside the fold-out uses, so the two cannot get out of step. */}
-              {/* ⚠️ DISABLED, NEVER ABSENT, when there is no grid to read yet.
-                  Gating this on `heatmapShownGrid` removed the button entirely
-                  before detection had found anything - which is the very defect
-                  this button exists to fix: the flow lost its visible next step
-                  again, one state earlier. A greyed control says "this is what
-                  comes next"; a missing one says nothing at all.
-                  ⚑ Same semantics the button inside the fold-out had (it was
-                  always rendered, `disabled={!canRead}`) - moving a control must
-                  not quietly change when it exists. */}
-                            {/* ⚑⚑ THE MODEL DECIDES WHETHER THERE IS ANYTHING TO END. A card
-                  whose cells are already read offers no "Read cells" - the
-                  ending belongs to the stage you are IN, and on a finished card
-                  you are past it. Wired to `cardModel.ending` rather than to a
-                  condition of its own, so the button and the model that governs
-                  it cannot drift apart. */}
-              {/* ⚑⚑ ONLY IN THE SECOND STAGE. Gating on `ending !== null` was
-                  wrong and the screenshot said so: during stage 1 the ending is
-                  "Calibrate", so this button borrowed stage 1's word AND kept
-                  stage 2's handler - a control labelled for one step that
-                  performed another. The stage is the gate; the ending is only
-                  its label. */}
-              {cardModel.ending !== null && cardModel.stage !== 'calibrating' && (
-                <button
-                  type="button"
-                  data-testid="heatmap-read"
-                  onClick={() => finishHeatmapGrid()}
-                  disabled={!heatmapShownGrid}
-                  title={
-                    heatmapShownGrid
-                      ? 'Read every cell through the colour key - the cells appear in the Cells panel'
-                      : 'Detect the grid first, or overlay an even one - there are no cells to read yet'
-                  }
-                  style={{ marginLeft: 'auto', ...endsCardButton(!!heatmapShownGrid) }}
-                >
-                  {cardModel.ending}
-                </button>
-              )}
-              </div>
               {/* ⚑⚑ WHERE THE GRID CAME FROM, BESIDE THE GRID - outside the
                   fold-out, because it is the answer to "did you measure this or
                   make it up?" and that question is live the moment a grid
@@ -10540,6 +10474,13 @@ export function Workspace() {
               )}
             </div>
           )}
+          {/* ⚑ The next step, named last while the axes are being calibrated, after their own settings (David,
+              2026-11-07). Grey: it is what comes next, not something to do yet. */}
+          {figureCaptured && cardModel.nextStageLine && (
+            <span data-testid="next-stage-line" style={{ fontSize: 12, color: theme.color.text.legend }}>
+              {cardModel.nextStageLine}
+            </span>
+          )}
           {/* Global calibration fields (e.g. Circular Chart Recorder's "Chart
               Start Time") live on the card now (checkpoint 59b), not the data-only
               right panel -- they're calibration inputs. Also reachable
@@ -10556,7 +10497,7 @@ export function Workspace() {
               to throw the calibration away and start again. setGlobalFieldValue
               already re-runs the calibration live, so editing it here re-reads every
               slice immediately. */}
-          {figureCaptured && calibExpanded && config.globalFields.length > 0 && (
+          {figureCaptured && cardModel.showsWalk && config.globalFields.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, fontSize: 12, color: theme.color.text.secondary }}>
               {config.globalFields.map((gf) => (
                 <label key={gf.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>

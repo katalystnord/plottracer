@@ -842,10 +842,11 @@ describe('a user’s own reading of a cell', () => {
 describe('E6 - the line under the grid says where the grid stands, and nothing twice', () => {
   const grid = (columns: number, rows: number) => ({ columns, rows });
 
-  it('names the calibration as the source only when the grid actually came from it', () => {
-    expect(heatmapGridLine(grid(5, 4), { columns: 5, rows: 4 })).toBe(
-      '5 columns × 4 rows, from the calibration'
-    );
+  it('⚑⚑ says nothing when the grid agrees with the calibration: the size is on the heading', () => {
+    // David's rule, 2026-11-04, for the categories: the count is said once. The
+    // heading reads "Calibrated ✓ 5 × 4 cells", so "5 columns × 4 rows, from the
+    // calibration" under it said the same thing twice (2026-11-07, mirrored).
+    expect(heatmapGridLine(grid(5, 4), { columns: 5, rows: 4 })).toBeNull();
   });
 
   it('⚑⚑ stops claiming "from the calibration" when the grid does NOT match it', () => {
@@ -877,13 +878,18 @@ describe('E6 - the line under the grid says where the grid stands, and nothing t
   it('is quiet about a count nobody has declared yet', () => {
     // A value axis mid-walk has NaN counts; a line built from those would read
     // "the calibration declares NaN".
-    expect(heatmapGridLine(grid(5, 4), { columns: NaN, rows: NaN })).toBe(
-      '5 columns × 4 rows, from the calibration'
-    );
+    expect(heatmapGridLine(grid(5, 4), { columns: NaN, rows: NaN })).toBeNull();
   });
 
-  it('asks for a calibration when there is no grid at all', () => {
-    expect(heatmapGridLine(null, { columns: 5, rows: 4 })).toBe('Calibrate the axes to see the grid.');
+  it('⚑⚑ with no grid, names the step that makes one, not a calibration that is already done', () => {
+    // The line is shown only in the second stage, so the axes ARE calibrated:
+    // "Calibrate the axes to see the grid." sat under "Calibrated ✓" whenever
+    // detection found nothing (2026-11-07). Detect grid and Overlay even grid
+    // are the two buttons just below it.
+    expect(heatmapGridLine(null, { columns: 5, rows: 4 })).toBe(
+      'Detect the grid, or overlay an even one, to have cells to read.'
+    );
+    expect(heatmapGridLine(null, { columns: 5, rows: 4 })).not.toMatch(/calibrate/i);
   });
 });
 

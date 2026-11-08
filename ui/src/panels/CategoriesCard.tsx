@@ -61,13 +61,6 @@ export interface CategoriesCardProps {
    */
   regenerateWarning: string | null;
   /**
-   * ⛔ `# Series (optional)` IS PARKED AND UNTOUCHED, by standing order. It is
-   * carried across verbatim rather than redesigned or dropped, so this rebuild
-   * does not quietly settle a question David has reserved.
-   */
-  seriesInput: string;
-  onSeriesInputChange: (value: string) => void;
-  /**
    * Arm the label-band drag (v2.4) - or absent where there is no axis to read
    * against yet.
    *
@@ -101,8 +94,6 @@ export function CategoriesCard({
   convention,
   onConventionChange,
   regenerateWarning,
-  seriesInput,
-  onSeriesInputChange,
   onReadLabels,
   readingArmed = false,
   onDetectTicks,
@@ -116,7 +107,7 @@ export function CategoriesCard({
       style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: theme.font.size.small }}
     >
       {/* ⚑⚑ NO COUNT BOX, AND THE COUNT SAID ONCE. How many categories the figure has is declared on the second
-          category click in the walk and shown on the stage's heading ("Categories - 6 categories"); a line here
+          category click in the walk and shown on the Calibration heading ("6 categories"); a line here
           repeating it was the same fact twice (David, 2026-11-04: "things in many different places on the card").
           Only an undeclared axis gets a line, because then there is something to say: where the count comes from. */}
       {declared === null && (
@@ -177,7 +168,7 @@ export function CategoriesCard({
                 Use them
               </button>
               <button type="button" data-testid="name-offer-check" onClick={nameOffer.onCheck} style={{ fontSize: 12 }}>
-                Check…
+                Check them
               </button>
             </span>
           ) : (
@@ -195,19 +186,7 @@ export function CategoriesCard({
           )}
         </StageRow>
       )}
-      {/* ⛔ `# Series (optional)` IS PARKED AND UNTOUCHED, by standing order: only its place in a row is new. */}
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ minWidth: 84 }}># Series (optional)</span>
-        <input
-          id="category-series-input"
-          type="number"
-          min={1}
-          data-testid="category-series-count"
-          value={seriesInput}
-          onChange={(e) => onSeriesInputChange(e.target.value)}
-          style={{ width: 56 }}
-        />
-      </label>
+      {/* ⚑ No `# Series (optional)` box (David, 2026-11-07: "yes. :)"): nothing read it since f6178fe (2026-08-10). */}
       {regenerateWarning && (
         <span data-testid="category-regenerate-warning" style={{ color: theme.color.text.secondary }}>
           {regenerateWarning}

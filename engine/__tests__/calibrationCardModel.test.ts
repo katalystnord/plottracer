@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calibrationCardModel, type CalibrationCardInput } from '../calibrationCardModel.js';
+import { calibrationCardModel, keepsCardOpenAfterCalibrate, type CalibrationCardInput } from '../calibrationCardModel.js';
 import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs.js';
 
 /**
@@ -96,36 +96,97 @@ describe('⚑⚑ the card is TWO STAGES, and says which one you are in', () => {
   });
 });
 
-describe('⚑⚑ one stage at a time is NOT a hidden next step', () => {
-  it('names the second stage while you are still calibrating, without its controls', () => {
-    // The card's own history: gating the stage's button on having something to
-    // read "removed the button entirely before detection had found anything -
-    // the flow lost its visible next step again". A greyed control says what
-    // comes next; a missing one says nothing.
-    const m = calibrationCardModel({ ...base, secondStage: GRID });
-    expect(m.showsSecondStageHeader).toBe(true);
+describe('⚑⚑ one layout, three states (David, 2026-11-07: "I approve, I like this")', () => {
+  // ⚑ The heading row is the whole status: the step's state, then the button
+  // that finishes the current step, always in the same place. So the next step
+  // is visible on the heading even with the card folded, and the body shows only
+  // when the card is open: the arrow and the content cannot disagree.
+  it('calibrating, open: the walk, then a grey line naming the next step last', () => {
+    const m = calibrationCardModel({ ...base, placed: 3, secondStage: { label: 'Categories', ending: 'Mark categories' } });
+    expect(m.showsWalk).toBe(true);
     expect(m.showsSecondStage).toBe(false);
+    expect(m.nextStageLine).toBe('Categories: next, after Calibrate');
+    expect(m.headingShowsCount).toBe(false);
   });
 
-  it('⚑⚑ stays visible while you are IN it, even with the card folded', () => {
-    // Finishing the walk auto-folds the card, and stage 2 is the step you are on
-    // the instant that happens. Requiring the card to be open would hide the
-    // current step behind a fold that just closed on the previous one.
+  it('the next-step line carries what the stage needs, where the type declares it', () => {
     const m = calibrationCardModel({
-      ...base, secondStage: GRID, calibrated: true, expanded: false,
+      ...base, placed: 3,
+      secondStage: { ...GRID, precondition: 'It needs a rectangular grid of cells.' },
     });
-    expect(m.stage).toBe('second-stage');
-    expect(m.showsSecondStageHeader).toBe(true);
+    expect(m.nextStageLine).toBe('Grid: next, after Calibrate. It needs a rectangular grid of cells.');
+  });
+
+  it('calibrating, folded: nothing under the heading, not even the next-step line', () => {
+    const m = calibrationCardModel({ ...base, placed: 3, secondStage: GRID, expanded: false });
+    expect(m.showsWalk).toBe(false);
+    expect(m.nextStageLine).toBeNull();
+    expect(m.ending).toBe('Calibrate');
+  });
+
+  it('the second stage, open: its controls only, its count and its ending on the heading', () => {
+    const m = calibrationCardModel({ ...base, secondStage: GRID, calibrated: true });
     expect(m.showsSecondStage).toBe(true);
+    expect(m.showsWalk).toBe(false);
+    expect(m.headingShowsCount).toBe(true);
+    expect(m.ending).toBe('Read cells');
+    expect(m.nextStageLine).toBeNull();
+  });
+
+  it('⚑⚑ the second stage, FOLDED: no controls, but the count and the ending stay on the heading', () => {
+    // The old rule showed the stage's controls under a folded card (arrow ▶)
+    // so the next step could not be hidden. The heading now carries the next
+    // step itself, so folding hides the controls and nothing else.
+    const m = calibrationCardModel({ ...base, secondStage: GRID, calibrated: true, expanded: false });
+    expect(m.stage).toBe('second-stage');
+    expect(m.showsSecondStage).toBe(false);
+    expect(m.showsWalk).toBe(false);
+    expect(m.headingShowsCount).toBe(true);
+    expect(m.ending).toBe('Read cells');
+  });
+
+  it('done: the done line replaces the count on the heading', () => {
+    const m = calibrationCardModel({
+      ...base, secondStage: GRID, calibrated: true, secondStageComplete: true,
+      secondStageSummary: '25 cells read', expanded: false,
+    });
+    expect(m.headingShowsCount).toBe(false);
+    expect(m.foldedLine.secondStage).toBe('25 cells read ✓');
+  });
+
+  it('done and unfolded to change it: the count is back on the heading, beside the done line', () => {
+    // ⚑ The review view shows the stage's controls, and a boundary added there
+    // changes the grid's size; with the line under the heading saying only how
+    // the declaration differs, the heading is the one place the size is said.
+    const m = calibrationCardModel({
+      ...base, secondStage: GRID, calibrated: true, secondStageComplete: true,
+      secondStageSummary: '25 cells read', expanded: true,
+    });
+    expect(m.headingShowsCount).toBe(true);
+    expect(m.foldedLine.secondStage).toBe('25 cells read ✓');
   });
 
   it('a type with no second stage never names one', () => {
-    expect(calibrationCardModel({ ...base }).showsSecondStageHeader).toBe(false);
+    const m = calibrationCardModel({ ...base, placed: 3 });
+    expect(m.nextStageLine).toBeNull();
+    expect(calibrationCardModel({ ...base, calibrated: true }).headingShowsCount).toBe(false);
   });
 
   it('and nothing is named before there is a figure to calibrate', () => {
     const m = calibrationCardModel({ ...base, secondStage: GRID, figureCaptured: false });
-    expect(m.showsSecondStageHeader).toBe(false);
+    expect(m.nextStageLine).toBeNull();
+    expect(m.showsWalk).toBe(false);
+  });
+});
+
+describe('⚑⚑ Calibrate opens straight into the second stage', () => {
+  it('a type with a second stage still to do keeps the card open', () => {
+    expect(keepsCardOpenAfterCalibrate(GRID, false)).toBe(true);
+  });
+
+  it('a finished second stage folds, as a type with none does', () => {
+    expect(keepsCardOpenAfterCalibrate(GRID, true)).toBe(false);
+    expect(keepsCardOpenAfterCalibrate(undefined, false)).toBe(false);
   });
 });
 

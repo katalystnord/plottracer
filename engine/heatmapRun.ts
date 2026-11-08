@@ -1142,13 +1142,17 @@ export function labelOrderReversed(
 export function heatmapGridLine(
   grid: { columns: number; rows: number } | null,
   declared: { columns: number; rows: number }
-): string {
-  if (grid === null) return 'Calibrate the axes to see the grid.';
+): string | null {
+  // ⚑⚑ The line shows only in the second stage, where the axes ARE calibrated, so
+  // with no grid it names the two buttons below it. It used to say "Calibrate the
+  // axes to see the grid." under "Calibrated ✓" (2026-11-07).
+  if (grid === null) return 'Detect the grid, or overlay an even one, to have cells to read.';
   const known = Number.isFinite(declared.columns) && Number.isFinite(declared.rows);
   const agrees = !known || (grid.columns === declared.columns && grid.rows === declared.rows);
-  return agrees
-    ? `${grid.columns} columns × ${grid.rows} rows, from the calibration`
-    : `Calibration declares ${declared.columns} columns × ${declared.rows} rows`;
+  // ⚑ Agreeing, it has nothing to add: the size is on the heading ("5 × 4 cells"),
+  // and the count is said once (David's rule for the categories, 2026-11-04,
+  // mirrored here 2026-11-07).
+  return agrees ? null : `Calibration declares ${declared.columns} columns × ${declared.rows} rows`;
 }
 
 export function heatmapRegenerateWarning(grid: HeatmapState | null): string | null {
@@ -1194,24 +1198,16 @@ export function noteRetiresOnRead(kind: GridNoteKind): boolean {
 }
 
 export function heatmapGridSummary(grid: HeatmapState | null): string {
-  // ⚑⚑ B14 - THE PRECONDITION, SAID BEFORE THE WORK IS DONE. A radial heatmap
-  // (`holoviews` RadialHeatMap: concentric rings and angular bands, and per its
-  // own docs "no rectangular plot box with corners") calibrates as a rectangle
-  // without complaint and then reads confident nonsense out of every cell.
-  //
-  // ⚠️ IT CANNOT BE DETECTED, so it cannot honestly be REFUSED: three clicks on
-  // a polar figure are three ordinary points, the transform is non-degenerate,
-  // and nothing in the pixels tells it apart from a rotated rectangular plot. A
-  // "looks polar to me" test would be interpretation of the kind tenet 9 keeps
-  // out, and a wrong one would block real figures. Naming the requirement is the
-  // honest half - and it costs a user eight clicks to learn it any other way.
-  //
-  // ⚑ Only while there is nothing to lose. Once a grid exists this line's job is
-  // to report it; a caveat that never goes away is one nobody reads.
-  if (grid === null) return 'Grid - needs a rectangular grid of cells; calibrate the axes first';
+  // ⚑ The grid's size on the calibration card's heading, beside "Calibrated ✓",
+  // as a bar chart's count stands there (2026-11-07). Shown only once the axes
+  // are calibrated, so with no grid it says so, and asks for no calibration.
+  // ⚑ B14's precondition ("needs a rectangular grid of cells") moved to the
+  // heatmap's `secondStage.precondition`, on the line naming the next step while
+  // the axes are being calibrated: the moment it can still save the clicks.
+  if (grid === null) return 'No grid yet';
   const columns = Math.max(0, grid.xDividers.length - 1);
   const rows = Math.max(0, grid.yDividers.length - 1);
-  return `Grid - ${columns} × ${rows} cells`;
+  return `${columns} × ${rows} cells`;
 }
 
 /**

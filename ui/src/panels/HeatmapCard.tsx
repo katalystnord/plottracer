@@ -129,6 +129,7 @@ export function HeatmapCard({
   error,
   canRead,
 }: HeatmapCardProps) {
+  const gridLine = heatmapGridLine(gridSize, declared);
   return (
     <div
         data-testid="heatmap-card"
@@ -139,9 +140,13 @@ export function HeatmapCard({
             as for a named one. These inputs existed because a value axis was
             never asked - so the panel asked again, and the two answers could
             disagree. The declaration is shown here, never re-collected. */}
-        <span data-testid="heatmap-declared-grid" style={{ color: theme.color.text.secondary }}>
-          {heatmapGridLine(gridSize, declared)}
-        </span>
+        {/* ⚑ Only when it adds something: the size is on the Calibration heading (2026-11-07), so this line
+            speaks only to say the declaration differs, or that there is no grid yet and what makes one. */}
+        {gridLine !== null && (
+          <span data-testid="heatmap-declared-grid" style={{ color: theme.color.text.secondary }}>
+            {gridLine}
+          </span>
+        )}
         <StageRow name="Grid" testId="heatmap-grid-row">
           <button type="button" data-testid="heatmap-detect" onClick={onDetect} disabled={!canRead}>
             Detect grid

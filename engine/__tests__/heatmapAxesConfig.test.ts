@@ -780,13 +780,20 @@ describe('B12 - three-point calibration', () => {
  * "radial heatmaps are handled".
  */
 describe('B14 - a heatmap says it needs a rectangular grid', () => {
-  it('says so BEFORE the axes are calibrated, when there is still nothing to lose', () => {
-    expect(heatmapGridSummary(null)).toMatch(/rectangular/i);
+  it('says so BEFORE the axes are calibrated, on the line naming the next step', () => {
+    // ⚑ It moved from the grid's summary to the stage's declaration when the
+    // summary became the heading's count (2026-11-07): the grey line "Grid:
+    // next, after Calibrate" is what shows while the axes are being calibrated.
+    expect(HEATMAP_AXES_CONFIG.secondStage?.precondition).toMatch(/rectangular/i);
+  });
+
+  it('a calibrated heatmap with no grid says so on the heading, without asking for a calibration', () => {
+    expect(heatmapGridSummary(null)).toBe('No grid yet');
   });
 
   it('stops saying it once there is a grid, because the moment has passed', () => {
     // ⚑ A caveat that never goes away is a caveat nobody reads. Once the figure
     // is calibrated and gridded, the line's job is to report the grid.
-    expect(heatmapGridSummary({ xDividers: [0, 1, 2], yDividers: [0, 1] })).toBe('Grid - 2 × 1 cells');
+    expect(heatmapGridSummary({ xDividers: [0, 1, 2], yDividers: [0, 1] })).toBe('2 × 1 cells');
   });
 });

@@ -169,25 +169,17 @@ describe('the drag handles', () => {
  */
 
 describe('the stage line', () => {
+  // ⚑ It stands on the calibration card's heading now, beside "Calibrated ✓"
+  // (David, 2026-11-07: "integrated on teh same row the same wat calibrated
+  // is"), so it is the count alone: the heading already says it is the
+  // Categories step, and "Categories marked ✓" replaces it once the ending is
+  // pressed, so the line carries no tick of its own.
   it('names the count the calibration declared', () => {
-    expect(categoryStageLine(12, false)).toBe('Categories - 12 categories');
+    expect(categoryStageLine(12)).toBe('12 categories');
   });
 
   it('says "1 category", not "1 categories"', () => {
-    expect(categoryStageLine(1, false)).toBe('Categories - 1 category');
-  });
-
-  /**
-   * ⚑⚑ TICKS EXISTING IS NOT THE SAME AS SOMEBODY HAVING LOOKED AT THEM, and
-   * that distinction is new. Before v2.3 an axis only existed once the user had
-   * marked it by hand, so the two were the same fact; now the walk produces
-   * ticks the instant it finishes, and a card that treated THAT as the stage
-   * being finished would fold itself shut at the moment the user reached for a
-   * marker.
-   */
-  it('⚑⚑ reports the stage finished only once the ending has been pressed', () => {
-    expect(categoryStageLine(12, false)).not.toContain('✓');
-    expect(categoryStageLine(12, true)).toBe('Categories - 12 categories ✓');
+    expect(categoryStageLine(1)).toBe('1 category');
   });
 
   /**
@@ -200,8 +192,8 @@ describe('the stage line', () => {
    * ⚠️ Caught on the bench, not by a test, which is why it is named here now.
    */
   it('⚑⚑ says nothing about a count when the walk has not declared one', () => {
-    expect(categoryStageLine(0, false, false)).toBe('Categories - finish the calibration first');
-    expect(categoryStageLine(0, false, false)).not.toContain('0 categories');
+    expect(categoryStageLine(0, false)).toBe('finish the calibration first');
+    expect(categoryStageLine(0, false)).not.toContain('0 categories');
   });
 });
 

@@ -84,12 +84,18 @@ on the value axis; only where that axis has no 0 (a log axis, or one that starts
 above 0) is the line the bars stand on measured at Cat 1. In the **Categories** stage after Calibrate you say whether the
 figure draws its ticks at the categories' centres (the default) or between them;
 the tick marks move on screen to show which, and Cat 1 and Cat n stay where you
-clicked them. The stage says the count once, on its heading, with **Mark categories**
-at the heading's right edge, and lays its controls out in rows: **Ticks at** (the
-two conventions and **Find the figure's own ticks**), **Names** (whatever writes
-the category names: names offered by detection, or **Read labels from the
-figure**) and **# Series (optional)**. A heatmap's Grid stage has the same rows:
-**Grid**, **Boundaries** and **Names**.
+clicked them. While you calibrate, the card names this stage last, in grey
+("Categories: next, after Calibrate"). Calibrate opens the card straight into it:
+the heading reads **Calibrated ✓**, the count ("5 categories") and **Mark
+categories**, the button that finishes the step, where **Calibrate** stood; under
+it are two rows, **Ticks at** (the two conventions and **Find the figure's own
+ticks**) and **Names** (whatever writes the category names: names offered by
+detection, or **Read labels from the figure**). Folding the card hides the rows and
+leaves the heading as it is. **Mark categories** folds the card to **Calibrated ✓
+Categories marked ✓**. A heatmap's card works the same way: its heading reads the
+grid's size ("5 × 5 cells") and **Read cells**, and its rows are **Grid**,
+**Boundaries** and **Names**. If no grid was found, the heading says "No grid yet",
+and **Detect grid** or **Overlay even grid** makes one.
 
 **[Automatic axis detection]**, just under the card's header, does the same walk
 for you on XY, Contour and the bar family: it sets the data area to the plot's
@@ -102,8 +108,8 @@ chip and then the figure, and press **Calibrate**. On a bar chart, Calibrate the
 reads the category names from the same labels and offers them: each appears in
 italic under its own tick mark, in the tick marks' purple so it is not mistaken for
 the figure's own print, and the Categories stage's **Names** row says how many were
-read, with **Use them** and **Check…**. **Use them** writes them all in one Undo step, and
-they leave the figure for the table; **Check…** opens the review card to correct
+read, with **Use them** and **Check them**. **Use them** writes them all in one Undo step, and
+they leave the figure for the table; **Check them** opens the review card to correct
 them first. Nothing is written until you do. If nothing could be read, the bottom
 bar says no calibration points could be fixed, with the warning triangle.
 
