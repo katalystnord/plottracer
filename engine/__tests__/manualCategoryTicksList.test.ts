@@ -4,8 +4,12 @@ import path from 'node:path';
 import { ALL_AXES_TYPE_CONFIGS } from '../axesTypeConfigs';
 
 /**
- * MANUAL.md names the types that offer "Mark category ticks?". This asserts the
- * list is the one the registry actually declares.
+ * MANUAL.md names the types whose calibration declares categories (Cat 1, Cat n and
+ * the count). This asserts the list is the one the registry actually declares.
+ *
+ * ⚑ Until v2.7 this checked the "Mark category ticks?" bullet; that fold-out was
+ * removed when the category axis joined the calibration walk, and the bullet stayed
+ * in the manual describing it, with this test holding it there.
  *
  * ⚑⚑ WHY THIS FILE EXISTS. The manual said *"a Bar, Span chart, Box Plot or
  * Candlestick figure"* - four types - while FIVE configs declare
@@ -52,11 +56,11 @@ function names(text: string, label: string): boolean {
   return false;
 }
 
-/** The first sentence of the "Mark category ticks" bullet - the enumeration. */
+/** The sentence of the "filed by the category" bullet that names the types - the enumeration. */
 function offerSentence(): string {
-  const start = MANUAL.indexOf('- **Mark category ticks');
-  expect(start, 'the "Mark category ticks" bullet is missing from MANUAL.md').toBeGreaterThan(-1);
-  const end = MANUAL.indexOf('figure is calibrated', start);
+  const start = MANUAL.indexOf('- **Every bar is filed by the category it stands in.**');
+  expect(start, 'the "Every bar is filed by the category it stands in" bullet is missing from MANUAL.md').toBeGreaterThan(-1);
+  const end = MANUAL.indexOf('are part of the calibration', start);
   expect(end, 'the bullet no longer says which figures the offer appears on').toBeGreaterThan(start);
   return MANUAL.slice(start, end);
 }
@@ -78,7 +82,7 @@ describe('MANUAL.md lists every type that offers category ticks', () => {
     for (const config of offering) {
       expect(
         names(sentence, config.label),
-        `MANUAL.md's "Mark category ticks" sentence does not name ${config.label}, which declares categoryTicks`,
+        `MANUAL.md's "filed by the category" sentence does not name ${config.label}, which declares categoryTicks`,
       ).toBe(true);
     }
     for (const config of ALL_AXES_TYPE_CONFIGS) {

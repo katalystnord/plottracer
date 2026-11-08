@@ -214,7 +214,7 @@ export function ImageEditCard({
               </span>
             </CropBar>
           ) : (
-            <Hint>Rotate, flip, crop, or mask part of the image. Calibration and points move with it.</Hint>
+            <Hint>Rotate, flip, crop or straighten the image. Calibration and points move with it.</Hint>
           )}
           <div style={{ height: 1, background: theme.color.border.regular, margin: '2px 0' }} />
           <StraightenRow>

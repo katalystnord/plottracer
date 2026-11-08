@@ -37,6 +37,14 @@ whether the figure is **drawn** in the PDF, a **picture**, or partly each: a dra
 figure is read from its drawing, exactly, by the tools that can (Find lines,
 markers, bars, the axes' labels), and past 100% zoom it is redrawn sharp.
 
+**Edit image** (`1`) turns and trims the figure: **Rotate ↺ / ↻** and **Flip
+H / V** in quarter turns, **Crop** to a dragged rectangle (the area to keep), and
+**Straighten** a scan by up to 15 degrees with the slider and **Apply**.
+**Auto-straighten** sets the angle from the X axis's calibration points once an XY
+chart is calibrated. Calibration points, data points and measurements move with the
+image, so no value changes. To leave something out of the reading without changing
+the picture, use **Mask an area** on the Legend card (section 4).
+
 ## 3. Choose the graph type and calibrate
 
 Pick the graph type from the **card picker** in the top bar - each type shows its
@@ -136,9 +144,6 @@ ray - points sit **on** the axis, so what you see is the number recorded. The ta
 reads one row per axis and one column per series. Click the point on the image,
 then type the axis value it represents. Log and date axes are options on the card.
 When every reference is placed, press **Calibrate**. The card shows **Calibrated ✓**.
-
-> Tip: **Check calibration** overlays the computed axis box so you can confirm the
-> mapping is right before you trace.
 
 **Pie and donut charts** are calibrated from the **outline**, not from the centre.
 Click three or more points around the rim - three fit a circle exactly, five or more
@@ -424,54 +429,22 @@ next. A reading you placed by hand is never overwritten.
   row, and every series bound to it shows the new name immediately; the exports
   carry it in a **Category** column. A category with no bar in some series shows a
   dash in that cell.
-- Names are **never invented.** An unnamed bar reads as a dash, not as "Bar 1" -
-  a placeholder in the Category column of an export is indistinguishable from a
-  name someone transcribed. On a grouped chart you only type the set once: a bar
-  added to the next series takes the name of the **nearest already-named bar**
-  along the category axis, so it lands on the right category however you click and
-  whatever you skip. Where the app can't tell which category you meant, it leaves
-  the cell **blank** rather than guess.
-- **Mark category ticks (optional, v2.1).** Once a Bar, Span chart, Stacked bar,
-  Box plot, Candlestick or Line (categorical X) figure is calibrated, the
-  calibration card offers **Mark category ticks?**. Open it, click where the
-  categories end (**P1** - the amber calibration handle - is already the start),
-  and say how many there are. Tick marks appear along the category axis; drag
-  any of them if the figure isn't evenly spaced. Choose whether the figure
-  prints its ticks **under each category** or **between them** - flip the
-  setting and watch the marks move to see which matches.
-  If P1 isn't where the categories start - you calibrated on a gridline part-way
-  up the value axis, say - press **Re-place axis** and click *both* ends yourself.
-  **Read categories** ends the step and keeps everything, folding the card to a
-  single line that says how many categories you declared; **Remove ticks** drops
-  the marks and the empty categories they created, keeping any you named or
-  captured a bar for.
-  It is entirely optional, and the app only asks when it has a reason to. A
-  single-series chart is one bar per category and needs none of it, so the offer
-  stays one quiet line. **The moment a second series carries readings the line
-  speaks up** - `2 series - mark category ticks to pair them` - because from then
-  on the two series are being lined up by a number they do not share: each numbers
-  its own bars left to right, so a series missing one category numbers every later
-  bar one lower. Nothing is blocked either way; the export says which it has, and
-  writes `Position (in series)` instead of `Position` when the ordinal is a
-  per-series count rather than a shared category.
-  With the categories declared, every bar is filed by the band it sits in rather
-  than by guessing from position, the table shows a row for every category before
-  you capture anything, and a run of touching same-coloured bars can be split at
-  the boundaries you marked.
-  If two bars of one series land in the same category - a miscounted figure, or a
-  bar sitting outside the axis you marked - the table says so underneath rather
-  than quietly showing one of them.
-- **⚠ Where the guess can go wrong, if you don't mark the ticks.** The
-  nearest-already-named-bar rule above copes with a *later* series skipping a
-  category. It cannot cope when the **first series you capture** is the one missing
-  a bar: that category never comes into existence, so a later series' bar there
-  takes its nearest neighbour's name instead. The wrong name looks exactly like one
-  you typed.
-  It depends on the direction you capture in - left-to-right is the one that can
-  mislead - and it only affects **names**, never measured values. To avoid it,
-  either mark the category ticks, or capture your most complete series first. To
-  spot it, check the Category column against the figure: a bar under one label
-  carrying a different one is the symptom, usually with a blank cell nearby.
+- Names are **never invented.** An unnamed category reads as a dash, not as
+  "Bar 1" - a placeholder in the Category column of an export is indistinguishable
+  from a name someone transcribed. Name them from the Categories stage's **Names**
+  row (the names detection offers, or **Read labels from the figure**), or type
+  each one once, in its row.
+- **Every bar is filed by the category it stands in.** On Bar, Span chart, Stacked
+  bar, Box plot, Candlestick and Line (categorical X) the categories are part of
+  the calibration: Cat 1, Cat n and how many there are. So every series' readings
+  line up by category, whatever order you capture them in and whatever a series
+  skips; the table shows a row for every category before you capture anything; a
+  run of touching same-coloured bars can be split at the category boundaries; and
+  if two bars of one series land in the same category, the table says so underneath
+  rather than quietly showing one of them. If the figure's ticks are not evenly
+  spaced, **Find the figure's own ticks** on the **Ticks at** row looks just outside
+  the axis for the tick marks the figure draws and moves the ticks onto them; or
+  drag any tick mark along the axis.
 - On a **Line** (categorical X) figure the same Category column exists, but the
   names belong to individual *points* rather than to shared rows, since each point
   is its own reading.
@@ -729,7 +702,7 @@ and says why.
 
 Two ways in, and they are the two every other category chart offers:
 
-- **Read column names** / **Read row names** on the Grid card arms the reader.
+- **Read column names** / **Read row names** on the Grid stage's **Names** row arms the reader.
   Drag a box round the row of labels beside that axis and every name comes back
   at once, one row per band, with the pixels it was read from. Nothing reaches
   your bands until you press Apply, and a row you clear is left alone.
@@ -742,11 +715,11 @@ and the unnamed bands keep their measured coordinates.
 
 ### Reading the cells
 
-**Read cells** is the end of the Grid card's job: it reads every cell through the
-colour key, fills the Cells panel and **closes the card behind it**. The folded
-line still reads *Grid - 7 × 5 cells*, so one click reopens it if you want to
-move a boundary or type names in bulk. (You never have to reopen it just to name
-a column - click the column's header in the matrix.)
+**Read cells**, on the card's heading, ends the Grid stage: it reads every cell
+through the colour key, fills the Cells panel and folds the card to **Calibrated ✓**
+and how many cells were read (*35 cells read ✓*). Unfold it to move a boundary or
+type names in bulk, and **Read cells** is offered again. (You never have to reopen
+it just to name a column - click the column's header in the matrix.)
 
 In a heatmap the colour *is* the value, so a
 wrong cell has no other symptom - no gap in a trace, no misplaced point - and
@@ -816,8 +789,8 @@ a fact about the ink, and usually the reason you looked twice.*
   PlotTracer cannot *detect* this and so cannot refuse it: three clicks on a
   polar figure are three perfectly ordinary points, and the calibration will
   build without complaint and then report a confident number for every cell that
-  means nothing. **This one is on you to spot** - which is why the Grid line says
-  a heatmap needs a rectangular grid of cells before you start clicking.
+  means nothing. **This one is on you to spot** - which is why the card says, while
+  you calibrate, that the Grid stage needs a rectangular grid of cells.
 - **A key drawn as a handful of discrete bands** (significance levels, cluster
   IDs, land cover) is **refused, and says why**. A colour on such a key
   identifies a band - a range - and not a value; the number that could be
