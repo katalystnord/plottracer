@@ -43,7 +43,7 @@ No account required, no data sent to any server, and no dependency on any compan
 - **In a heatmap the colour *is* the value, so every cell carries its own evidence.** Alongside the number, each cell reports the interval it cannot be told apart from, how far its colour sat off the key, how much of the cell was actually that colour, and whether it sits against the key's limit - a cell whose data ran past the key is exact, uniform and **clipped**, which no amount of colour accuracy can recover. A key drawn as a handful of **discrete bands** is refused by name rather than being averaged into a number the figure never printed.
 - Grid-line removal to clean a busy plot first.
 
-**Analysis** - curve fitting (polynomial degree 1–9, plus exponential, power-law, logarithmic, Gaussian and logistic models solved by Levenberg–Marquardt; optional x-range), geometry & statistics (arc length, enclosed area, curvature), and a Check-Calibration overlay that draws the calibrated axis box back onto the image.
+**Analysis** - curve fitting (polynomial degree 1-9, plus exponential, power-law, logarithmic, Gaussian and logistic models solved by Levenberg-Marquardt; optional x-range), geometry & statistics (arc length, enclosed area, curvature), and a Check-Calibration overlay that draws the calibrated axis box back onto the image.
 
 **Measurements** - distance, angle, area, slope, and a px→real-unit "Set scale" reference, kept as a separate collection from the series data.
 
@@ -68,7 +68,7 @@ No account required, no data sent to any server, and no dependency on any compan
 | `Enter` | accept the current step (apply crop, finish area, run calibration) |
 | `Esc` | back out of the current step / clear the selection |
 | `Del` / `Backspace` | delete the active point or measurement |
-| `0`–`9` | switch tools (mirrors the rail) |
+| `0`-`9` | switch tools (mirrors the rail) |
 | Arrow keys | nudge the selected point/handle (Shift = coarse) |
 | `Q` / `W` | step to the previous / next point |
 | `Ctrl+Z` / `Ctrl+Shift+Z` | undo / redo |
@@ -160,7 +160,7 @@ plottracer/
 
 PlotTracer's calibration engine is a TypeScript port of **WebPlotDigitizer** by Ankit Rohatgi, and the whole project is distributed under the same licence.
 
-> WebPlotDigitizer - Copyright 2010–2025 Ankit Rohatgi
+> WebPlotDigitizer - Copyright 2010-2025 Ankit Rohatgi
 > Licensed under the GNU Affero General Public License v3.0
 > <https://github.com/automeris-io/WebPlotDigitizer>
 

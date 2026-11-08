@@ -2,7 +2,7 @@
  * B4, the UI half - ⚑⚑ ERROR SLOTS ARE AN ADDITION TO A SERIES, NOT A CHANGE OF
  * WHAT THE SERIES IS.
  *
- * The model half (commits 1–10 plus the capture switch) puts a datum's caps on
+ * The model half (commits 1-10 plus the capture switch) puts a datum's caps on
  * its own tuple. That gives every series that carries error a `_tuples` array -
  * and `hasSlots()` answers "does this dataset have named slots", so from that
  * moment an XY scatter reported itself as a TUPLE-SHAPED graph type. It is not

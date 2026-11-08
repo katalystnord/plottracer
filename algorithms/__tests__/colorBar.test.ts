@@ -107,7 +107,7 @@ const lutRamp: RGBRamp = (u) => {
  * position order disagree. An earlier version had them agreeing, which left the
  * rival sort untested while looking as though it tested it.
  *
- * A NON-MONOTONE key is not exotic - a diverging map (cold–white–warm) revisits
+ * A NON-MONOTONE key is not exotic - a diverging map (cold-white-warm) revisits
  * pale colours on both sides of its centre, and any key drawn over a background
  * gradient can too. It is the case where a single "nearest colour" answer is
  * least defensible.

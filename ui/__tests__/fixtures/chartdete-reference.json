@@ -1,5 +1,5 @@
 {
-"note": "ChartDete's ORIGINAL inference_detector (PyTorch, mmdetection) on bundled samples, boxes scored 0.5 or more, in the app's class names: the reference the app's ONNX ChartDete must reproduce (2026-10-20).",
+"note": "ChartDete's ORIGINAL inference_detector (PyTorch, mmdetection) on bundled samples, boxes scored 0.5 or more, in the app's class names: the reference the app's ONNX ChartDete must reproduce (2026-10-20; xy-stress-strain.png rerun 2026-11-08 after its title lost an en-dash).",
 "images": {
 "xy-stress-strain.png": [
 {
@@ -25,10 +25,10 @@
 {
 "cls": "plot_area",
 "box": [
-64.78,
-37.66,
-889.74,
-636.63
+64.77,
+37.69,
+889.75,
+636.64
 ],
 "score": 0.995
 },
@@ -70,7 +70,7 @@
 72.91,
 658.82
 ],
-"score": 0.976
+"score": 0.975
 },
 {
 "cls": "x_tick_label",
@@ -96,9 +96,9 @@
 "cls": "x_tick_label",
 "box": [
 171.14,
-643.42,
+643.43,
 181.38,
-658.76
+658.75
 ],
 "score": 0.967
 },
@@ -126,7 +126,7 @@
 "cls": "y_tick_label",
 "box": [
 38.13,
-131.17,
+131.18,
 57.37,
 145.82
 ],
@@ -146,7 +146,7 @@
 "cls": "y_tick_label",
 "box": [
 38.09,
-31.27,
+31.28,
 57.31,
 46.16
 ],
@@ -185,12 +185,12 @@
 {
 "cls": "chart_title",
 "box": [
-339.81,
-13.4,
-612.42,
-32.07
+340.85,
+13.62,
+611.36,
+31.73
 ],
-"score": 0.726
+"score": 0.701
 },
 {
 "cls": "x_tick",
@@ -210,7 +210,7 @@
 727.84,
 643.04
 ],
-"score": 0.702
+"score": 0.701
 }
 ],
 "bar-grouped-viability.png": [

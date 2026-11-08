@@ -204,7 +204,7 @@ describe('buildColorScale', () => {
 
     // ⚑ AND THE FIXTURES ARE THE OTHER HALF OF THIS TEST. A detector that
     // refuses banded keys is worthless if it also refuses viridis - the real
-    // keys measure 108–260 levels against a threshold of 20, and this is what
+    // keys measure 108-260 levels against a threshold of 20, and this is what
     // keeps that margin honest as the sampler changes.
     const { image, placed } = scene();
     expect(buildColorScale(placed, image, false).error).toBeNull();

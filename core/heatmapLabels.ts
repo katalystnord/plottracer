@@ -121,7 +121,7 @@ export function labelAt(labels: readonly string[], index: number): string {
  * re-sort dividers - values right, filed wrong is the silent kind of wrong.
  *
  * ⚑ PADDED FIRST, THEN REVERSED, and the order matters: three names on a
- * five-row figure belong to the top three rows, not to rows 0–2 counted from
+ * five-row figure belong to the top three rows, not to rows 0-2 counted from
  * the bottom. Reversing a short list without padding would slide them two rows
  * down the figure.
  *

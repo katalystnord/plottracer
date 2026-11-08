@@ -342,7 +342,7 @@ function PickedCell({
   const cell = cells.find((c) => c.col === selectedCell.col && c.row === selectedCell.row);
   if (!cell) return null;
   const band = (label: string, name: string, lo: number, hi: number) =>
-    `${label}${name ? ` “${name}”` : ''} (${num(lo, 3)} – ${num(hi, 3)})`;
+    `${label}${name ? ` “${name}”` : ''} (${num(lo, 3)} to ${num(hi, 3)})`;
   return (
     <p
       data-testid="heatmap-picked-cell"
@@ -489,7 +489,7 @@ function MatrixView({
                     <div style={{ fontWeight: 500 }}>{cell.xLabel}</div>
                   ) : (
                     <div style={{ fontWeight: 400, color: theme.color.text.legend }}>
-                      {`${num(cell.xMin, 3)} – ${num(cell.xMax, 3)}`}
+                      {`${num(cell.xMin, 3)} to ${num(cell.xMax, 3)}`}
                     </div>
                   )}
                 </th>
@@ -523,7 +523,7 @@ function MatrixView({
                     <span style={{ fontWeight: 500 }}>{rowCell.yLabel}</span>
                   ) : (
                     <span style={{ fontWeight: 400, color: theme.color.text.legend }}>
-                      {`${num(rowCell.yMin, 3)} – ${num(rowCell.yMax, 3)}`}
+                      {`${num(rowCell.yMin, 3)} to ${num(rowCell.yMax, 3)}`}
                     </span>
                   )}
                 </th>
@@ -627,11 +627,11 @@ function LongView({
                 arithmetic to match a row to the matrix or the figure.
                 ⚑ THE SAME TOKENS the rest of the app uses: the matrix heads its
                 columns `C4`, and the picked-cell line reads
-                `C4 (6.00 – 8.99) × R4 (4.01 – 6.00)`. This view was the only one
+                `C4 (6.00 to 8.99) × R4 (4.01 to 6.00)`. This view was the only one
                 staying silent, so it was harder to read than the matrix AND less
                 complete than the file we write from the same data.
                 ⚑ Coordinates do NOT replace identity: `C4` is what the cell IS,
-                `6.00 – 8.99` is where it sits. The matrix header shows both,
+                `6.00 to 8.99` is where it sits. The matrix header shows both,
                 stacked - this shows both, side by side. */}
             <th style={{ paddingRight: 8 }}>column</th>
             <th style={{ paddingRight: 8 }}>row</th>

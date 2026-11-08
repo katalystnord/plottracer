@@ -2205,7 +2205,7 @@ _____
 
 Scikit-learn
 
-Copyright (c) 2007–2018 The scikit-learn developers.
+Copyright (c) 2007-2018 The scikit-learn developers.
 All rights reserved.
 
 

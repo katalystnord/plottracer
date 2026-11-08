@@ -12,7 +12,7 @@ files, copied here verbatim.
 
 - **Source:** WebPlotDigitizer by Ankit Rohatgi -
   <https://github.com/automeris-io/WebPlotDigitizer>
-- **Copyright:** 2010–2025 Ankit Rohatgi
+- **Copyright:** 2010-2025 Ankit Rohatgi
 - **Licence:** GNU Affero General Public License v3.0 - the same licence this
   project is distributed under, which is why they can live here at all.
 - **Modifications:** none. Verified byte-identical against the upstream working

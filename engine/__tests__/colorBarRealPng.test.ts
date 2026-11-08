@@ -212,7 +212,7 @@ describe('colour bar against real matplotlib renders', () => {
     // table, its mean step (4.26 RGB units per entry) is more than DOUBLE
     // viridis's (1.90), so over most of its length jet is the better-conditioned
     // of the two in RGB terms and its bands are NARROWER. The ill-conditioning is
-    // local: four consecutive entries around u = 0.11–0.12 are byte-identical.
+    // local: four consecutive entries around u = 0.11-0.12 are byte-identical.
     // A first version of this test asserted "jet's bands are wider than
     // viridis's" and was simply false.
     const fig = figure('heatmap-jet.png');

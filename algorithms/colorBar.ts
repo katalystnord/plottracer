@@ -667,7 +667,7 @@ export function invertColor(strip: ColorBarStrip, rgb: RGB): ColorBarReading | n
   // large figure or a coarse map makes those plateaus much wider. Taking the
   // FIRST tied position (what `argmin` does, and what this did first) biases
   // every single reading to the LOW end of its plateau. Measured on the jet
-  // fixture: a systematic 0.6–0.8 °C under-read on a 160 °C range, in the same
+  // fixture: a systematic 0.6-0.8 °C under-read on a 160 °C range, in the same
   // direction for every cell, from a colour that matched the key EXACTLY. A
   // constant signed bias is the worst kind - averaging cells does not remove it.
   const plateau = tiedRun(d, best);

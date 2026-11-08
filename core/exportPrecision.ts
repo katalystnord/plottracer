@@ -3,7 +3,7 @@
  * ~half a pixel in data units, instead of a fixed number of decimals.
  *
  * **Why this replaces the fixed 2-decimal round (B6).** `Math.round(v*100)/100`
- * assumed every axis lives around O(1–100). On a small-magnitude, log, or
+ * assumed every axis lives around O(1-100). On a small-magnitude, log, or
  * sub-unit-binned axis it silently ZEROED real data - `0.0012` exported as `0`,
  * a log-Y series collapsed to `[0, 0.01, 0.03]` - reaching every format including
  * the JSON a downstream pipeline ingests (v1.0-gate audit, BLOCKER). The record

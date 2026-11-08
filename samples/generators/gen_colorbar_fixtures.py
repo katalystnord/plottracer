@@ -195,7 +195,7 @@ def make_cyclic_key(name):
     in the same way twice. Sampling `hsv` at 512 pixel CENTRES never reaches hue
     360°, and the gradient's outermost columns are ANTI-ALIASED against the axes
     boundary (they came out at 241 rather than 255), so the two ends of the
-    sampled strip landed 21–27 RGB units apart. The module then correctly
+    sampled strip landed 21-27 RGB units apart. The module then correctly
     reported ONE candidate - on that render the ends really were
     distinguishable, and a test asserting otherwise would have been asserting a
     figure that did not exist.

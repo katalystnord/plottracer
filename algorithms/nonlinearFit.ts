@@ -1,5 +1,5 @@
 /**
- * Nonlinear curve fitting - standard models solved by Levenberg–Marquardt.
+ * Nonlinear curve fitting - standard models solved by Levenberg-Marquardt.
  *
  * Until now fitting was polynomial only (algorithms/curveFit.ts, normal
  * equations). A polynomial can be made to pass near almost anything by raising
@@ -15,11 +15,11 @@
  * fit does not converge, say so.** A model that failed must never be shown as a
  * plausible curve, because a drawn line is read as a result.
  *
- * WHY LEVENBERG–MARQUARDT. It interpolates between gradient descent (reliable
- * far from the solution) and Gauss–Newton (fast near it) by one damping term, so
+ * WHY LEVENBERG-MARQUARDT. It interpolates between gradient descent (reliable
+ * far from the solution) and Gauss-Newton (fast near it) by one damping term, so
  * it is the standard choice for small least-squares problems and needs no
  * derivatives supplied by hand - the Jacobian here is numeric. Tenet 10 says the
- * simplest thing that works, and for five models with 2–3 parameters each this
+ * simplest thing that works, and for five models with 2-3 parameters each this
  * is it; nothing here needs a general optimiser.
  *
  * ⚑ THE INITIAL GUESS IS THE WHOLE GAME. LM finds a LOCAL minimum, so a bad
@@ -262,7 +262,7 @@ function sumSquares(
 }
 
 /**
- * Levenberg–Marquardt with a numeric Jacobian.
+ * Levenberg-Marquardt with a numeric Jacobian.
  *
  * Returns null only when the very first evaluation is unusable (a start that
  * produces no finite residual at all); otherwise it always returns the best

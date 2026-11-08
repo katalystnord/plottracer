@@ -6,7 +6,7 @@ import { readEngaugeProject, importEngaugeFigure } from '../digImport.js';
  * of axis points, and refusing arrangements that cannot fix a scale.
  *
  * ⚑ WHY THIS FILE EXISTS. `digImport.ts` carries 169 surviving mutants, the
- * largest pool left, and they cluster in `buildXYCalibration` (lines 452–497)
+ * largest pool left, and they cluster in `buildXYCalibration` (lines 452-497)
  * - the function that turns another tool's axis points into our Calibration.
  * The existing suite reads the ORDINARY three-point L; nothing exercised the
  * four-sides mode, the degenerate arrangements, or the search that pairs the

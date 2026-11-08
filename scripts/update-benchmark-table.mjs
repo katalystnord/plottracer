@@ -75,7 +75,7 @@ const REFERENCES = {
     citation:
       'K. Davila, F. Xu, S. Ahmed, D. A. Mendoza, S. Setlur and V. Govindaraju, ' +
       '&ldquo;ICPR 2022: Challenge on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; ' +
-      '<i>26th Int. Conf. on Pattern Recognition</i>, 2022, pp. 4995&ndash;5001.',
+      '<i>26th Int. Conf. on Pattern Recognition</i>, 2022, pp. 4995-5001.',
     doi: '10.1109/ICPR56361.2022.9956289',
   },
   adobe: {
@@ -84,7 +84,7 @@ const REFERENCES = {
     citation:
       'K. Davila, B. U. Kota, S. Setlur, V. Govindaraju, C. Tensmeyer, S. Shekhar and R. Chaudhry, ' +
       '&ldquo;ICDAR 2019 Competition on Harvesting Raw Tables from Infographics (CHART-Infographics),&rdquo; ' +
-      '<i>Int. Conf. on Document Analysis and Recognition</i>, 2019, pp. 1594&ndash;1599.',
+      '<i>Int. Conf. on Document Analysis and Recognition</i>, 2019, pp. 1594-1599.',
     doi: '10.1109/ICDAR.2019.00203',
   },
 };

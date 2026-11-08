@@ -543,7 +543,7 @@ def gen_categorical():
 
 
 def gen_stress_strain():
-    """A tensile stress–strain curve (a flagship materials-testing extraction case):
+    """A tensile stress-strain curve (a flagship materials-testing extraction case):
     elastic rise → rounded yield → strain hardening, reaching 54.05 MPa at 15%
     strain. ⚑ The y-limit is 60 so the WHOLE curve is drawn: at 50 (until
     2026-09-23) it left the frame at x = 9.2 and 24 truth points were never on
@@ -565,7 +565,7 @@ def gen_stress_strain():
     ax.set_ylim(0, 60)
     ax.set_xlabel("Strain (%)", fontsize=13)
     ax.set_ylabel("Stress (MPa)", fontsize=13)
-    ax.set_title("Tensile stress–strain curve", fontsize=15)
+    ax.set_title("Tensile stress-strain curve", fontsize=15)
     ax.grid(True, color="#dddddd", linewidth=0.8)
     ax.tick_params(labelsize=11)
     fig.tight_layout()
@@ -1012,7 +1012,7 @@ def gen_map():
 def gen_multipage_pdf():
     """A 3-page PDF, one figure per page - the multi-figure showcase (checkpoint
     114). Each page's data was MEASURED off the previous throwaway PDF and
-    replotted (David, 2026-07-20): (1) a PLA/flax tensile stress–strain curve
+    replotted (David, 2026-07-20): (1) a PLA/flax tensile stress-strain curve
     (XY), (2) tensile strength by fibre (bar), (3) flexural modulus by fibre (a
     line over a categorical X). Truth = one entry per page/figure, each in its own
     graph type's schema."""
@@ -1028,7 +1028,7 @@ def gen_multipage_pdf():
 
     pdf_path = os.path.join(SAMPLES_DIR, name + ".pdf")
     with PdfPages(pdf_path) as pdf:
-        # Page 1 - XY stress–strain.
+        # Page 1 - XY stress-strain.
         fig = plt.figure(figsize=(8.5, 11), dpi=100)
         ax = fig.add_axes([0.13, 0.56, 0.78, 0.35])
         ax.plot(ss_x, ss_y, "-o", color=NAVY, markersize=4, linewidth=1.5)

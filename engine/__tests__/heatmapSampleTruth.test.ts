@@ -145,7 +145,7 @@ describe('the bundled heatmap examples read back what they were drawn from', () 
     const { truth, read } = traceSample('heatmap-weld-temperature');
     expect(read.rows).toHaveLength(truth.cells.length);
     // ⚑ TWO DEGREES ABSOLUTE, and that is the key's own floor rather than a
-    // slack tolerance: 256 lookup-table entries over a 60–780 °C key is 2.8 °C
+    // slack tolerance: 256 lookup-table entries over a 60-780 °C key is 2.8 °C
     // per entry, so half an entry - 1.4 °C - is the finest any inversion through
     // this figure can be. Measured worst case: 1.4 °C.
     for (const row of read.rows) {

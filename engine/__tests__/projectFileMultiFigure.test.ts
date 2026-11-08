@@ -16,7 +16,7 @@ import type { XYAxes } from '../../core/axes/xy.js';
  *
  * ⚑ WHY THIS FILE EXISTS. `projectFile.ts` scored 66.37% with 94 surviving
  * mutants, and the hottest lines by far are in
- * `deserializeMultiFigureProject` (lines 515–533, 38 mutants between them) -
+ * `deserializeMultiFigureProject` (lines 515-533, 38 mutants between them) -
  * the door every multi-figure project comes through. The existing suite
  * round-trips a healthy two-figure project; nothing tested what happens when
  * one figure is broken, when the active index is out of range, or when a

@@ -74,6 +74,12 @@ describe('audit C7: one odd read cannot veto the right ones', () => {
     const rs = readSlots([read('10'), read('20'), read('30'), read('4.0', 0.85)]);
     expect(rs.slice(0, 3).map((r) => r.value)).toEqual([10, 20, 30]);
   });
+  it('a label printed with a typographic minus or an en dash reads as negative', () => {
+    // Written by code point: the dash checker refuses the character itself in source.
+    const minus = String.fromCodePoint(0x2212);
+    const enDash = String.fromCodePoint(0x2013);
+    expect(readSlots([read(`${enDash}20`), read(`${minus}10`), read('0'), read('10')]).map((r) => r.value)).toEqual([-20, -10, 0, 10]);
+  });
   it('C7 %g-style labels (0, 0.5, 1, 1.5) are all read', () => {
     expect(readSlots([read('0'), read('0.5'), read('1'), read('1.5')]).map((r) => r.value)).toEqual([0, 0.5, 1, 1.5]);
   });

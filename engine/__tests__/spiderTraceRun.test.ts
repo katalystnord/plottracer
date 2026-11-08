@@ -430,8 +430,8 @@ describe('the bundled example, traced end to end', () => {
   });
 
   it('reads the axis that runs to 5 as 3.4, not as a fraction of 120', () => {
-    // ⚑ The single number that catches a shared-scale reading. Cost index runs 0–5
-    // while Tensile strength runs 0–120; a trace that read every ray against one
+    // ⚑ The single number that catches a shared-scale reading. Cost index runs 0-5
+    // while Tensile strength runs 0-120; a trace that read every ray against one
     // range would put Cost's 3.4 out at 82 and look entirely confident about it.
     const axes = axesFromTruth();
     const img = whiteImage();

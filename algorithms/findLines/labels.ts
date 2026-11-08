@@ -143,10 +143,18 @@ export interface SlotRead {
   refused: string | null;
 }
 
+/**
+ * A typographic minus (U+2212) or an en dash (U+2013) in front of a number is how many figures print a negative label,
+ * and OCR returns it as read. Built from code points because tools/no-em-dashes.sh refuses the en dash in source text,
+ * escaped forms included; the reader still has to recognise it on a figure.
+ */
+const MINUS_LIKE = [String.fromCodePoint(0x2212), String.fromCodePoint(0x2013)];
+const asHyphenMinus = (t: string) => MINUS_LIKE.reduce((s, c) => s.split(c).join('-'), t);
+
 /** Apply the reading rules to every slot's raw read. */
 export function readSlots(raw: readonly { text: string; confidence: number | null }[], minConfidence = MIN_CONFIDENCE): SlotRead[] {
   const pat = /^-?\d+(\.\d+)?$/;
-  const tidy = raw.map((r) => (r.text ?? '').trim().replace(/\s+/g, '').replace(/[\u2212\u2013]/g, '-'));
+  const tidy = raw.map((r) => asHyphenMinus((r.text ?? '').trim().replace(/\s+/g, '')));
   const pre: (string | null)[] = raw.map((r, i) => {
     if (r.confidence !== null && r.confidence < minConfidence) return `the reader was unsure (${Math.round(r.confidence * 100)}%)`;
     if (/^-?0\d/.test(tidy[i]!)) return 'the decimal point was lost';

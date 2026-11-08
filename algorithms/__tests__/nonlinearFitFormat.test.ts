@@ -16,7 +16,7 @@ import { findFitModel } from '../nonlinearFit.js';
  * - The equation is the one part of a fit a user COPIES OUT into a paper. A
  *   number rendered wrong there is a wrong number published, and no fit
  *   assertion anywhere would catch it.
- * - The guess is not cosmetic. Levenberg–Marquardt finds *a* local minimum,
+ * - The guess is not cosmetic. Levenberg-Marquardt finds *a* local minimum,
  *   and which one depends entirely on where it starts. The guesses here are
  *   built from MEASURED features of the data (the tallest point, the y-weighted
  *   spread, the half-height crossing) precisely so the start is a reading and

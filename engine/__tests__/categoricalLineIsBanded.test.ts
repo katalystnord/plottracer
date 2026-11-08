@@ -60,7 +60,7 @@ function lineSession() {
 }
 
 /** Mark the category axis across the plot and declare three categories, so the
- * bands are x 100–200, 200–300, 300–400. */
+ * bands are x 100-200, 200-300, 300-400. */
 function withThreeCategories(s: LineSession) {
   // ⚑⚑ DRAGGED, not re-marked. Categorical Line's category axis is steps
   // c1/c2 like Bar's; `markCategoryAxis` moved the geometry and left the
@@ -148,8 +148,8 @@ describe('a category is the band the reading sits in', () => {
     const s = withThreeCategories(lineSession());
     s.addDataPoint(250, 200);
     expect(positions(s, 0)).toEqual([2]);
-    // Slide the axis right so x=250 now falls in the FIRST band (250–400 split
-    // into three: 250–300, 300–350, 350–400 - 250 is band 0).
+    // Slide the axis right so x=250 now falls in the FIRST band (250-400 split
+    // into three: 250-300, 300-350, 350-400 - 250 is band 0).
     s.updateCalibPointPixel('c1', 250, 300);
     expect(s.runCalibration()).toBe(true); // any change to the calibration loses it (David, 2026-11-01)
     expect(positions(s, 0)).toEqual([1]);

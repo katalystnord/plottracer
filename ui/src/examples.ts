@@ -50,7 +50,7 @@ import multipagePdfSample from '../../samples/multipage-figures.pdf?url';
 export const MANUAL_URL = 'https://github.com/katalystnord/plottracer/blob/master/MANUAL.md';
 
 export const EXAMPLES: readonly { id: string; name: string; src: string; axes: string; icon?: string; pdf?: boolean }[] = [
-  { id: 'xy', name: 'Stress–strain curve', src: xySample, axes: 'xy' },
+  { id: 'xy', name: 'Stress-strain curve', src: xySample, axes: 'xy' },
   { id: 'xy-multi', name: 'Multiseries - 4 curves', src: xyMultiSample, axes: 'xy' },
   // A scatter of single-colour markers (checkpoint 123) -- the shape the Blob
   // Detector exists for: Auto-extract by colour ▸ Scattered points reduces each

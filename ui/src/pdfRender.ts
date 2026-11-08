@@ -55,7 +55,7 @@ pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
  * resolution target itself requested. At 1x the same page lands near the
  * target instead. (Round-2 audit.) For a standard ~800pt page this
  * gives ~3.7×, so the target governs and MAX rarely binds; MAX only caps small
- * pages that would otherwise scale past it. A 3000px-longest page is ~6–9M
+ * pages that would otherwise scale past it. A 3000px-longest page is ~6-9M
  * pixels - a few MB as a PNG, which is what the baked image / project carries. */
 const TARGET_LONGEST_PX = 3000;
 const MIN_SCALE = 1;
