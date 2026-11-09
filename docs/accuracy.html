@@ -112,6 +112,8 @@
   nav.top a { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.02em; color: var(--ink-soft); text-decoration: none; }
   nav.top a:hover { color: var(--teal-deep); }
   @media (max-width: 720px) { nav.top a.hideable { display: none; } }
+  /* Phone width: four links overflowed a 390px screen. Keep this page's own link and Download. */
+  @media (max-width: 480px) { nav.top { gap: 14px; } nav.top a.hide-narrow { display: none; } }
 
   /* ---- buttons ---- */
   .btn {
@@ -331,8 +333,8 @@
       <a class="hideable" href="index.html#how">How it works</a>
       <a class="hideable" href="index.html#types">Graph types</a>
       <a href="accuracy.html" aria-current="page">Accuracy</a>
-      <a href="releases.html">Releases</a>
-      <a href="https://github.com/katalystnord/plottracer">GitHub</a>
+      <a class="hide-narrow" href="releases.html">Releases</a>
+      <a class="hide-narrow" href="https://github.com/katalystnord/plottracer">GitHub</a>
       <a href="index.html#download" class="btn btn-primary" style="padding:8px 16px;">Download</a>
     </nav>
   </div>

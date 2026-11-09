@@ -112,6 +112,8 @@
   nav.top a { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.02em; color: var(--ink-soft); text-decoration: none; }
   nav.top a:hover { color: var(--teal-deep); }
   @media (max-width: 720px) { nav.top a.hideable { display: none; } }
+  /* Phone width: four links overflowed a 390px screen. Keep this page's own link and Download. */
+  @media (max-width: 480px) { nav.top { gap: 14px; } nav.top a.hide-narrow { display: none; } }
 
   /* ---- buttons ---- */
   .btn {
@@ -331,9 +333,9 @@
     <nav class="top">
       <a class="hideable" href="index.html#how">How it works</a>
       <a class="hideable" href="index.html#types">Graph types</a>
-      <a href="accuracy.html">Accuracy</a>
+      <a class="hide-narrow" href="accuracy.html">Accuracy</a>
       <a href="releases.html" aria-current="page">Releases</a>
-      <a href="https://github.com/katalystnord/plottracer">GitHub</a>
+      <a class="hide-narrow" href="https://github.com/katalystnord/plottracer">GitHub</a>
       <a href="index.html#download" class="btn btn-primary" style="padding:8px 16px;">Download</a>
     </nav>
   </div>
@@ -368,6 +370,26 @@
          release here is a theme rather than a patch note: what the tool learned to
          read, and what it stopped getting wrong.</p>
     </div>
+      <article class="rel">
+        <div class="rel-head">
+          <span class="rel-ver data">2.7.0</span>
+          <span class="rel-when">2026-11</span>
+        </div>
+        <div class="rel-body">
+          <h2>The release that extracts the figure for you</h2>
+          <p class="rel-lede">The first release of the automatic pathway. The workflow is one card per step (open, capture, calibrate, mark the legend, extract, correct, export), and each card holds every way of doing its step: a click, the guided order, or an automatic detection. Any of them can finish or correct what another started.</p>
+          <ul>
+        <li>Automatic axis detection puts the calibration points on labelled tick marks on XY, contour, histogram and the bar family, and the data area on the plot's frame. On a bar chart the category names are read and offered under each mark.</li>
+        <li>The legend is detected and read: each entry's name and the colour, line style or marker beside it name the series.</li>
+        <li>Auto-extract all series reads every series in one press, with or without a legend, and one Undo takes it back.</li>
+        <li>Bars are found whole by a chart-element detector, hatched ones included. Series in one ink are told apart by their dash pattern or their marker.</li>
+        <li>Find lines reads dotted lines and runs through a spectrum's peaks. PaddleOCR replaces Tesseract as the text reader, offline.</li>
+        <li>The Trace Challenge is traced by hand, as a test of your eye and your aim.</li>
+          </ul>
+          <p class="rel-more"><a href="https://github.com/katalystnord/plottracer/releases/tag/v2.7.0">Full release notes for 2.7.0</a></p>
+        </div>
+      </article>
+
       <article class="rel">
         <div class="rel-head">
           <span class="rel-ver data">2.6.0</span>

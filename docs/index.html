@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlotTracer - turn any graph back into data</title>
-<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers - across XY, log, bar, histogram, box-plot, line, pie/donut, heatmap, polar, spider/radar, ternary, map and circular-chart-recorder figures. Export to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R.">
+<meta name="description" content="PlotTracer is a free, offline, cross-platform desktop app that extracts precise numbers from the figures in scientific papers - across XY, log, bar, histogram, box-plot, line, pie/donut, heatmap, contour, polar, spider/radar, ternary, map and circular-chart-recorder figures. Export to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB, Python and R.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="PlotTracer - turn any graph back into data">
 <meta property="og:description" content="A free, offline desktop digitizer for scientific figures. Graph in, reliable data out.">
@@ -112,6 +112,9 @@
   nav.top a { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.02em; color: var(--ink-soft); text-decoration: none; }
   nav.top a:hover { color: var(--teal-deep); }
   @media (max-width: 720px) { nav.top a.hideable { display: none; } }
+  /* Phone width: four links still overflowed a 390px screen by 133px. GitHub is also in the hero,
+     and Releases in What's new. */
+  @media (max-width: 480px) { nav.top { gap: 14px; } nav.top a.hide-narrow { display: none; } }
 
   /* ---- buttons ---- */
   .btn {
@@ -171,8 +174,8 @@
   .wn-head .eyebrow { margin-bottom: 12px; }
   .wn-head h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); }
   .wn-head p { color: var(--ink-soft); margin: 12px 0 0; max-width: 42em; }
-  .wn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  @media (max-width: 880px) { .wn-grid { grid-template-columns: 1fr 1fr; } }
+  /* Two columns: the section carries four cards, and three left the fourth alone on a row. */
+  .wn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
   @media (max-width: 560px) { .wn-grid { grid-template-columns: 1fr; } }
   .wn { background: var(--card); border: 1px solid var(--line); border-radius: 13px; padding: 20px 19px 18px; }
   .wn h3 { font-size: 1rem; margin: 0 0 6px; }
@@ -332,8 +335,8 @@
       <a class="hideable" href="#how">How it works</a>
       <a class="hideable" href="#types">Graph types</a>
       <a href="accuracy.html">Accuracy</a>
-      <a href="releases.html">Releases</a>
-      <a href="https://github.com/katalystnord/plottracer">GitHub</a>
+      <a class="hide-narrow" href="releases.html">Releases</a>
+      <a class="hide-narrow" href="https://github.com/katalystnord/plottracer">GitHub</a>
       <a href="#download" class="btn btn-primary" style="padding:8px 16px;">Download</a>
     </nav>
   </div>
@@ -421,59 +424,63 @@
 <section class="hero-shot">
   <div class="wrap">
     <div class="frame">
-      <img class="shot" src="assets/shot-hero.png" width="3040" height="1934"
-        alt="The PlotTracer desktop app tracing a cumulative-release figure: four dash-coded formulations fanning out from the origin, two of them already traced with the extracted points sitting on the ink, numbered guide points along the live curve, and 182 extracted values in the right-hand panel with the selected point ringed on the figure.">
+      <img class="shot" src="assets/shot-hero.png" width="2888" height="1888"
+        alt="The PlotTracer desktop app after one press of Auto-extract all series on a cumulative-release figure: four formulations drawn in the same black ink and told apart by their dash pattern, each read as its own series named from the legend, the legend outlined where it was detected, the values of every series in the right-hand panel, and six places to check listed below them.">
     </div>
-    <p class="cap">Four dash-coded curves running close together - two traced from a handful of guide points, and you can see the points land on the ink.</p>
+    <p class="cap">Four formulations in one ink, told apart by their dash pattern. The axes were detected, the legend read, and one press of Auto-extract all series read each formulation as its own series. Where it was unsure, it lists the place to check.</p>
   </div>
 </section>
 
-<!-- ===================== WHAT'S NEW IN 2.6 ===================== -->
+<!-- ===================== WHAT'S NEW IN 2.7 ===================== -->
 <section class="whatsnew">
   <div class="wrap">
     <div class="wn-head">
-      <span class="eyebrow">New in 2.6</span>
-      <h2>The release that tells same-colour lines apart.</h2>
-      <p>One press finds every line of one colour, each as its own line - through
-        crossings, shared stretches and their own labels - and says where it was unsure.
-        Contour plots join as a chart type, with their labels read and their levels taken
-        from a colour key.</p>
+      <span class="eyebrow">New in 2.7</span>
+      <h2>The release that extracts the figure for you.</h2>
+      <p>The first release of the automatic pathway. Capture a figure, and PlotTracer
+        can detect its axes, read its legend and extract every series in a few presses.
+        Each step is one card holding every way of doing it: a click, the guided order,
+        or an automatic detection. They make the same marks, and every one stays yours
+        to check, move or redo.</p>
     </div>
     <div class="wn-grid">
 
       <div class="wn">
-        <h3>Find lines</h3>
-        <p>Every line of the picked colour becomes its own line, even where lines of the
-          same ink cross, touch or run together. A gap the figure drew no ink in is bridged
-          by a fair interpolation and <b>marked</b> as bridged; a stretch two curves share
-          is recorded in both. A first version, and the button says so.</p>
+        <h3>Axes detected and calibrated</h3>
+        <p><b>Automatic axis detection</b> puts the calibration points on labelled tick
+          marks, with the numbers printed there, and the data area on the plot's frame:
+          on XY, contour, histogram and the bar family. On a bar chart the category names
+          are read from the labels and <b>offered</b> under each mark; nothing is written
+          until you use them.</p>
       </div>
 
       <div class="wn">
-        <h3>Where it is unsure, it says so</h3>
-        <p>It never guesses a join. The pieces stay apart and the place is listed under
-          <b>Places to check</b>: one click takes you there, and Cut, Join with, Move and a
-          box that selects across every line put it right. One Undo reverses any of it.</p>
+        <h3>The legend read</h3>
+        <p><b>Auto detect legend</b> finds the legend, masks it, and reads each entry's
+          name and the colour, line style or marker beside it. Those names become the
+          series.</p>
       </div>
 
       <div class="wn">
-        <h3>Contour, a new chart type</h3>
-        <p>A contour line carries its level as a number, so the export redraws the plot on
-          its own. Lines that share a level sit together under it, and a line clicked all
-          the way round closes on its own ink.</p>
+        <h3>Every series in one press</h3>
+        <p><b>Auto-extract all series</b> reads each series the legend names with the tool
+          that suits it, and reports one short line per series. With no legend, a bar
+          chart's series are its bar colours and a line chart's are its inks. One Undo
+          takes the whole read back.</p>
       </div>
 
       <div class="wn">
-        <h3>Levels from the labels, or the key</h3>
-        <p>Each line's own label is read and <b>offered</b> beside its level - never
-          written in unasked, because a wrong level looks exactly like a right one. On a
-          coloured plot, a colour key calibrates the levels instead, linear or log.</p>
+        <h3>Bars found whole, one ink told apart</h3>
+        <p>A chart-element detector finds bars whole, hatched ones included: on real and
+          synthetic test figures it found 79.5% and 79.6% of the bars, and 95.2% and 92.4%
+          of the boxes it placed were bars. Series drawn in one ink are told apart by
+          their dash pattern or their marker.</p>
       </div>
 
     </div>
     <p class="wn-foot">All of it runs on your machine; no part of a figure leaves it.</p>
-    <p class="wn-foot" style="margin-top:14px;"><a href="releases.html">Every release, newest first</a>
-      - what each one fixed, as plainly as what it added.</p>
+    <p class="wn-foot" style="margin-top:14px;"><a href="releases.html">Every release, newest first</a>:
+      what each one fixed, as plainly as what it added.</p>
   </div>
 </section>
 
@@ -499,9 +506,10 @@
           <text x="159" y="38" font-family="ui-monospace, monospace" font-size="12" fill="var(--ink-soft)">x=10</text>
         </svg>
         <span class="num">STEP 01</span>
-        <h3>Calibrate</h3>
-        <p>Mark the axes with a couple of clicks. PlotTracer learns the figure's
-          coordinate system - linear, log, polar, or dates.</p>
+        <h3>Capture and calibrate</h3>
+        <p>Frame the figure and mark two labelled ticks on each axis, or let automatic
+          detection place them. PlotTracer learns the figure's coordinate system:
+          linear, log, polar, or dates.</p>
       </div>
 
       <div class="step">
@@ -517,9 +525,10 @@
           <circle cx="104" cy="54" r="4" class="il-amber"/>
         </svg>
         <span class="num">STEP 02</span>
-        <h3>Trace</h3>
-        <p>Place points with the zoom loupe, or auto-extract a whole curve by colour,
-          fill, or blob detection. Fix anything in a click.</p>
+        <h3>Extract</h3>
+        <p>Mark the legend and press Auto-extract all series, or take one series at a
+          time: by line, by colour, by fill, or by hand with the zoom loupe. Fix
+          anything in a click.</p>
       </div>
 
       <div class="step">
@@ -539,7 +548,7 @@
         <span class="num">STEP 03</span>
         <h3>Export</h3>
         <p>Send clean numbers to CSV, TSV, JSON, Excel, OpenDocument, LaTeX, MATLAB,
-          Python or R - or straight to the clipboard, at the figure's real precision.</p>
+          Python or R, or straight to the clipboard, at the figure's real precision.</p>
       </div>
 
     </div>
@@ -554,18 +563,23 @@
       <h2>Built for the graphs papers actually publish.</h2>
       <p>Curves that run together and share a colour, heatmaps read cell by cell, floating
         bars measured end to end, asymmetric error bars, true histogram bins, box
-        plots, pie and donut charts - the same tool, on the plots you meet in practice.</p>
+        plots, pie and donut charts: the same tool, on the plots you meet in practice.</p>
     </div>
     <div class="shots">
       <figure class="shot-card" style="grid-column: 1 / -1;">
-        <img class="shot" src="assets/shot-heatmap.png" width="2980" height="1894"
-          alt="The PlotTracer desktop app reading a heatmap: peak temperature across a weld cross-section, distance against depth, its column boundaries measured from the figure's own rules and visibly unequal, all 20 cells read through the calibrated colour key, and the extracted matrix in the right panel tinted with the figure's own colours, each row and column showing the range it spans.">
-        <figcaption><b>Heatmaps - no other digitizer reads them coherently.</b> Every cell read through a calibrated colour key, on boundaries measured from the figure itself rather than divided evenly - so unequal columns come back unequal. The matrix is tinted with the figure&rsquo;s own colours, and a picked cell shows all three of its coordinates.</figcaption>
+        <img class="shot" src="assets/shot-grouped.png" width="2888" height="1888"
+          alt="A grouped bar chart of cell viability in PlotTracer, control against treatment on days 3, 7, 14 and 21: the axes and the four category names detected from the figure, the legend outlined where it was found, every bar read and filed under its series by colour, and the right panel listing Control and Treatment side by side for each day.">
+        <figcaption><b>Grouped bars, named and filed in a few presses.</b> The axes and the category names were detected from the figure, the legend was read, and Auto-extract all series filed every bar under the series whose colour fills it. Each value lands within 0.21 of the number the figure was drawn from, on an axis that runs to 70.</figcaption>
       </figure>
       <figure class="shot-card" style="grid-column: 1 / -1;">
-        <img class="shot" src="assets/shot-hatched.png" width="1999" height="1307"
-          alt="A bar chart of extraction yield by solvent in PlotTracer, every bar filled with a diagonal hatch, each one captured whole with a point at its top and its baseline, the loupe magnifying a bar's stroked top-left corner, and the six solvent names - Water, Ethanol, Methanol, Acetone, Hexane, Ethyl acetate - listed down the right panel beside their yields, having been read off the axis rather than typed.">
-        <figcaption><b>Hatched and patterned fills, read as whole bars.</b> A hatch cuts a bar into stripes, and a tracer that goes on colour alone hands back the stripes. PlotTracer puts them back together, using the category boundaries you already marked as the evidence that a pile of pieces is one bar. The six solvent names came off the axis in a single drag - read from the figure, shown to you with the pixels they came from, and typed nowhere.</figcaption>
+        <img class="shot" src="assets/shot-heatmap.png" width="2888" height="1888"
+          alt="The PlotTracer desktop app reading a heatmap of target engagement over time: five treatments against time in hours, its column boundaries at 0, 1, 2, 4, 8 and 24 hours and visibly unequal, all 25 cells read through the calibrated colour key, and the extracted matrix in the right panel tinted with the figure's own colours, each row and column showing the range it spans.">
+        <figcaption><b>Heatmaps: no other digitizer reads them coherently.</b> Every cell read through a calibrated colour key, on boundaries measured from the figure itself rather than divided evenly, so unequal columns come back unequal: here 0, 1, 2, 4, 8 and 24 hours. The matrix is tinted with the figure&rsquo;s own colours, so a cell in the table and a cell in the figure are plainly the same cell.</figcaption>
+      </figure>
+      <figure class="shot-card" style="grid-column: 1 / -1;">
+        <img class="shot" src="assets/shot-hatched.png" width="2888" height="1888"
+          alt="A bar chart of extraction yield by solvent in PlotTracer, every bar filled with a diagonal hatch and each one found whole, with a point at its top and its baseline, and the six solvent names, Water, Ethanol, Methanol, Acetone, Hexane and Ethyl acetate, listed down the right panel beside their yields, read off the axis rather than typed.">
+        <figcaption><b>Hatched bars, found whole.</b> A hatch cuts a bar into stripes, and a tracer that goes on colour alone hands back the stripes. The chart-element detector finds each bar whole, with no legend needed, and the six solvent names were read off the axis and offered under each tick mark, then used with one press. Typed nowhere, and every yield within 0.24 of the figure&rsquo;s own.</figcaption>
       </figure>
       <figure class="shot-card" style="grid-column: 1 / -1;">
         <img class="shot" src="assets/shot-bar.png" width="2980" height="1894"
@@ -578,9 +592,9 @@
         <figcaption><b>Error &amp; uncertainty.</b> Place each cap where the figure actually draws it - asymmetric and all. Here a 95% CI runs +359 above the point and −211 below it, and both are recorded as measured rather than one being assumed from the other. The tool says up front that the second cap starts as a mirror rather than a measurement, and the cap is draggable where it stands.</figcaption>
       </figure>
       <figure class="shot-card">
-        <img class="shot" src="assets/shot-histogram.png" width="2980" height="1894"
+        <img class="shot" src="assets/shot-histogram.png" width="2888" height="1888"
           alt="A histogram in PlotTracer with bin edges captured.">
-        <figcaption><b>True histogram bins.</b> Records the interval each bar spans and its height - genuine bin edges, not just centres.</figcaption>
+        <figcaption><b>True histogram bins.</b> Records the interval each bar spans and its height: genuine bin edges, not just centres.</figcaption>
       </figure>
       <figure class="shot-card">
         <img class="shot" src="assets/shot-donut.png" width="1999" height="1307"
@@ -603,9 +617,9 @@
         <figcaption><b>Box plots.</b> Quartiles and whiskers captured per category, named and exported side by side. Ternary, map, circular chart recorders and categorical-X line charts are calibrated the way each figure draws them too.</figcaption>
       </figure>
       <figure class="shot-card">
-        <img class="shot" src="assets/shot-scatter-fit.png" width="2980" height="1894"
+        <img class="shot" src="assets/shot-scatter-fit.png" width="2888" height="1888"
           alt="A scatter plot in PlotTracer with a fitted trend line through the extracted points.">
-        <figcaption><b>Scatter &amp; curve fit.</b> Fit a model through the points - the fit exports as its own block, never mixed into the record.</figcaption>
+        <figcaption><b>Scatter &amp; curve fit.</b> Fit a model through the points; the fit exports as its own block, never mixed into the record.</figcaption>
       </figure>
     </div>
   </div>
@@ -703,7 +717,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16h16"/><path d="M6 16c4-1 6-8 12-11"/></svg>
         <h3>Sixteen chart types</h3>
-        <p>XY, bar, categorical line, histogram, span, stacked bar, candlestick, box plot, polar, spider/radar, pie/donut, heatmap, ternary, map and circular chart recorders - each calibrated the way that figure is actually drawn.</p>
+        <p>XY, bar, categorical line, histogram, span, stacked bar, candlestick, box plot, polar, spider/radar, pie/donut, heatmap, contour, ternary, map and circular chart recorders, each calibrated the way that figure is actually drawn.</p>
       </div>
 
       <div class="feature">
@@ -720,8 +734,8 @@
 
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h3l2-6 4 12 2-8h7"/><path d="M18 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></svg>
-        <h3>Auto-extract curves</h3>
-        <p>Trace a whole series in one pass: by colour, by connected fill, or by blob detection for scatter.</p>
+        <h3>Auto-extract every series</h3>
+        <p>One press reads every series the legend names: lines by Find lines, markers by colour, bars by the detector. Or take one series at a time, by colour, by connected fill, or from a few guide points.</p>
       </div>
 
       <div class="feature">
@@ -744,13 +758,13 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20V4"/><path d="M3 20h18"/><rect x="6.5" y="8" width="4" height="12"/><rect x="13.5" y="11" width="4" height="9"/><path d="M6.5 11l4-3M6.5 15l4-3M6.5 19l4-3M13.5 14l4-3M13.5 18l4-3"/></svg>
         <h3>Hatched and patterned fills</h3>
-        <p>A hatch is drawn in a colour the trace drops, which parts a bar into fragments. PlotTracer puts the pieces back together from their own geometry, so a hatched bar is read as one bar.</p>
+        <p>A hatch parts a bar into stripes for a tracer that goes on colour. The detector finds the bar whole, and where it finds none the pieces are put back together from their own geometry, so a hatched bar is read as one bar.</p>
       </div>
 
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="19" height="11" rx="1.5" stroke-dasharray="3 2.4"/><path d="M6.5 14.5l2.6-6 2.6 6M7.4 12.6h3.4"/><path d="M15 14.5V9.5M15 11.2c1.4-1.6 3.2-.9 3.2.9v2.4"/></svg>
         <h3>Reads the labels for you</h3>
-        <p>Drag one box round the category labels and the names come back read off the figure - each shown beside the pixels it was read from, for you to approve or correct before anything lands. Sideways labels included, and the reader is bundled in the app, so nothing leaves your machine.</p>
+        <p>Tick labels, category names, legend entries and contour levels are read off the figure and offered beside the pixels they came from, for you to use or correct before anything lands. Sideways labels included, and the reader is bundled in the app, so nothing leaves your machine.</p>
       </div>
 
       <div class="feature">
@@ -762,7 +776,7 @@
       <div class="feature">
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c4 0 5-11 9-11s5 11 9 8" stroke-dasharray="3 3"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="21" cy="15" r="1.5" fill="currentColor" stroke="none"/></svg>
         <h3>Built for the hard graphs</h3>
-        <p>Interpolation-assist traces dashed, overlapping and monochrome curves that colour tools miss - drop a few guide points, a spline fills the rest, even where a curve doubles back.</p>
+        <p>Find lines takes dashed, dotted and overlapping curves in one ink apart, each as its own line, and says where it was unsure. Follow guide points does the rest: drop a few points, and a spline fills between them, even where a curve doubles back.</p>
       </div>
 
       <div class="feature">
