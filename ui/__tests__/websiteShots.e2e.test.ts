@@ -689,6 +689,19 @@ describe.runIf(GUIDE)('user guide figures', () => {
     await shot('guide-hero');
   }, 300000);
 
+  // ⚑ the website's hero (docs/assets/shot-hero.png) since 2026-11-09: the dash-coded figure left five pieces to check
+  it('website hero: four blends in four colours, legend detected and every series read, nothing to check', async () => {
+    await detectAxes('xy-multiseries-modulus', 'xy', 'y2');
+    await calibrate('xy-multiseries-modulus');
+    await autoLegend('xy-multiseries-modulus');
+    const said = await autoExtract();
+    console.log('website hero said:', said);
+    expect(said.filter((t) => /^Blend [A-D]: 1 line/.test(t)).length).toBe(4);
+    expect(await page.getByTestId('places-to-check').locator('li').count()).toBe(0);
+    await page.getByTestId('mode-pan').click();
+    await shot('website-hero');
+  }, 300000);
+
   it('grouped bars: categories detected, names offered and used, every series read', async () => {
     await detectAxes('bar-grouped-viability', 'bar', 'c2');
     await calibrate('bar-grouped-viability');
