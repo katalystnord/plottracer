@@ -1,5 +1,5 @@
 {
-"note": "ChartDete's ORIGINAL inference_detector (PyTorch, mmdetection) on bundled samples, boxes scored 0.5 or more, in the app's class names: the reference the app's ONNX ChartDete must reproduce (2026-10-20; xy-stress-strain.png rerun 2026-11-08 after its title lost an en-dash).",
+"note": "ChartDete's ORIGINAL inference_detector (PyTorch, mmdetection) on bundled samples, boxes scored 0.5 or more, in the app's class names: the reference the app's ONNX ChartDete must reproduce (2026-10-20; xy-stress-strain.png rerun 2026-11-08 after its title lost an en-dash; bar-grouped-viability.png rerun 2026-11-09 after its title lost an em-dash).",
 "images": {
 "xy-stress-strain.png": [
 {
@@ -217,28 +217,28 @@
 {
 "cls": "y_title",
 "box": [
-11.99,
-276.28,
+12.0,
+276.27,
 32.55,
 424.9
 ],
-"score": 0.987
+"score": 0.988
 },
 {
 "cls": "plot_area",
 "box": [
-66.32,
-37.88,
-890.84,
-660.54
+66.28,
+37.85,
+890.83,
+660.37
 ],
-"score": 0.99
+"score": 0.991
 },
 {
 "cls": "x_tick_label",
 "box": [
-152.54,
-668.19,
+152.53,
+668.18,
 197.07,
 684.98
 ],
@@ -247,19 +247,19 @@
 {
 "cls": "x_tick_label",
 "box": [
-548.95,
-667.77,
+548.94,
+667.75,
 604.05,
-685.44
+685.45
 ],
 "score": 0.98
 },
 {
 "cls": "x_tick_label",
 "box": [
-353.01,
-667.81,
-398.27,
+353.0,
+667.79,
+398.29,
 685.52
 ],
 "score": 0.979
@@ -268,21 +268,21 @@
 "cls": "x_tick_label",
 "box": [
 749.44,
-667.77,
+667.76,
 803.61,
 685.68
 ],
-"score": 0.966
+"score": 0.967
 },
 {
 "cls": "y_tick_label",
 "box": [
 37.73,
-297.16,
+297.15,
 57.25,
 312.29
 ],
-"score": 0.978
+"score": 0.979
 },
 {
 "cls": "y_tick_label",
@@ -300,7 +300,7 @@
 37.92,
 208.99,
 57.35,
-223.71
+223.72
 ],
 "score": 0.975
 },
@@ -308,7 +308,7 @@
 "cls": "y_tick_label",
 "box": [
 38.01,
-120.17,
+120.16,
 57.34,
 134.69
 ],
@@ -317,9 +317,9 @@
 {
 "cls": "y_tick_label",
 "box": [
-38.04,
-474.82,
-57.3,
+38.03,
+474.81,
+57.31,
 489.86
 ],
 "score": 0.969
@@ -330,7 +330,7 @@
 38.81,
 564.05,
 57.14,
-578.92
+578.93
 ],
 "score": 0.966
 },
@@ -338,37 +338,57 @@
 "cls": "y_tick_label",
 "box": [
 38.22,
-31.05,
+31.04,
 57.28,
-46.1
+46.11
 ],
-"score": 0.954
+"score": 0.955
 },
 {
 "cls": "y_tick_label",
 "box": [
-47.49,
-652.06,
+47.48,
+652.05,
 57.61,
-666.94
+666.95
 ],
 "score": 0.936
+},
+{
+"cls": "chart_title",
+"box": [
+292.01,
+13.15,
+662.01,
+35.07
+],
+"score": 0.698
+},
+{
+"cls": "x_tick",
+"box": [
+370.35,
+655.39,
+381.46,
+666.09
+],
+"score": 0.652
 },
 {
 "cls": "legend_marker",
 "box": [
 763.0,
-51.85,
+51.87,
 790.67,
-63.73
+63.74
 ],
-"score": 0.914
+"score": 0.915
 },
 {
 "cls": "legend_marker",
 "box": [
-763.5,
-73.58,
+763.49,
+73.59,
 789.99,
 83.28
 ],
@@ -377,8 +397,8 @@
 {
 "cls": "legend_label",
 "box": [
-799.68,
-72.13,
+799.67,
+72.12,
 872.3,
 84.94
 ],
@@ -387,32 +407,22 @@
 {
 "cls": "legend_label",
 "box": [
-800.78,
-50.32,
+800.77,
+50.31,
 850.13,
-63.96
+63.97
 ],
-"score": 0.965
-},
-{
-"cls": "legend_label",
-"box": [
-449.42,
-14.14,
-669.21,
-32.18
-],
-"score": 0.718
+"score": 0.964
 },
 {
 "cls": "legend_area",
 "box": [
-763.9,
-50.66,
-871.68,
-85.0
+763.89,
+50.68,
+871.67,
+84.98
 ],
-"score": 0.991
+"score": 0.992
 }
 ]
 }
