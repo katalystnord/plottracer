@@ -136,7 +136,7 @@ async function toolDown(d: Driver) {
 
 const CARDS: Card[] = [
   {
-    name: 'shot-hero',
+    name: 'shot-dashed-guide-points',
     sample: 'xy-dashed-release',
     type: 'xy',
     claim: 'Four dash-coded curves that cross, two traced from a handful of guide points, and the points land on the ink.',
@@ -676,30 +676,29 @@ describe.runIf(GUIDE)('user guide figures', () => {
     await shot('guide-qs-extracted');
   }, 300000);
 
-  it('hero: four series in one ink, told apart by their line style', async () => {
+  it('auto-extract: four series in one ink, told apart by their line style', async () => {
     await detectAxes('xy-dashed-release', 'xy', 'y2');
     await calibrate('xy-dashed-release');
     await autoLegend('xy-dashed-release');
     await shot('guide-legend');
     const said = await autoExtract();
-    console.log('hero said:', said);
+    console.log('auto-extract said:', said);
     expect(said.filter((t) => /^Formulation [A-D]: 1 line/.test(t)).length).toBe(4);
     await shot('guide-autoextract');
-    await page.getByTestId('mode-pan').click();
-    await shot('guide-hero');
   }, 300000);
 
-  // ⚑ the website's hero (docs/assets/shot-hero.png) since 2026-11-09: the dash-coded figure left five pieces to check
-  it('website hero: four blends in four colours, legend detected and every series read, nothing to check', async () => {
+  // ⚑ the hero, on the guide's cover and in its Interface chapter, and copied to the website as docs/assets/shot-hero.png,
+  // since 2026-11-09: the dash-coded figure left five pieces to check
+  it('hero: four blends in four colours, legend detected and every series read, nothing to check', async () => {
     await detectAxes('xy-multiseries-modulus', 'xy', 'y2');
     await calibrate('xy-multiseries-modulus');
     await autoLegend('xy-multiseries-modulus');
     const said = await autoExtract();
-    console.log('website hero said:', said);
+    console.log('hero said:', said);
     expect(said.filter((t) => /^Blend [A-D]: 1 line/.test(t)).length).toBe(4);
     expect(await page.getByTestId('places-to-check').locator('li').count()).toBe(0);
     await page.getByTestId('mode-pan').click();
-    await shot('website-hero');
+    await shot('guide-hero');
   }, 300000);
 
   it('grouped bars: categories detected, names offered and used, every series read', async () => {
